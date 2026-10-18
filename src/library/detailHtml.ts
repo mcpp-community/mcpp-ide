@@ -17,6 +17,8 @@
  * keyword list and punctuation. It is not a parser and is not meant to be.
  */
 
+import { dependencyLocation, type DependencyKind, type ProjectDependencyState } from "./projectState";
+
 import {
   BADGE_UI,
   surfaceLabel,
@@ -39,6 +41,7 @@ export interface DetailDependency {
   version?: string;
   /** The version the project's `mcpp.lock` resolved, when it is known. */
   resolved?: string;
+  key?: string;
 }
 
 /** One window of real example code. */
@@ -47,6 +50,7 @@ export interface DetailSnippet {
   startLine: number;
   lines: string[];
   usageLine: number;
+  fileKey?: string;
 }
 
 /** The outcome of the last `mcpp add`, shown in place. */
@@ -66,6 +70,20 @@ export interface DetailInstalled {
 export interface DetailModel {
   /** Everything is already localized by the caller. */
   ui: Record<string, string>;
+  key?: string;
+  generation?: number;
+  projectRoot?: string;
+  platform?: string;
+  projectState?: ProjectDependencyState;
+  dependencyGroups?: Record<DependencyKind, ProjectDependencyState>;
+  dependencyKind?: DependencyKind;
+  manifestAvailable?: boolean;
+  blockedReason?: string;
+  versionNotice?: string;
+  loading?: boolean;
+  preview?: boolean;
+  previewVersion?: string;
+  busy?: boolean;
   id: string;
   name: string;
   description?: string;
@@ -95,6 +113,7 @@ export interface DetailModel {
   snippets: DetailSnippet[];
   /** The example project the snippets come from, when there is one. */
   exampleProject?: string;
+  exampleProvenance?: string;
   /**
    * How a reader brings the package into code (§22): the example project's
    * real `import …;` / `#include …` lines when there are any, else the honest
@@ -123,6 +142,34 @@ export interface DetailAssets {
 export const DETAIL_UI = {
   htmlLang: "detail.htmlLang",
   title: "detail.title",
+  project: "detail.project",
+  chooseProject: "detail.chooseProject",
+  platform: "detail.platform",
+  version: "detail.version",
+  otherPlatforms: "detail.otherPlatforms",
+  declared: "detail.declared",
+  locked: "detail.locked",
+  sourceDependency: "detail.sourceDependency",
+  unknownUsage: "detail.unknownUsage",
+  usageSource: "detail.usageSource",
+  source: "detail.source",
+  loading: "detail.loading",
+  pending: "detail.pending",
+  groupChange: "detail.groupChange",
+  output: "detail.output",
+  retry: "detail.retry",
+  openManifest: "detail.openManifest",
+  openFile: "detail.openFile",
+  readOnlySource: "detail.readOnlySource",
+  preview: "detail.preview",
+  platforms: "detail.platforms",
+  kind: "detail.kind",
+  kindNormal: "detail.kind.normal",
+  kindDev: "detail.kind.dev",
+  kindBuild: "detail.kind.build",
+  addDevAction: "detail.addDevAction",
+  buildHint: "detail.buildHint",
+  moveHint: "detail.moveHint",
   overview: "detail.overview",
   license: "detail.license",
   repo: "detail.repo",
@@ -177,19 +224,15 @@ const BADGE_KEY_UI: Readonly<Record<BadgeKey, string>> = {
   "openkal-platform": DETAIL_UI.badgeOpenkalPlatform,
 };
 
-/**
- * What the page says to the host.
- *
- * There is no `ready`: the document is already the whole model, and a page that
- * announces its own load only invites the host to render it again — which is
- * exactly the reload loop the *library sidebar* shipped with (see the note in
- * `libraryHtml.ts`). This host happened to answer `ready` with an empty `return`,
- * so the trap never fired here; it is gone all the same.
+/** Messages carry a page key and generation at the transport boundary.
+ * Mounting replays the latest model in place; it never rebuilds the document.
  */
 export type DetailMessage =
   | { type: "add"; version: string; dev: boolean }
   | { type: "openUrl"; url: string }
-  | { type: "copy"; text: string };
+  | { type: "copy"; text: string; token?: string }
+  | { type: "selectProject" | "showOutput" | "retry" | "openManifest" | "mounted" }
+  | { type: "openDependency" | "openFile"; key: string };
 
 export type UiLabel = (key: string) => string;
 
@@ -237,16 +280,22 @@ function renderLine(line: string, usage: boolean): string {
   return `<span class="code-line"${flag("data-usage", usage)}>${tokens}</span>\n`;
 }
 
+function actionIcon(kind: "copy" | "source"): string {
+  const paths = kind === "copy" ? '<rect x="6" y="6" width="8" height="8" rx="1.5"/><path d="M10 3H3v7"/>' : '<path d="M3 6V2h6l4 4v3M9 2v4h4M3 9v5h3"/><rect x="8" y="10" width="6" height="5" rx="1"/><path d="M9.5 10V8.5a1.5 1.5 0 0 1 3 0V10"/>';
+  return `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">${paths}</svg>`;
+}
+
 function renderSnippets(model: DetailModel, label: UiLabel): string {
   if (model.snippets.length === 0) {
     return `<p class="detail-hint">${escapeHtml(label(DETAIL_UI.codeNone))}</p>`;
   }
-  const blocks = model.snippets.map((snippet) => {
+  const blocks = model.snippets.map((snippet, index) => {
     const lines = snippet.lines
       .map((line, index) => renderLine(line, snippet.startLine + index === snippet.usageLine))
       .join("");
     const caption = fill(label, DETAIL_UI.codeSource, [snippet.file, snippet.startLine]);
     return [
+      `<div class="example-heading"><h2>${escapeHtml(index === 0 ? label(DETAIL_UI.code) : snippet.file.split("/").pop() ?? snippet.file)}</h2><div class="snippet-actions"><button class="snippet-action" type="button" data-copy="${escapeHtml(snippet.lines.join("\n"))}">${actionIcon("copy")}<span data-action-label>${escapeHtml(label(DETAIL_UI.copy))}</span></button>${snippet.fileKey === undefined ? "" : `<button class="snippet-action" type="button" data-open-file="${escapeHtml(snippet.fileKey)}" title="${escapeHtml(label(DETAIL_UI.readOnlySource))}" aria-label="${escapeHtml(label(DETAIL_UI.readOnlySource))}">${actionIcon("source")}<span>${escapeHtml(label(DETAIL_UI.openFile))}</span></button>`}</div></div>`,
       `<pre class="detail-code"><code>${lines}</code></pre>`,
       `<p class="detail-code-file">${escapeHtml(caption)}</p>`,
     ].join("\n");
@@ -254,52 +303,16 @@ function renderSnippets(model: DetailModel, label: UiLabel): string {
   return blocks.join("\n");
 }
 
-/**
- * The version matrix, as the page's **selector**: each version is a button that
- * aims the command at the top of the page at itself.
- *
- * A `<select>` and a printed list of the same versions used to sit in two
- * different places, and only the select was interactive, so the list was
- * something to read and the choice was something else to find. One clickable
- * list is both.
- */
+/** Read-only platform information; the current-environment select owns the command. */
 function renderVersions(model: DetailModel, label: UiLabel): string {
-  if (model.versions.length === 0) {
-    return `<p class="detail-hint">${escapeHtml(label(DETAIL_UI.versionsNone))}</p>`;
-  }
-  const groups = model.versions
-    .map((group) => {
-      const list =
-        group.versions.length === 0
-          ? `<span class="detail-version-empty">—</span>`
-          : group.versions
-              .map((version) => {
-                const installed = model.installed !== undefined && model.installed.version === version;
-                return (
-                  `<button type="button" class="detail-version" data-version="${escapeHtml(version)}"` +
-                  `${flag("data-selected", version === model.latest)}${flag("data-installed", installed)}>` +
-                  `${escapeHtml(version)}</button>` +
-                  // The word, not the colour: a reader who cannot see the hue still
-                  // learns that this is the version in their manifest.
-                  (installed ? `<span class="detail-installed">${escapeHtml(label(DETAIL_UI.installed))}</span>` : "")
-                );
-              })
-              .join("");
-      return (
-        `<li class="detail-version-group"${flag("data-current", group.current)}>` +
-        `<span class="detail-platform">${escapeHtml(group.platform)}</span>` +
-        `<span class="detail-version-list">${list}</span>` +
-        (group.current ? `<span class="detail-current">${escapeHtml(label(DETAIL_UI.versionsCurrent))}</span>` : "") +
-        `</li>`
-      );
-    })
-    .join("\n");
-  return [
-    `<ul class="detail-versions">`,
-    groups,
-    `</ul>`,
-    `<p class="detail-hint">${escapeHtml(label(DETAIL_UI.versionsPick))}</p>`,
-  ].join("\n");
+  if (!model.versions.length) { return `<p class="detail-hint">${escapeHtml(label(DETAIL_UI.versionsNone))}</p>`; }
+  const row = (group: DetailVersionGroup) => `<li class="detail-version-group"${flag("data-current", group.current)}>
+    <span class="detail-platform">${escapeHtml(group.platform)}</span>
+    <span class="detail-version-list">${group.versions.map((version) => `<span class="detail-version"${flag("data-installed", version === model.projectState?.declaredVersion)}>${escapeHtml(version)}</span>`).join("") || "—"}</span>
+    ${group.current ? `<span class="detail-current">${escapeHtml(label(DETAIL_UI.versionsCurrent))}</span>` : ""}</li>`;
+  return `<ul class="detail-versions">${model.versions.filter((group) => group.current).map(row).join("")}</ul>
+    <details data-persist="platforms"><summary>${escapeHtml(label(DETAIL_UI.otherPlatforms))}</summary>
+    <ul class="detail-versions">${model.versions.filter((group) => !group.current).map(row).join("")}</ul></details>`;
 }
 
 function renderDependencies(model: DetailModel, label: UiLabel): string {
@@ -312,7 +325,7 @@ function renderDependencies(model: DetailModel, label: UiLabel): string {
       parts.push(fill(label, DETAIL_UI.resolved, [dependency.resolved]));
     }
     return (
-      `<li><code>${escapeHtml(dependency.id)}</code>` +
+      `<li>${dependency.key ? `<button class="link-button" type="button" data-open-dependency="${escapeHtml(dependency.key)}">${escapeHtml(dependency.id)}</button>` : `<code>${escapeHtml(dependency.id)}</code>`}` +
       (parts.length === 0 ? "" : ` — ${escapeHtml(parts.join(" · "))}`) +
       `</li>`
     );
@@ -326,26 +339,12 @@ function renderDependencies(model: DetailModel, label: UiLabel): string {
 }
 
 function renderMeta(model: DetailModel, label: UiLabel): string {
-  const parts: string[] = [
-    `<span class="badge">${escapeHtml(label(DETAIL_UI.registry))}: ${escapeHtml(model.registry)}</span>`,
-  ];
-  if (model.surface !== undefined) {
-    parts.push(
-      `<span class="badge">${escapeHtml(label(DETAIL_UI.surface))}: ${escapeHtml(surfaceLabel(model.surface, label))}</span>`,
-    );
-  }
-  if (model.standard !== undefined) {
-    parts.push(`<span class="badge">${escapeHtml(label(DETAIL_UI.standard))}: ${escapeHtml(model.standard)}</span>`);
-  }
-  for (const badge of badgeLabels(model.badges, label)) {
-    parts.push(`<span class="badge">${escapeHtml(badge)}</span>`);
-  }
-  for (const license of model.licenses) {
-    parts.push(`<span class="badge">${escapeHtml(license)}</span>`);
-  }
-  // The repository and index links are actions, not facts, so they live in the
-  // button row below rather than at the end of this line.
-  return [`<div class="detail-meta">`, parts.join("\n"), `</div>`].join("\n");
+  const tag = (kind: string, value: string, title: string) => `<span class="detail-tag" data-tag="${kind}" title="${escapeHtml(title)}">${escapeHtml(value)}</span>`;
+  return `<div class="detail-tags">${model.surface ? tag("surface", surfaceLabel(model.surface, label), label(DETAIL_UI.surface)) : ""}${model.standard ? tag("standard", model.standard.toUpperCase(), label(DETAIL_UI.standard)) : ""}${model.licenses.map((license) => tag("license", license, license)).join("")}</div>`;
+}
+
+function renderProject(model: DetailModel, label: UiLabel): string {
+  return `<div class="project-context"><button type="button" class="project-picker" data-action="selectProject" title="${escapeHtml(model.projectRoot ?? label(DETAIL_UI.chooseProject))}" aria-label="${escapeHtml(label(DETAIL_UI.chooseProject))}"><strong>${escapeHtml(model.projectRoot?.split(/[\\/]/).pop() ?? label(DETAIL_UI.chooseProject))}</strong><span aria-hidden="true">⌄</span></button><span class="context-platform" title="${escapeHtml(label(DETAIL_UI.platform))}">${escapeHtml(model.platform ?? "—")}</span></div>`;
 }
 
 function renderExtras(model: DetailModel, label: UiLabel): string {
@@ -371,244 +370,213 @@ function renderExtras(model: DetailModel, label: UiLabel): string {
  * version is chosen in the list below (`renderVersions`), and this block shows
  * the command the choice produces.
  */
-function renderActions(model: DetailModel, label: UiLabel): string {
-  const disabled = model.latest === undefined;
-  const command = fill(label, DETAIL_UI.command, [model.id, model.latest ?? "?"]);
-  // The label the reader first sees is the one the *client* would compute for the
-  // same selection, so the button never changes meaning under the pointer.
-  const alreadyInstalled = model.installed !== undefined && model.installed.version === model.latest;
-  const addLabel = alreadyInstalled
-    ? label(DETAIL_UI.alreadyAdded)
-    : model.installed === undefined || model.latest === undefined
-      ? label(DETAIL_UI.add)
-      : fill(label, DETAIL_UI.switchTo, [model.latest]);
-  const link = (url: string, text: string): string =>
-    `    <button type="button" data-secondary data-open-url="${escapeHtml(url)}">${escapeHtml(text)}</button>`;
-  // The command and each usage line carry their own copy button: both are
-  // things a reader pastes somewhere else — a terminal, a source file.
-  const copyButton = (data: string, text: string): string =>
-    `<button type="button" class="detail-copy" ${data}>${escapeHtml(text)}</button>`;
-  const usage =
-    model.usage.length === 0
-      ? []
-      : [
-          `  <p class="detail-hint">${escapeHtml(label(DETAIL_UI.usage))}</p>`,
-          ...model.usage.map(
-            (line) =>
-              `  <p class="detail-usage-line"><code>${escapeHtml(line)}</code>${copyButton(`data-copy="${escapeHtml(line)}"`, label(DETAIL_UI.copy))}</p>`,
-          ),
-        ];
-  return [
-    `<section class="detail-primary" data-section="add">`,
-    `  <div class="detail-actions">`,
-    `    <button type="button" id="detail-add" class="detail-add"${flag("disabled", disabled || alreadyInstalled)}${flag("data-installed", alreadyInstalled)}>${escapeHtml(addLabel)}</button>`,
-    `    <label class="detail-toggle"><input id="detail-dev" type="checkbox"><span>${escapeHtml(label(DETAIL_UI.addDev))}</span></label>`,
-    ...(model.repo === undefined ? [] : [link(model.repo, label(DETAIL_UI.openRepo))]),
-    ...(model.indexUrl === undefined ? [] : [link(model.indexUrl, label(DETAIL_UI.indexLink))]),
-    `  </div>`,
-    // The copy button sits beside the command, not inside it: `command.textContent`
-    // is what a click copies, and a button inside the paragraph would be copied too.
-    `  <div class="detail-command-row">`,
-    `    <p class="detail-command" id="detail-command" data-selected-version="${escapeHtml(model.latest ?? "")}" data-template="${escapeHtml(model.commandTemplate)}" data-template-dev="${escapeHtml(model.commandDevTemplate)}">${escapeHtml(command)}</p>`,
-    `    <button type="button" class="detail-copy" data-copy-command>${escapeHtml(label(DETAIL_UI.copy))}</button>`,
-    `  </div>`,
-    disabled
-      ? `  <p class="detail-hint">${escapeHtml(label(DETAIL_UI.addNoVersion))}</p>`
-      : `  <p class="detail-hint">${escapeHtml(label(DETAIL_UI.addLatest))}</p>`,
-    ...usage,
-    `  <p class="detail-result" id="detail-result" role="status"${attribute("data-state", model.result?.state)}${model.result === undefined ? " hidden" : ""}>${escapeHtml(model.result?.message ?? "")}</p>`,
-    `</section>`,
-  ]
-    .filter((line) => line.length > 0)
-    .join("\n");
+function groupsFor(model: DetailModel): Record<DependencyKind, ProjectDependencyState> {
+  const empty: ProjectDependencyState = { declared: false, dev: false, sourceType: "none", ambiguous: false };
+  const kind = model.dependencyKind ?? (model.projectState?.dev || model.installed?.dev ? "dev" : "normal");
+  const state = model.projectState ?? (model.installed ? { ...empty, declared: true, declaredVersion: model.installed.version, dev: model.installed.dev, sourceType: "registry" as const } : empty);
+  return model.dependencyGroups ?? { normal: kind === "normal" ? state : empty, dev: kind === "dev" ? state : { ...empty, dev: true }, build: kind === "build" ? state : empty };
 }
 
-/**
- * The client. It posts two things — `add` and `openUrl` — and applies
- * the host's `{type:"result"}` in place, so running `mcpp add` never rebuilds the
- * document and never resets the version the reader picked.
- */
+function selectedVersion(model: DetailModel): string | undefined {
+  const kind = model.dependencyKind ?? (model.projectState?.dev || model.installed?.dev ? "dev" : "normal");
+  const declared = groupsFor(model)[kind].declaredVersion;
+  return declared !== undefined && model.currentVersions.includes(declared) ? declared : model.latest;
+}
+
+function renderActions(model: DetailModel, label: UiLabel): string {
+  const kind = model.dependencyKind ?? (model.projectState?.dev || model.installed?.dev ? "dev" : "normal");
+  const groups = groupsFor(model);
+  const current = groups[kind];
+  const version = selectedVersion(model);
+  const manual = kind === "build" || current.ambiguous || current.declared && current.sourceType !== "registry" || !current.declared && groups[kind === "dev" ? "normal" : "dev"].declared;
+  const already = current.declaredVersion !== undefined && current.declaredVersion === version && !manual;
+  const canOpen = model.manifestAvailable ?? !!model.projectRoot;
+  const disabled = !!model.busy || !!model.loading || (manual ? !canOpen : !!model.blockedReason || !version || already);
+  const location = dependencyLocation(model.id, kind);
+  const command = model.preview ? `mcpp search ${model.id}` : manual ? `[${location.table}]
+${location.name} = ${JSON.stringify(version ?? "<version>")}` : (kind === "dev" ? model.commandDevTemplate : model.commandTemplate).replace("{0}", model.id).replace("{1}", version ?? "?");
+  const addLabel = model.busy ? label(DETAIL_UI.pending) : manual ? label(DETAIL_UI.openManifest) : already ? label(DETAIL_UI.alreadyAdded) : current.declared ? fill(label, DETAIL_UI.switchTo, [version ?? "?"]) : label(kind === "dev" ? DETAIL_UI.addDevAction : DETAIL_UI.add);
+  const link = (url: string, text: string) => `<button type="button" data-secondary data-open-url="${escapeHtml(url)}">${escapeHtml(text)}</button>`;
+  const kinds: Array<[DependencyKind, string, string]> = [["normal", DETAIL_UI.kindNormal, "dependencies"], ["dev", DETAIL_UI.kindDev, "dev-dependencies"], ["build", DETAIL_UI.kindBuild, "build-dependencies"]];
+  return `<section class="detail-primary" data-section="add" aria-busy="${model.loading || model.busy ? "true" : "false"}">
+    ${model.loading ? `<p class="detail-hint" role="status">${escapeHtml(label(DETAIL_UI.loading))}</p>` : ""}
+    ${model.preview ? `<p class="detail-hint">${escapeHtml(label(DETAIL_UI.preview))}</p><p>${escapeHtml(label(DETAIL_UI.version))}: ${escapeHtml(model.previewVersion ?? "—")}</p>` : ""}
+    ${model.preview ? "" : `<div class="detail-controls"><label>${escapeHtml(label(DETAIL_UI.version))} <select id="detail-version"${flag("disabled", !!model.loading || !!model.busy || !model.currentVersions.length)}>${model.currentVersions.map((item) => `<option value="${escapeHtml(item)}"${flag("selected", item === version)}>${escapeHtml(item)}</option>`).join("")}</select></label><span class="dependency-kind-label" id="detail-kind-label">${kind === "dev" ? "dev-dependencies" : kind === "build" ? "build-dependencies" : "dependencies"}</span>${current.resolvedVersion && current.resolvedVersion !== current.declaredVersion ? `<span>${escapeHtml(label(DETAIL_UI.locked))}: ${escapeHtml(current.resolvedVersion)}</span>` : ""}</div>`}
+    <div class="detail-actions">
+      ${model.preview ? "" : `<div class="detail-add-group"><button type="button" id="detail-add" class="detail-add"${flag("disabled", disabled)}${flag("data-installed", already)}>${escapeHtml(addLabel)}</button><button type="button" id="detail-kind-toggle" class="detail-kind-toggle" aria-label="${escapeHtml(label(DETAIL_UI.kind))}" aria-haspopup="menu" aria-expanded="false" aria-controls="detail-kind-menu"${flag("disabled", !!model.loading || !!model.busy)}><span aria-hidden="true">⌄</span></button><div id="detail-kind-menu" class="detail-kind-menu" role="menu" aria-label="${escapeHtml(label(DETAIL_UI.kind))}" hidden>${kinds.map(([value, key, section]) => `<button type="button" role="menuitemradio" aria-checked="${value === kind}" data-kind="${value}"><span>${escapeHtml(label(key))}</span><code>${section}</code></button>`).join("")}</div></div>`}
+      ${model.repo === undefined ? "" : link(model.repo, label(DETAIL_UI.openRepo))}
+      ${model.indexUrl === undefined ? "" : link(model.indexUrl, label(DETAIL_UI.indexLink))}
+    </div>
+    ${model.versionNotice ? `<p class="detail-hint">${escapeHtml(model.versionNotice)} <button class="link-button" type="button" data-action="retry">${escapeHtml(label(DETAIL_UI.retry))}</button></p>` : ""}
+    ${model.blockedReason ? `<p class="detail-hint" id="detail-blocked">${escapeHtml(model.blockedReason)}</p>` : ""}
+    <p id="detail-selection-note" class="detail-hint"${flag("hidden", !manual)}>${escapeHtml(manual ? label(kind === "build" ? DETAIL_UI.buildHint : DETAIL_UI.moveHint) : "")}</p>
+    <div class="detail-command-row"><p class="detail-command" id="detail-command">${escapeHtml(command)}</p><button type="button" class="detail-copy" data-copy-command>${escapeHtml(label(DETAIL_UI.copy))}</button></div>
+    <p class="detail-result" id="detail-result" role="status"${attribute("data-state", model.result?.state)}${flag("hidden", !model.result)}>${escapeHtml(model.result?.message ?? "")}</p>
+    <div class="result-actions" id="detail-result-actions"${flag("hidden", model.result?.state !== "error")}><button class="link-button" type="button" data-action="retry">${escapeHtml(label(DETAIL_UI.retry))}</button><button class="link-button" type="button" data-action="showOutput">${escapeHtml(label(DETAIL_UI.output))}</button></div>
+  </section>`;
+}
+
+export function detailClientState(model: DetailModel): Record<string, unknown> {
+  return {
+    key: model.key ?? model.id, generation: model.generation ?? 0, projectRoot: model.projectRoot,
+    id: model.id, versions: model.currentVersions, version: selectedVersion(model),
+    groups: groupsFor(model), kind: model.dependencyKind ?? (model.projectState?.dev || model.installed?.dev ? "dev" : "normal"),
+    locations: Object.fromEntries((["normal", "dev", "build"] as const).map((kind) => [kind, dependencyLocation(model.id, kind)])),
+    loading: !!model.loading, canOpenManifest: model.manifestAvailable ?? !!model.projectRoot,
+    blocked: !!model.blockedReason, busy: !!model.busy, preview: !!model.preview,
+    command: model.commandTemplate, commandDev: model.commandDevTemplate,
+    labels: Object.fromEntries(Object.entries(DETAIL_UI).map(([name, key]) => [name, model.ui[key] ?? key])),
+  };
+}
+
 function clientScript(initialModel: string): string {
   return `(function () {
   "use strict";
   var api = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
   var state = ${initialModel};
-  var devInput = document.getElementById("detail-dev");
-  var command = document.getElementById("detail-command");
-  var result = document.getElementById("detail-result");
-  var addButton = document.getElementById("detail-add");
-  var version = command ? (command.getAttribute("data-selected-version") || "") : "";
-  var labels = (state && state.labels) || {};
-  var installed = state && state.installed ? state.installed : "";
-
-  function post(message) {
-    if (api) { api.postMessage(message); }
+  var saved = api && api.getState ? api.getState() || {} : {};
+  var pages = saved.pages || {};
+  var busy = state.busy;
+  var version = state.version || "";
+  var kind = state.kind || "normal";
+  var copyId = 0;
+  var copyRequests = {};
+  function copyLabel(button, text) { (button.querySelector("[data-action-label]") || button).textContent = text; }
+  function restoreCopyFeedback() {
+    Object.keys(copyRequests).forEach(function (token) {
+      var request = copyRequests[token];
+      if (request.key !== pageKey() || request.until < Date.now()) { delete copyRequests[token]; return; }
+      var buttons = Array.from(document.querySelectorAll(request.command ? "[data-copy-command]" : "[data-copy]"));
+      var button = buttons.find(function (node) { return request.command ? document.getElementById("detail-command").textContent === request.text : node.getAttribute("data-copy") === request.text; });
+      if (button) { button.setAttribute("data-copy-token", token); if (request.message) { copyLabel(button, request.message); } }
+    });
   }
-
-  function fillTemplate(template, values) {
-    var out = template;
-    for (var index = 0; index < values.length; index += 1) {
-      out = out.split("{" + index + "}").join(String(values[index]));
+  function pageKey() { return state.key + "|" + (state.projectRoot || ""); }
+  function post(message) { message.pageKey = state.key; message.generation = state.generation; if (api) { api.postMessage(message); } }
+  function persist() {
+    if (state.loading) { return; }
+    var expanded = Array.from(document.querySelectorAll("details[data-persist]")).filter(function (node) { return node.open; }).map(function (node) { return node.getAttribute("data-persist"); });
+    pages[pageKey()] = { version: version, kind: kind, scroll: window.scrollY, expanded: expanded };
+    var keys = Object.keys(pages); while (keys.length > 20) { delete pages[keys.shift()]; }
+    if (api && api.setState) { api.setState({ pages: pages }); }
+  }
+  function closeKindMenu(focus) {
+    var menu = document.getElementById("detail-kind-menu");
+    var toggle = document.getElementById("detail-kind-toggle");
+    if (menu) { menu.hidden = true; }
+    if (toggle) { toggle.setAttribute("aria-expanded", "false"); if (focus) { toggle.focus(); } }
+  }
+  function manualSelection() {
+    var group = state.groups[kind];
+    return kind === "build" || group.ambiguous || group.declared && group.sourceType !== "registry" || !group.declared && state.groups[kind === "dev" ? "normal" : "dev"].declared;
+  }
+  function update() {
+    var select = document.getElementById("detail-version");
+    var button = document.getElementById("detail-add");
+    if (state.preview) { return; }
+    var group = state.groups[kind];
+    var manual = manualSelection();
+    var same = !!group.declaredVersion && group.declaredVersion === version && !manual;
+    if (select) { select.value = version; select.disabled = busy || state.loading || !state.versions.length; }
+    var toggle = document.getElementById("detail-kind-toggle"); if (toggle) { toggle.disabled = busy || state.loading; }
+    var kindLabel = document.getElementById("detail-kind-label");
+    if (kindLabel) { kindLabel.textContent = kind === "dev" ? "dev-dependencies" : kind === "build" ? "build-dependencies" : "dependencies"; }
+    document.querySelectorAll("[data-kind]").forEach(function (item) { item.setAttribute("aria-checked", String(item.getAttribute("data-kind") === kind)); });
+    if (button) {
+      button.disabled = busy || state.loading || (manual ? !state.canOpenManifest : state.blocked || !version || same);
+      button.textContent = busy ? state.labels.pending : manual ? state.labels.openManifest : same ? state.labels.alreadyAdded : group.declared ? state.labels.switchTo.split("{0}").join(version) : kind === "dev" ? state.labels.addDevAction : state.labels.add;
+      if (same) { button.setAttribute("data-installed", ""); } else { button.removeAttribute("data-installed"); }
     }
-    return out;
+    var note = document.getElementById("detail-selection-note"); if (note) { note.textContent = manual ? kind === "build" ? state.labels.buildHint : state.labels.moveHint : ""; note.hidden = !manual; }
+    var command = document.getElementById("detail-command");
+    var location = state.locations[kind];
+    if (command) { command.textContent = manual ? "[" + location.table + "]\\n" + location.name + " = " + JSON.stringify(version || "<version>") : (kind === "dev" ? state.commandDev : state.command).split("{0}").join(state.id).split("{1}").join(version || "?"); }
   }
-
-  function updateCommand() {
-    if (!command) { return; }
-    var dev = devInput ? devInput.checked === true : false;
-    var template = dev
-      ? (command.getAttribute("data-template-dev") || "")
-      : (command.getAttribute("data-template") || "");
-    command.setAttribute("data-selected-version", version);
-    command.textContent = fillTemplate(template, [state.id, version || "?"]);
+  function restore() {
+    var page = pages[pageKey()] || {};
+    if (state.versions.indexOf(page.version) >= 0) { version = page.version; }
+    kind = ["normal", "dev", "build"].indexOf(page.kind) >= 0 ? page.kind : state.kind || "normal";
+    document.querySelectorAll("details[data-persist]").forEach(function (node) { node.open = (page.expanded || []).indexOf(node.getAttribute("data-persist")) >= 0; });
+    update(); window.scrollTo(0, page.scroll || 0);
   }
-
-  /**
-   * The button's label and enabled state follow the selection: adding a new
-   * package, switching the version of one that is already there, or nothing to do
-   * because this is the version the manifest already asks for. The inert state
-   * carries the data-installed attribute, which is what paints it the thinned
-   * green of a thing already done.
-   */
-  function updateButton() {
-    if (!addButton) { return; }
-    if (!version) {
-      addButton.textContent = labels.add || "";
-      addButton.disabled = true;
-      addButton.removeAttribute("data-installed");
-      return;
-    }
-    if (installed && version === installed) {
-      addButton.textContent = labels.alreadyAdded || "";
-      addButton.disabled = true;
-      addButton.setAttribute("data-installed", "");
-      return;
-    }
-    addButton.textContent = installed
-      ? (labels.switchTo || "{0}").split("{0}").join(version)
-      : (labels.add || "");
-    addButton.disabled = false;
-    addButton.removeAttribute("data-installed");
-  }
-
-  /** One version button is the selection; the rest are alternatives. */
-  function selectVersion(next) {
-    version = next;
-    var buttons = document.querySelectorAll("[data-version]");
-    for (var index = 0; index < buttons.length; index += 1) {
-      var button = buttons[index];
-      if (button.getAttribute("data-version") === next) {
-        button.setAttribute("data-selected", "");
-      } else {
-        button.removeAttribute("data-selected");
-      }
-    }
-    updateCommand();
-    updateButton();
-  }
-
-  function showResult(payload) {
-    if (!result) { return; }
-    result.hidden = false;
-    result.setAttribute(
-      "data-state",
-      payload.state === "ok" ? "ok" : payload.state === "pending" ? "pending" : "error",
-    );
-    result.textContent = payload.message || "";
-  }
-
-  if (devInput) { devInput.addEventListener("change", updateCommand); }
-
+  document.addEventListener("change", function (event) {
+    if (event.target.id === "detail-version") { version = event.target.value; }
+    if (event.target.id === "detail-version") { update(); persist(); }
+  });
+  document.addEventListener("toggle", persist, true);
+  window.addEventListener("scroll", persist);
   document.addEventListener("click", function (event) {
-    var target = event.target;
-    if (!target || typeof target.closest !== "function") { return; }
-    var link = target.closest("[data-open-url]");
-    if (link) {
-      event.preventDefault();
-      var url = link.getAttribute("data-open-url") || "";
-      // Say something the instant the click lands: the host's answer replaces
-      // this line, and if it never arrives the reader can see that too.
-      showResult({ state: "pending", message: (labels.opening || "{0}").split("{0}").join(url) });
-      post({ type: "openUrl", url: url });
+    var target = event.target.closest && event.target.closest("button");
+    if (!target || target.disabled) { return; }
+    if (target.id === "detail-kind-toggle") {
+      var menu = document.getElementById("detail-kind-menu"); menu.hidden = !menu.hidden;
+      target.setAttribute("aria-expanded", String(!menu.hidden));
+      if (!menu.hidden) { menu.querySelector('[aria-checked="true"]').focus(); }
       return;
     }
-    var copy = target.closest("[data-copy-command], [data-copy]");
-    if (copy) {
-      // The command's own text is what gets copied — the button beside it, not
-      // inside it, is why the command's textContent is exactly the command.
-      var text = copy.hasAttribute("data-copy-command")
-        ? (command ? String(command.textContent || "") : "")
-        : String(copy.getAttribute("data-copy") || "");
-      if (!text) { return; }
-      showResult({ state: "pending", message: labels.copying || "" });
-      post({ type: "copy", text: text });
-      return;
+    if (target.hasAttribute("data-kind")) {
+      kind = target.getAttribute("data-kind");
+      var declared = state.groups[kind].declaredVersion;
+      if (state.versions.indexOf(declared) >= 0) { version = declared; }
+      closeKindMenu(true); update(); persist(); return;
     }
-    var pick = target.closest("[data-version]");
-    if (pick) {
-      selectVersion(pick.getAttribute("data-version") || "");
-      return;
+    closeKindMenu(false);
+    var action = target.getAttribute("data-action");
+    if (action) { post({ type: action }); return; }
+    if (target.hasAttribute("data-open-dependency")) { persist(); post({ type: "openDependency", key: target.getAttribute("data-open-dependency") }); return; }
+    if (target.hasAttribute("data-open-file")) { post({ type: "openFile", key: target.getAttribute("data-open-file") }); return; }
+    if (target.hasAttribute("data-open-url")) { post({ type: "openUrl", url: target.getAttribute("data-open-url") }); return; }
+    if (target.hasAttribute("data-copy") || target.hasAttribute("data-copy-command")) {
+      var token = "copy-" + (++copyId); target.setAttribute("data-copy-token", token);
+      copyRequests[token] = { key: pageKey(), command: target.hasAttribute("data-copy-command"), text: target.hasAttribute("data-copy") ? target.getAttribute("data-copy") : document.getElementById("detail-command").textContent, until: Date.now() + 20000 };
+      post({ type: "copy", text: target.hasAttribute("data-copy") ? target.getAttribute("data-copy") : document.getElementById("detail-command").textContent, token: token }); return;
     }
-    var add = target.closest("#detail-add");
-    if (add && !add.disabled) {
+    if (target.id === "detail-add" && !busy) {
+      if (manualSelection()) { post({ type: "openManifest" }); return; }
       if (!version) { return; }
-      post({ type: "add", version: version, dev: devInput ? devInput.checked === true : false });
+      busy = true; update();
+      var result = document.getElementById("detail-result"); result.hidden = false; result.dataset.state = "pending"; result.textContent = state.labels.pending;
+      persist(); post({ type: "add", version: version, dev: kind === "dev" });
     }
   });
-
-  /** Move the "added" marker onto the version the project now asks for. */
-  function markInstalled(next) {
-    installed = next;
-    var marks = document.querySelectorAll(".detail-installed");
-    for (var index = 0; index < marks.length; index += 1) { marks[index].parentNode.removeChild(marks[index]); }
-    var buttons = document.querySelectorAll("[data-version]");
-    for (var index2 = 0; index2 < buttons.length; index2 += 1) {
-      var button = buttons[index2];
-      if (button.getAttribute("data-version") !== next) {
-        button.removeAttribute("data-installed");
-        continue;
-      }
-      button.setAttribute("data-installed", "");
-      var mark = document.createElement("span");
-      mark.className = "detail-installed";
-      mark.textContent = labels.installed || "";
-      button.parentNode.insertBefore(mark, button.nextSibling);
-    }
-    updateButton();
-  }
-
+  document.addEventListener("click", function (event) { if (!event.target.closest || !event.target.closest(".detail-add-group")) { closeKindMenu(false); } });
+  document.addEventListener("keydown", function (event) {
+    var menu = document.getElementById("detail-kind-menu");
+    if (!menu || menu.hidden) { return; }
+    if (event.key === "Escape") { event.preventDefault(); closeKindMenu(true); return; }
+    if (event.key === "Tab") { closeKindMenu(false); return; }
+    var options = Array.from(menu.querySelectorAll("[data-kind]"));
+    if (["ArrowDown", "ArrowUp", "Home", "End"].indexOf(event.key) < 0) { return; }
+    event.preventDefault(); var index = options.indexOf(document.activeElement);
+    index = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (index + (event.key === "ArrowDown" ? 1 : options.length - 1)) % options.length;
+    options[index].focus();
+  });
   window.addEventListener("message", function (event) {
     var data = event.data;
-    if (data && data.type === "result" && data.result) { showResult(data.result); }
-    if (data && data.added && data.added.version) { markInstalled(data.added.version); }
+    if (!data) { return; }
+    if (data.type === "detailUpdate") {
+      persist();
+      var focused = document.activeElement && document.activeElement.id;
+      var doc = new DOMParser().parseFromString(data.html, "text/html");
+      ["detail-header", "detail-main", "detail-footer"].forEach(function (id) { var old = document.getElementById(id); var next = doc.getElementById(id); if (old && next) { old.replaceWith(next); } });
+      state = data.state; busy = state.busy; version = state.version || ""; kind = state.kind || "normal";
+      restore(); restoreCopyFeedback();
+      var nextFocus = focused && document.getElementById(focused); if (nextFocus) { nextFocus.focus({ preventScroll: true }); }
+      return;
+    }
+    if (data.key !== state.key || data.generation !== state.generation) { return; }
+    if (data.type === "copyResult") {
+      var request = copyRequests[data.token];
+      if (request) {
+        request.message = data.message; request.until = Date.now() + 1800; restoreCopyFeedback();
+        setTimeout(function () { var button = document.querySelector('[data-copy-token="' + data.token + '"]'); if (button) { copyLabel(button, state.labels.copy); } delete copyRequests[data.token]; }, 1800);
+      }
+    }
+    if (data.type === "linkResult") { var status = document.getElementById("detail-link-result"); status.textContent = data.message; status.hidden = !data.message; }
   });
-
-  updateCommand();
-  updateButton();
+  restore();
+  post({ type: "mounted" });
 })();`;
-}
-
-/** The little state the client needs; the page is already rendered from the rest. */
-function clientState(model: DetailModel): Record<string, unknown> {
-  return {
-    id: model.id,
-    ...(model.latest === undefined ? {} : { latest: model.latest }),
-    // The three labels the button can wear, and the version the project already
-    // has: the client re-decides the label every time the selection changes, so
-    // the host cannot be the only one that knows what the button means. The
-    // `installed` word belongs here too — `markInstalled()` writes it next to
-    // the version button after a successful add, and an empty string there is
-    // a marker nobody can read (§22).
-    labels: {
-      add: model.ui[DETAIL_UI.add] ?? "",
-      switchTo: model.ui[DETAIL_UI.switchTo] ?? "",
-      alreadyAdded: model.ui[DETAIL_UI.alreadyAdded] ?? "",
-      opening: model.ui[DETAIL_UI.opening] ?? "",
-      installed: model.ui[DETAIL_UI.installed] ?? "",
-      copying: model.ui[DETAIL_UI.copying] ?? "",
-    },
-    ...(model.installed === undefined ? {} : { installed: model.installed.version }),
-  };
 }
 
 /** A model embedded in the page's own script; `<` is escaped so it cannot close it. */
@@ -637,35 +605,31 @@ export function renderDetailHtml(model: DetailModel, assets: DetailAssets): stri
 <title>${escapeHtml(title)}</title>
 </head>
 <body class="detail">
-<header class="detail-header">
-  <h1 class="detail-title">${escapeHtml(model.id)}</h1>
+<header class="detail-header" id="detail-header">
+  <div class="detail-heading-row"><div class="detail-heading"><h1 class="detail-title">${escapeHtml(model.id)}</h1>${renderMeta(model, label)}</div>${renderProject(model, label)}</div>
   ${model.description === undefined ? "" : `<p class="detail-description">${escapeHtml(model.description)}</p>`}
-  ${renderMeta(model, label)}
 </header>
-<main>
+<main id="detail-main">
   ${renderActions(model, label)}
-  <section class="detail-section" data-section="versions">
-    <h2>${escapeHtml(versionsHeading)}</h2>
-    ${renderVersions(model, label)}
-  </section>
-  <section class="detail-section" data-section="dependencies">
-    <h2>${escapeHtml(label(DETAIL_UI.dependencies))}</h2>
-    ${renderDependencies(model, label)}
-  </section>
-  <section class="detail-section" data-section="code">
-    <h2>${escapeHtml(label(DETAIL_UI.code))}</h2>
-    ${renderSnippets(model, label)}
-    ${model.exampleProject === undefined ? "" : `<p class="detail-hint">${escapeHtml(fill(label, DETAIL_UI.codeProject, [model.exampleProject]))}</p>`}
-  </section>
-  <section class="detail-section" data-section="build">
-    <h2>${escapeHtml(label(DETAIL_UI.overview))}</h2>
-    ${renderExtras(model, label)}
-    ${model.parseNotice === undefined ? "" : `<p class="detail-hint">${escapeHtml(model.parseNotice)}</p>`}
-  </section>
+  <p class="detail-hint" id="detail-link-result" role="status" hidden></p>
+  ${model.preview ? "" : `<div class="detail-layout">
+    <section class="detail-section detail-usage" data-section="code">
+      <h2>${escapeHtml(label(DETAIL_UI.usage))}</h2>
+      ${model.usage.length ? `<p class="detail-hint">${escapeHtml(label(DETAIL_UI.usageSource))}</p>` + model.usage.map((line) => `<div class="detail-usage-line"><code>${escapeHtml(line)}</code><button type="button" class="detail-copy" data-copy="${escapeHtml(line)}">${escapeHtml(label(DETAIL_UI.copy))}</button></div>`).join("") : model.snippets.length ? "" : `<p class="detail-hint">${escapeHtml(label(DETAIL_UI.unknownUsage))}</p>`}
+      ${model.snippets.length ? renderSnippets(model, label) : ""}
+      ${model.exampleProject === undefined ? "" : `<p class="detail-hint">${escapeHtml(fill(label, DETAIL_UI.codeProject, [model.exampleProject]))}</p>`}
+      ${model.exampleProvenance === undefined ? "" : `<p class="detail-hint">${escapeHtml(model.exampleProvenance)}</p>`}
+    </section>
+    <aside class="detail-aside">
+      <details class="detail-section" data-section="versions" data-persist="versions"><summary>${escapeHtml(label(DETAIL_UI.platforms))}</summary>${renderVersions(model, label)}</details>
+      ${model.dependencies.length ? `<details class="detail-section" data-section="dependencies" data-persist="dependencies"><summary>${escapeHtml(label(DETAIL_UI.dependencies))} (${model.dependencies.length})</summary>${renderDependencies(model, label)}</details>` : ""}
+      ${!model.targets.length && !model.includeDirs.length ? "" : `<details class="detail-section" data-section="build" data-persist="build"><summary>${escapeHtml(label(DETAIL_UI.overview))}</summary>${renderExtras(model, label)}</details>`}
+    </aside>
+  </div>`}
 </main>
-<footer class="detail-footer" role="note">${escapeHtml(model.dataSource)}</footer>
+<footer class="detail-footer" id="detail-footer"><details data-persist="source"><summary>${escapeHtml(label(DETAIL_UI.source))}</summary><p>${escapeHtml(model.dataSource)}</p>${model.projectRoot ? `<button class="link-button" type="button" data-action="openManifest">${escapeHtml(label(DETAIL_UI.openManifest))}</button>` : ""}<p>${escapeHtml(badgeLabels(model.badges, label).join(" · "))}</p>${model.parseNotice === undefined ? "" : `<p>${escapeHtml(model.parseNotice)}</p>`}</details></footer>
 <script nonce="${escapeHtml(assets.nonce)}">
-${clientScript(embedJson(clientState(model)))}
+${clientScript(embedJson(detailClientState(model)))}
 </script>
 </body>
 </html>
@@ -691,6 +655,15 @@ export function decodeDetailMessage(raw: unknown): DetailMessage | undefined {
     return undefined;
   }
   switch (raw.type) {
+    case "mounted":
+    case "selectProject":
+    case "showOutput":
+    case "retry":
+    case "openManifest":
+      return { type: raw.type };
+    case "openDependency":
+    case "openFile":
+      return nonEmptyString(raw.key) ? { type: raw.type, key: raw.key } : undefined;
     case "add":
       return nonEmptyString(raw.version) && typeof raw.dev === "boolean"
         ? { type: "add", version: raw.version, dev: raw.dev }
@@ -705,7 +678,7 @@ export function decodeDetailMessage(raw: unknown): DetailMessage | undefined {
       // hostile document cannot park a novel in the clipboard — and everything
       // else about the text is the user's own click.
       return nonEmptyString(raw.text) && raw.text.length <= 16_384
-        ? { type: "copy", text: raw.text }
+        ? { type: "copy", text: raw.text, ...(typeof raw.token === "string" && /^copy-\d+$/.test(raw.token) ? { token: raw.token } : {}) }
         : undefined;
     default:
       return undefined;

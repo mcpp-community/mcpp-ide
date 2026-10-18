@@ -1,33 +1,7 @@
-/**
- * Where the index lives, and how it is read **cheaply**.
- *
- * The catalog is a directory of Lua descriptors:
- * `<home>/.mcpp/registry/data/<registry>/pkgs/<letter>/<file>.lua`. Three
- * registries are installed on the reference machine (`mcpplibs` with 239
- * descriptors, `xim-pkgindex`, `xim-pkgindex-local`), and `mcpp index status`
- * prints a table of them — which is deliberately **not** parsed: `--format json`
- * is an unknown option there, and a second human-output parser is exactly what
- * this project forbids. Globbing the data directory under `<home>` gives the
- * same answer without parsing anything.
- *
- * `<home>` is `$MCPP_HOME`, then `~/.mcpp` — every one of them that holds a data
- * directory — and when none does, whatever `mcpp self env --format json`
- * reports, which is a machine shape and therefore allowed to be read.
- *
- * Two budgets shape this file:
- *
- * - **No process per package.** The list is read from the descriptor text
- *   (`src/library/indexModel.ts`); `mcpp xpkg parse --json` runs on demand, from
- *   the detail panel, never here.
- * - **One read per index revision.** A snapshot is cached and invalidated by a
- *   cheap revision key (the `pkgs` directory's mtime, the `.mcpp-index-updated`
- *   marker and the descriptor count), so re-rendering the view after a filter
- *   change costs a few stats, not 239 file reads.
- *
- * A missing index is **not** an error: `locateIndexRoots()` returns `[]` and the
- * caller renders the message this module hands it.
+/** Local package discovery. Official indexes are separate from the xlings tool registry.
+ * Descriptor contents are cached independently from the project's dependency state.
  */
-
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -35,10 +9,10 @@ import * as vscode from "vscode";
 
 import { runMcpp } from "../cli/process";
 import { read } from "../config/access";
+import { projectDependencyState, readProjectDeclarations } from "./projectState";
 import {
   descriptorEntry,
   descriptorId,
-  declaredDependencies,
   exampleCatalog,
   openkalFacetFor,
   parseDescriptorLua,
@@ -68,6 +42,8 @@ export const INDEX_SITE = "https://mcpplibs.github.io/mcpp-index/packages";
 export interface IndexRoot {
   /** The directory name, e.g. `mcpplibs`. */
   registry: string;
+  kind: "official" | "custom";
+  updatedAt?: number;
   /** The index root: it contains `pkgs`, and may contain `tests/` and `.xpkgindex/`. */
   path: string;
   /** `<root>/pkgs`. */
@@ -124,164 +100,83 @@ async function isFile(target: string): Promise<boolean> {
 }
 
 /** One index root, or `undefined` when the directory is not one. */
-async function rootAt(directory: string): Promise<IndexRoot | undefined> {
+async function rootAt(directory: string, official = false): Promise<IndexRoot | undefined> {
   const pkgs = path.join(directory, "pkgs");
   if (!(await isDirectory(pkgs))) {
     return undefined;
   }
+  directory = await fs.realpath(directory);
   const registry = path.basename(directory);
+  const updated = await statSafe(path.join(directory, ".mcpp-index-updated"));
   const generator = await isFile(path.join(directory, ".xpkgindex", "plugins", "mcpp.py"));
   return {
     registry,
+    kind: official ? "official" : "custom",
+    ...(updated === undefined ? {} : { updatedAt: updated.mtimeMs }),
     path: directory,
-    pkgs,
+    pkgs: path.join(directory, "pkgs"),
     hasExamples: await isDirectory(path.join(directory, "tests", "examples")),
     hasOpenkal: await isFile(path.join(directory, ".xpkgindex", "openkal-compat.json")),
-    ...(registry === "mcpplibs" || generator ? { site: INDEX_SITE } : {}),
+    ...(official || generator ? { site: INDEX_SITE } : {}),
   };
 }
 
-/**
- * The index roots to read.
- *
- * `mcpp.library.indexPath` wins when the user set it — it may name one index
- * root (a directory with `pkgs/`), a `pkgs` directory itself, or a whole
- * `<home>/.mcpp/registry/data` directory of registries. With no setting, the
- * default glob is the data directory under each known mcpp home.
- *
- * **Finding `<home>`.** Two are tried, in order: `$MCPP_HOME` (the variable mcpp
- * itself honours) and `~/.mcpp`. Both are listed when both hold something, and
- * the view's footer names the registries it read, so a stale second home shows
- * up as an extra source rather than as a wrong answer. When *neither* has a
- * `registry/data` with anything in it, mcpp is asked directly — `mcpp self env
- * --format json` reports `mcppHome`, which is the only authoritative answer for
- * an install in a place nothing can guess. That probe costs one process **per
- * session** and only runs when the cheap globs came up empty, so the ordinary
- * machine never pays for it; it is also skipped in an untrusted workspace,
- * because `mcpp.path` is a resource-scoped setting and a workspace must not
- * choose a binary to run.
- *
- * `[]` means "no index found"; the caller turns that into the message rather
- * than into an error, because a machine without the index is a normal machine.
- *
- * (`locateIndexRoots` is kept as an alias: the name reads better at the call
- * site, the exported name is the one `extension.ts` uses.)
- */
-export async function readIndexRoots(): Promise<IndexRoot[]> {
+/** Explicit paths never silently fall back. Only the official library source is auto-discovered. */
+export async function readIndexRoots(projectRoot?: string): Promise<IndexRoot[]> {
   const configured = read<string>("mcpp.library.indexPath");
-  const candidates: string[] = [];
-  if (typeof configured === "string" && configured.trim().length > 0) {
-    const configured_path = path.resolve(expandHome(configured.trim()));
-    // A `pkgs` directory was named directly.
-    if (path.basename(configured_path) === "pkgs" && (await isDirectory(configured_path))) {
-      candidates.push(path.dirname(configured_path));
-    } else {
-      const own = await rootAt(configured_path);
-      if (own !== undefined) {
-        candidates.push(own.path);
-      } else {
-        // A data directory: every registry inside it.
-        for (const entry of await readdirSafe(configured_path)) {
-          candidates.push(path.join(configured_path, entry));
-        }
-      }
-    }
-  } else {
-    for (const data of await defaultDataDirectories()) {
-      for (const entry of await readdirSafe(data)) {
-        candidates.push(path.join(data, entry));
-      }
-    }
-  }
-
-  const roots: IndexRoot[] = [];
-  for (const candidate of candidates) {
-    const root = await rootAt(candidate);
-    if (root !== undefined && !roots.some((seen) => seen.path === root.path)) {
-      roots.push(root);
-    }
-  }
-  return roots.sort((a, b) => (a.registry < b.registry ? -1 : a.registry > b.registry ? 1 : 0));
+  return discoverIndexRoots(configured, configured.trim() ? path.join(os.homedir(), ".mcpp") : await activeHome(projectRoot));
 }
 
-/** Set once per session, so `mcpp self env` runs at most once. */
-let probedHome: string | undefined;
-let probeAttempted = false;
-
-/** The homes mcpp may have used, most specific first, without duplicates. */
-function candidateHomes(): string[] {
-  const homes: string[] = [];
-  const fromEnvironment = process.env.MCPP_HOME?.trim();
-  if (fromEnvironment !== undefined && fromEnvironment.length > 0) {
-    homes.push(fromEnvironment);
-  }
-  homes.push(path.join(os.homedir(), ".mcpp"));
-  if (probedHome !== undefined) {
-    homes.push(probedHome);
-  }
-  return [...new Set(homes)];
-}
-
-/**
- * The `<home>/registry/data` directories worth listing.
- *
- * The cheap answer first: a data directory that already holds something is the
- * answer, and no process is started. Only when all of them are missing or empty
- * is `mcpp self env` asked where its home is — and its answer is picked up by
- * re-reading the candidate list, because the probe is what adds the home to it.
- */
-async function defaultDataDirectories(): Promise<string[]> {
-  const candidates = (): string[] => candidateHomes().map((home) => path.join(home, "registry", "data"));
-  const present: string[] = [];
-  for (const data of candidates()) {
-    if ((await readdirSafe(data)).length > 0) {
-      present.push(data);
+/** Filesystem seam used by the extension and fixture-based tests. */
+export async function discoverIndexRoots(configured: string, home: string): Promise<IndexRoot[]> {
+  if (configured.trim()) {
+    const target = path.resolve(expandHome(configured.trim()));
+    const own = await rootAt(path.basename(target) === "pkgs" ? path.dirname(target) : target);
+    const roots = own === undefined
+      ? (await Promise.all((await readdirSafe(target)).sort().map((name) => rootAt(path.join(target, name)))))
+          .filter((root): root is IndexRoot => root !== undefined)
+      : [own];
+    if (roots.length === 0) {
+      throw new Error(`No package index (pkgs/) at ${target}`);
     }
+    return roots.filter((root, index) => roots.findIndex((other) => other.path === root.path) === index);
   }
-  if (present.length > 0) {
-    return present;
+  for (const directory of [path.join(home, "indices", "mcpplibs"), path.join(home, "registry", "data", "mcpplibs")]) {
+    const root = await rootAt(directory, true);
+    if (root !== undefined) { return [root]; }
   }
-  await mcppHomeFromCli();
-  return [...new Set(candidates())];
+  return [];
 }
 
-/**
- * `mcpp self env --format json`, for the one field that says where the index is.
- *
- * It runs at most once per session and never in an untrusted workspace. A
- * missing or failing mcpp is not an error here: the caller falls back to the
- * directories it already has, and the view says "no index" the way it does when
- * there is none.
- */
-async function mcppHomeFromCli(): Promise<string | undefined> {
-  if (probeAttempted) {
-    return probedHome;
-  }
-  probeAttempted = true;
-  const executable = read<string>("mcpp.path").trim();
-  // `mcpp.path` is resource-scoped, so the probe goes through the trust-gated
-  // seam; a refusal is the same "no answer" as a failing mcpp.
-  const result = await runMcpp(
-    vscode.workspace.isTrusted,
-    executable.length === 0 ? "mcpp" : executable,
-    ["self", "env", "--format", "json"],
-    undefined,
-    { timeoutMs: SELF_ENV_TIMEOUT_MS, maxBufferMiB: 1 },
-  );
-  if (result === undefined || result.exitCode !== 0) {
-    return undefined;
-  }
-  const env = parseSelfEnv(result.stdout);
-  if (env === undefined) {
-    return undefined;
-  }
-  if (env.mcppHome !== undefined) {
-    probedHome = env.mcppHome;
-  } else if (env.registry !== undefined) {
-    // `registry` is `<home>/registry`; the home is what the other paths hang off.
-    probedHome = path.dirname(env.registry);
-  }
-  return probedHome;
+let homeProbe: { key: string; promise: Promise<string | undefined> } | undefined;
+
+/** CLI also supports self-contained installs: ask it once rather than merge unrelated homes. */
+async function activeHome(projectRoot?: string): Promise<string> {
+  const explicit = process.env.MCPP_HOME?.trim();
+  if (explicit) { return path.resolve(expandHome(explicit)); }
+  return (await mcppHomeFromCli(projectRoot)) ?? path.join(os.homedir(), ".mcpp");
+}
+
+export function invalidateIndexCache(): void {
+  cache = undefined;
+  homeProbe = undefined;
+}
+
+/** Share concurrent probes, with separate answers for different configured executables/projects. */
+async function mcppHomeFromCli(projectRoot?: string): Promise<string | undefined> {
+  const resource = projectRoot === undefined ? undefined : vscode.Uri.file(projectRoot);
+  const executable = read<string>("mcpp.path", resource).trim() || "mcpp";
+  const key = `${executable}\u0000${projectRoot ?? ""}\u0000${vscode.workspace.isTrusted}`;
+  if (homeProbe?.key === key) { return homeProbe.promise; }
+  const promise = (async () => {
+    const result = await runMcpp(vscode.workspace.isTrusted, executable, ["self", "env", "--format", "json"], projectRoot,
+      { timeoutMs: SELF_ENV_TIMEOUT_MS, maxBufferMiB: 1 });
+    if (result === undefined || result.exitCode !== 0) { return undefined; }
+    const env = parseSelfEnv(result.stdout);
+    return env?.mcppHome ?? (env?.registry === undefined ? undefined : path.dirname(env.registry));
+  })();
+  homeProbe = { key, promise };
+  return promise;
 }
 
 export { readIndexRoots as locateIndexRoots };
@@ -324,23 +219,15 @@ async function descriptorFiles(pkgs: string): Promise<string[]> {
   return out.sort();
 }
 
-/**
- * A cheap key that changes when the index does.
- *
- * The `pkgs` directory's own mtime catches an added or removed letter
- * directory; `.mcpp-index-updated` is written whenever mcpp refreshes the index,
- * which catches a changed descriptor body. The descriptor count is included so a
- * tree that stops being updated still costs one full read when its size changes.
- */
+/** Include source identity and every descriptor stat, including checkout edits without a marker. */
 async function revisionOf(roots: readonly IndexRoot[]): Promise<string> {
   const parts: string[] = [];
   for (const root of roots) {
-    const pkgs = await statSafe(root.pkgs);
-    const marker = await statSafe(path.join(root.path, ".mcpp-index-updated"));
-    const letters = await readdirSafe(root.pkgs);
-    parts.push(`${root.registry}:${pkgs?.mtimeMs ?? 0}:${marker?.mtimeMs ?? 0}:${letters.length}`);
+    const files = await descriptorFiles(root.pkgs);
+    const stats = await Promise.all(files.map(async (file) => `${file}:${JSON.stringify(await statSafe(file))}`));
+    parts.push(`${root.path}:${root.kind}:${root.updatedAt ?? ""}:${stats.join(";")}`);
   }
-  return parts.join("|");
+  return createHash("sha256").update(parts.join("|")).digest("hex");
 }
 
 async function statSafe(target: string): Promise<{ mtimeMs: number; size: number } | undefined> {
@@ -416,17 +303,14 @@ async function readOpenkal(roots: readonly IndexRoot[]): Promise<OpenkalIndex | 
   return found ? { members, ...(measured === undefined ? {} : { measured }) } : undefined;
 }
 
-/** The package ids the workspace's own `mcpp.toml` declares. */
-async function readAdded(projectRoot: string | undefined): Promise<Set<string>> {
-  if (projectRoot === undefined) {
-    return new Set();
-  }
-  try {
-    const text = await fs.readFile(path.join(projectRoot, "mcpp.toml"), "utf8");
-    return new Set(declaredDependencies(text));
-  } catch {
-    return new Set();
-  }
+/** Project overlay is always fresh and never changes the descriptor cache. */
+async function withProject(snapshot: LibrarySnapshot, projectRoot?: string): Promise<LibrarySnapshot> {
+  const text = projectRoot === undefined ? "" : await fs.readFile(path.join(projectRoot, "mcpp.toml"), "utf8").catch(() => "");
+  const declarations = readProjectDeclarations(text);
+  const ids = snapshot.entries.map((entry) => entry.id);
+  return { ...snapshot, entries: snapshot.entries.map((entry) => ({
+    ...entry, added: (["normal", "dev", "build"] as const).some((kind) => projectDependencyState(entry.id, declarations, [], ids, kind).declared),
+  })) };
 }
 
 interface Cache {
@@ -441,15 +325,14 @@ let cache: Cache | undefined;
 /**
  * The list, read from disk only when the revision changed.
  *
- * `projectRoot` is the workspace folder whose `mcpp.toml` decides the "already
- * declared" state; it is part of the cache key, because switching workspaces
- * changes the answer without changing the index.
+ * Only descriptor contents are cached. Project declarations are reapplied on
+ * every read, so disk writes and project switches cannot reuse old badges.
  */
 export async function loadSnapshot(options: { projectRoot?: string; platform?: string } = {}): Promise<LibrarySnapshot> {
-  const roots = await readIndexRoots();
-  const revision = `${await revisionOf(roots)}|${options.projectRoot ?? ""}`;
+  const roots = await readIndexRoots(options.projectRoot);
+  const revision = `${await revisionOf(roots)}|${options.platform ?? platformKey(process.platform)}`;
   if (cache !== undefined && cache.revision === revision) {
-    return cache.snapshot;
+    return withProject(cache.snapshot, options.projectRoot);
   }
   if (roots.length === 0) {
     const empty: LibrarySnapshot = { entries: [], roots, revision };
@@ -458,21 +341,18 @@ export async function loadSnapshot(options: { projectRoot?: string; platform?: s
   }
 
   const platform = options.platform ?? platformKey(process.platform);
-  const added = await readAdded(options.projectRoot);
   const entries: LibraryEntry[] = [];
   const texts = new Map<string, string>();
   /** Example refs, keyed by package id, from every root that has examples. */
   const exampleRefs = new Map<string, ExampleRef>();
   for (const root of roots) {
     for (const [id, ref] of exampleCatalog(await readExamples(root))) {
-      if (!exampleRefs.has(id)) {
-        exampleRefs.set(id, ref);
-      }
+      exampleRefs.set(`${root.path}\u0000${id}`, ref);
     }
   }
-  const openkal = await readOpenkal(roots);
 
   for (const root of roots) {
+    const openkal = await readOpenkal([root]);
     for (const file of await descriptorFiles(root.pkgs)) {
       let text: string;
       try {
@@ -485,7 +365,7 @@ export async function loadSnapshot(options: { projectRoot?: string; platform?: s
       // `descriptorEntry` decides the identity; the example and openkal lookups
       // below must use that same id, so it is computed the same way here.
       const id = descriptorId(fields, fileName).id;
-      const example = exampleRefs.get(id);
+      const example = exampleRefs.get(`${root.path}\u0000${id}`);
       const facet = openkalFacetFor(openkal, id);
       const entry = descriptorEntry({
         fileName,
@@ -493,19 +373,19 @@ export async function loadSnapshot(options: { projectRoot?: string; platform?: s
         file,
         text,
         platform,
-        added: added.has(id),
+        added: false,
         ...(example === undefined ? {} : { example }),
         ...(facet === undefined ? {} : { openkal: facet }),
       });
       entries.push(entry);
-      texts.set(entry.id, text);
+      texts.set(entry.file, text);
     }
   }
 
   entries.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const snapshot: LibrarySnapshot = { entries, roots, revision };
   cache = { revision, snapshot, texts };
-  return snapshot;
+  return withProject(snapshot, options.projectRoot);
 }
 
 /** The descriptor text of one package, from the cache when possible. */
@@ -518,8 +398,8 @@ export async function readDescriptorText(file: string): Promise<string | undefin
 }
 
 /** The cached text for a package id, when the last snapshot read it. */
-export function cachedDescriptorText(id: string): string | undefined {
-  return cache?.texts.get(id);
+export function cachedDescriptorText(file: string): string | undefined {
+  return cache?.texts.get(file);
 }
 
 /**
@@ -537,7 +417,7 @@ export async function readExampleFiles(roots: readonly IndexRoot[], example: Exa
     }
     for (const relative of example.paths) {
       const absolute = path.join(root.path, relative);
-      if (!absolute.startsWith(root.path)) {
+      if (path.relative(root.path, absolute).startsWith("..") || path.isAbsolute(path.relative(root.path, absolute))) {
         continue;
       }
       try {

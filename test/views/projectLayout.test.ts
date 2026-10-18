@@ -210,21 +210,23 @@ test("the dependency group is two levels, marked and resolved, with no connector
   assert.ok(group);
   assert.equal(text(group.label), "Dependencies (7)");
   assert.equal(text(group.description), "1 dev");
-  assert.equal(group.expanded, true);
-  assert.deepEqual(ids(group.children ?? []), declared.map((entry) => `project.dependency.${entry.name}`));
+  assert.equal(group.expanded, false);
+  assert.deepEqual(ids(group.children ?? []), declared.map((entry) => `project.dependency.${entry.name}${entry.dev ? ":dev" : ""}`));
   assert.equal(group.tooltip?.key, "Declared in mcpp.toml; the resolved version comes from mcpp.lock.");
 
   // `mcpplibs.openkal` matches `[package."openkal"]` through the namespace field;
   // `compat.freetype` matches `[package."compat.freetype"]` through its key.
-  assert.equal(text(find(tree, "project.dependency.mcpplibs.openkal")?.description), "Resolved 0.14.0");
-  assert.equal(text(find(tree, "project.dependency.compat.freetype")?.description), "Resolved 2.13.3");
-  assert.equal(text(find(tree, "project.dependency.compat.argparse")?.description), "Resolved —");
-  assert.equal(text(find(tree, "project.dependency.counters")?.description), "path · ../counters · Resolved —");
+  assert.equal(text(find(tree, "project.dependency.mcpplibs.openkal")?.label), "mcpplibs.openkal@0.14.0");
+  assert.equal(text(find(tree, "project.dependency.compat.freetype")?.label), "compat.freetype@2.13.3");
+  assert.equal(text(find(tree, "project.dependency.compat.argparse")?.label), "compat.argparse@3.2");
+  assert.equal(text(find(tree, "project.dependency.compat.argparse")?.description), "index");
+  assert.equal(text(find(tree, "project.dependency.counters")?.description), "path · ../counters");
   assert.equal(
     text(find(tree, "project.dependency.codec")?.description),
-    "git · https://example.test/codec.git · Resolved —",
+    "git",
   );
-  assert.equal(text(find(tree, "project.dependency.compat.gtest")?.description), "dev · Resolved —");
+  assert.equal(text(find(tree, "project.dependency.compat.gtest:dev")?.description), "index · dev");
+  assert.deepEqual(find(tree, "project.dependency.compat.argparse")?.command?.arguments, [{ root: "/w", dependency: "compat.argparse", kind: "normal", path: undefined }]);
   assert.equal(find(tree, "project.dependency.counters")?.icon, "folder");
   assert.equal(find(tree, "project.dependency.compat.argparse")?.icon, "package");
 
@@ -239,16 +241,18 @@ test("the dependency group is two levels, marked and resolved, with no connector
   }
 });
 
-test("the basics section ends with the dependencies and the language-service block", () => {
+test("dependencies follow Basics as a folded sibling; module graph remains inside Basics", () => {
   const tree = buildProjectTree(
     { root: "/w", target: "x86_64-linux-gnu", dependencies: [{ name: "compat.zlib" }] },
     { lock: parseLockfile(LOCK_TEXT), languageService: { installed: false } },
   );
+  assert.deepEqual(ids(tree), ["project.section.basic", "project.dependencies", "project.section.commands"]);
+  assert.equal(find(tree, "project.dependencies")?.expanded, false);
   assert.deepEqual(ids(find(tree, "project.section.basic")?.children ?? []), [
     "project.package",
     "project.target",
     "project.toolchain",
-    "project.dependencies",
+    "project.moduleDependencies",
     "project.languageService",
   ]);
 });
@@ -457,4 +461,15 @@ test("other C++ language services: with none, the row is a dimmed confirmation w
 test("other C++ language services: no row when there is nothing to read", () => {
   const service = find(buildProjectTree({ root: "/w" }, { languageService: HEALTHY }), "project.languageService");
   assert.equal(find(service?.children ?? [], "project.languageService.otherCppFeatures"), undefined);
+});
+
+test("namespaced direct dependencies stay individual and every row opens its graph target", () => {
+  const declared = readDependencies('[dependencies.compat]\nargparse="3.2"\nzlib="1.3.2"\n[dependencies.local]\npath="../local"\n[build-dependencies]\ngenerator="2"'.split('\n'));
+  assert.deepEqual(declared.map(dep=>dep.name), ['compat.argparse','compat.zlib','local','generator']);
+  const tree = buildProjectTree({root:'/work/app',dependencies:declared},{lock:[{key:'transitive',version:'9'}]});
+  const group = find(tree,'project.dependencies')!;
+  assert.equal(group.children?.length,4);
+  assert.ok(!allText([group]).some(text=>text.includes('transitive')));
+  for(const row of group.children ?? []) assert.equal(row.command?.command,'mcpp.project.showDependencyGraph');
+  assert.equal(find(tree,'project.dependency.local')?.icon,'folder');
 });

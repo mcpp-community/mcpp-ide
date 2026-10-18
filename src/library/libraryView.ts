@@ -24,16 +24,17 @@
 import * as vscode from "vscode";
 
 import { runMcpp } from "../cli/process";
-import { read, write } from "../config/access";
+import { effective, read, write } from "../config/access";
 import { languagePreference, t } from "../i18n/t";
 import { localeFromEditorLanguage } from "../i18n/translate";
 import { WebviewDocument } from "../webview/document";
 import { badgesOf, searchText, parseSearchOutput, type LibraryEntry } from "./indexModel";
-import { loadSnapshot, type IndexRoot, type LibrarySnapshot } from "./indexLocator";
+import { loadSnapshot, invalidateIndexCache, type IndexRoot, type LibrarySnapshot } from "./indexLocator";
 import {
   LIBRARY_UI,
   decodeLibraryMessage,
   renderLibraryHtml,
+  libraryClientState,
   type LibraryModel,
   type LibraryRow,
 } from "./libraryHtml";
@@ -57,7 +58,7 @@ export interface LibraryViewDeps {
   /** The configured executable, for the cross-registry search only. */
   mcppExecutable: () => string;
   /** Opens the editor-area detail page for one package id. */
-  openDetail: (id: string) => Promise<void> | void;
+  openDetail: (id: string, preview?: LibraryRow) => Promise<void> | void;
   /** Where `mcpp search` is logged; the same channel the other commands use. */
   output?: vscode.OutputChannel;
   /** `vscode.workspace.isTrusted`; `mcpp search` never runs without it. */
@@ -85,7 +86,8 @@ export function registerLibraryView(context: vscode.ExtensionContext, deps: Libr
     }),
     provider,
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("mcpp.library")) {
+      if (event.affectsConfiguration("mcpp.library") || event.affectsConfiguration("mcpp.path")) {
+        invalidateIndexCache();
         void provider.refresh();
       }
     }),
@@ -98,6 +100,8 @@ export function registerLibraryView(context: vscode.ExtensionContext, deps: Libr
   );
   return {
     refresh: () => provider.refresh(),
+    select: (key: string) => provider.select(key),
+    setUpdateStatus: (status: string) => provider.setUpdateStatus(status),
     dispose: () => provider.dispose(),
   };
 }
@@ -114,6 +118,8 @@ export function registerLibraryView(context: vscode.ExtensionContext, deps: Libr
  */
 export interface LibraryViewHandle {
   refresh(): Promise<void>;
+  select(key: string): void;
+  setUpdateStatus(status: string): void;
   dispose(): void;
 }
 
@@ -121,11 +127,20 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private view: vscode.WebviewView | undefined;
   private snapshot: LibrarySnapshot | undefined;
   private query = "";
+  private selectedKey = "";
   /** Cross-registry hits for the current query, from `mcpp search`. */
   private extra: LibraryRow[] = [];
   private searchNote: string | undefined;
   private searchTimer: NodeJS.Timeout | undefined;
   private rendering: Promise<void> | undefined;
+  private refreshAgain = false;
+  private requestGeneration = 0;
+  private error: string | undefined;
+  private updateNote: string | undefined;
+  private networkWrites: Promise<void> = Promise.resolve();
+  private networkChange = 0;
+  private painted = false;
+  private lastHtml = "";
   /**
    * The document on screen and the one CSP nonce it may be built with. Both
    * live in `WebviewDocument`: the nonce is per view (a nonce per render would
@@ -140,7 +155,12 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     private readonly deps: LibraryViewDeps,
   ) {}
 
+  public setUpdateStatus(status: string): void { this.updateNote = status; this.paint(); }
+
+  public select(key: string): void { this.selectedKey = key; this.paint(); }
+
   public dispose(): void {
+    this.requestGeneration++;
     if (this.searchTimer !== undefined) {
       clearTimeout(this.searchTimer);
       this.searchTimer = undefined;
@@ -151,6 +171,8 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     this.view = view;
     // A resolved view is a fresh, empty webview; see the note in `onDidDispose`.
     this.webviewDocument.invalidate();
+    this.painted = false;
+    this.lastHtml = "";
     view.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, MEDIA_DIRECTORY)],
@@ -175,22 +197,29 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
   /** Re-read the index (from the cache when the revision is unchanged) and paint. */
   public refresh(): Promise<void> {
+    this.requestGeneration++;
+    this.extra = [];
+    this.searchNote = undefined;
     if (this.rendering !== undefined) {
+      this.refreshAgain = true;
       return this.rendering;
     }
-    const projectRoot = this.deps.projectRoot();
-    this.rendering = loadSnapshot(projectRoot === undefined ? {} : { projectRoot })
-      .then((snapshot) => {
-        this.snapshot = snapshot;
-      })
-      .catch((error: unknown) => {
-        this.deps.output?.appendLine(`mcpp library: ${error instanceof Error ? error.message : String(error)}`);
-        this.snapshot = { entries: [], roots: [], revision: "error" };
-      })
-      .then(() => {
-        this.rendering = undefined;
+    this.rendering = (async () => {
+      do {
+        this.refreshAgain = false;
+        const projectRoot = this.deps.projectRoot();
+        try {
+          const snapshot = await loadSnapshot({ projectRoot });
+          if (projectRoot !== this.deps.projectRoot()) { this.refreshAgain = true; continue; }
+          this.snapshot = snapshot;
+          this.error = undefined;
+        } catch (error) {
+          this.error = t("Could not read the index: {0}", error instanceof Error ? error.message : String(error));
+          this.deps.output?.appendLine(this.error);
+        }
         this.paint();
-      });
+      } while (this.refreshAgain);
+    })().finally(() => { this.rendering = undefined; });
     return this.rendering;
   }
 
@@ -200,7 +229,21 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
       return;
     }
     switch (message.type) {
+      case "mounted":
+        this.lastHtml = "";
+        this.paint();
+        return;
+      case "settings":
+        await vscode.commands.executeCommand("workbench.action.openSettings", "mcpp.library.indexPath");
+        return;
+      case "update":
+        await vscode.commands.executeCommand("mcpp.library.updateIndex");
+        return;
+      case "output":
+        this.deps.output?.show(true);
+        return;
       case "refresh":
+        invalidateIndexCache();
         await this.refresh();
         return;
       case "search":
@@ -208,10 +251,10 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
         this.scheduleSearch();
         return;
       case "networkSearch":
-        await this.setNetworkSearch(message.enabled);
+        await this.setNetworkSearch(message.enabled, message.token);
         return;
       case "open":
-        await this.deps.openDetail(message.id);
+        await this.deps.openDetail(message.id, this.extra.find((row) => (row.key ?? row.id) === message.id));
         return;
       default:
         return;
@@ -219,18 +262,25 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
   }
 
   /** `mcpp.library.networkSearch`: persisted, then honoured on the next query. */
-  private async setNetworkSearch(enabled: boolean): Promise<void> {
+  private async setNetworkSearch(enabled: boolean, token?: string): Promise<void> {
+    const change = ++this.networkChange;
+    this.requestGeneration++;
     this.extra = [];
     this.searchNote = undefined;
     try {
-      await write("mcpp.library.networkSearch", enabled, "user");
+      const source = effective<boolean>("mcpp.library.networkSearch").source;
+      const queued = this.networkWrites.then(() => write("mcpp.library.networkSearch", enabled, source === "workspace" || source === "workspaceFolder" ? "workspace" : "user"));
+      this.networkWrites = queued.catch(() => {});
+      await queued;
     } catch (error) {
       this.deps.output?.appendLine(
         `mcpp library: could not write mcpp.library.networkSearch: ${error instanceof Error ? error.message : String(error)}`,
       );
       this.searchNote = t("The setting could not be written; the toggle was not saved.");
     }
-    if (enabled) {
+    if (change !== this.networkChange) { return; }
+    void this.view?.webview.postMessage({ type: "networkSearchSaved", token, enabled: this.networkSearch() });
+    if (enabled && this.networkSearch()) {
       await this.runCrossRegistrySearch();
     } else {
       this.paint();
@@ -238,10 +288,15 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
   }
 
   private scheduleSearch(): void {
+    this.requestGeneration++;
+    const hadExtra = this.extra.length > 0 || this.searchNote !== undefined;
+    this.extra = [];
+    this.searchNote = undefined;
+    if (hadExtra) { this.paint(); }
     if (this.searchTimer !== undefined) {
       clearTimeout(this.searchTimer);
     }
-    if (!this.networkSearch()) {
+    if (!this.networkSearch() || this.query.trim().length < 2) {
       this.extra = [];
       this.searchNote = undefined;
       return;
@@ -266,7 +321,9 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
    */
   private async runCrossRegistrySearch(): Promise<void> {
     const query = this.query.trim();
-    if (query.length < 2) {
+    const generation = ++this.requestGeneration;
+    const projectRoot = this.deps.projectRoot();
+    if (!this.networkSearch() || query.length < 2) {
       this.extra = [];
       this.searchNote = undefined;
       this.paint();
@@ -275,6 +332,8 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     // `mcpp search` runs the configured executable and `mcpp.path` is
     // resource-scoped: an untrusted workspace must not name the program, so the
     // tier refuses and says so instead of silently showing nothing extra.
+    this.searchNote = t("Searching other registries…");
+    this.paint();
     const result = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Window, title: t("Searching all registries…") },
       () =>
@@ -283,6 +342,7 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
           maxBufferMiB: read<number>("mcpp.runtime.maxOutputMiB"),
         }),
     );
+    if (generation !== this.requestGeneration || !this.networkSearch() || this.query.trim() !== query || this.deps.projectRoot() !== projectRoot) { return; }
     if (result === undefined) {
       this.extra = [];
       this.searchNote = t("The workspace is not trusted; the other registries were not searched.");
@@ -303,6 +363,8 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
       .filter((hit) => !known.has(hit.id))
       .map((hit) => ({
         id: hit.id,
+        key: `search:${hit.id}`,
+        source: t("Other registry"),
         name: hit.id.includes(".") ? hit.id.slice(hit.id.indexOf(".") + 1) : hit.id,
         ...(hit.id.includes(".") ? { namespace: hit.id.slice(0, hit.id.indexOf(".")) } : {}),
         ...(hit.version === undefined ? {} : { version: hit.version }),
@@ -324,13 +386,19 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
   private labels(): Record<string, string> {
     return {
       [LIBRARY_UI.htmlLang]: htmlLanguage(),
-      [LIBRARY_UI.title]: t("Library"),
+      [LIBRARY_UI.title]: t("Libraries"),
+      [LIBRARY_UI.sources]: t("Source details"),
+      [LIBRARY_UI.other]: t("Other registries"),
+      [LIBRARY_UI.settings]: t("Set index path"),
+      [LIBRARY_UI.update]: t("Update mcpp index"),
+      [LIBRARY_UI.output]: t("Show output"),
+      [LIBRARY_UI.clear]: t("Clear search"),
       [LIBRARY_UI.search]: t("Search packages"),
-      [LIBRARY_UI.networkSearch]: t("Search all registries"),
+      [LIBRARY_UI.networkSearch]: t("Search other registries"),
       [LIBRARY_UI.networkSearchHint]: t(
         "Off by default: this tier runs mcpp search, which may use the network and is read from human output on a best-effort basis. Failures fall back to the local index.",
       ),
-      [LIBRARY_UI.versionLatest]: t("latest {0}"),
+      [LIBRARY_UI.versionLatest]: t("{0}"),
       [LIBRARY_UI.surfaceExternal]: t("upstream mcpp.toml"),
       [LIBRARY_UI.badgeExamples]: t("✓ Has examples"),
       [LIBRARY_UI.badgeCn]: t("China mirror"),
@@ -338,7 +406,7 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
       [LIBRARY_UI.badgeOpenkalCompat]: t("openkal-compat"),
       [LIBRARY_UI.badgeOpenkalPosix]: t("POSIX environment"),
       [LIBRARY_UI.badgeOpenkalPlatform]: t("uses platform interfaces"),
-      [LIBRARY_UI.added]: t("Added"),
+      [LIBRARY_UI.added]: t("Declared"),
       [LIBRARY_UI.unreadable]: t("Descriptor not readable"),
       [LIBRARY_UI.noResults]: t("No package matches this search."),
       [LIBRARY_UI.noIndex]: t(
@@ -348,7 +416,7 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
       [LIBRARY_UI.count]: t("{0} of {1} packages"),
       [LIBRARY_UI.open]: t("Open the detail page for {0}"),
       [LIBRARY_UI.crossRegistry]: t("other registry"),
-      [LIBRARY_UI.refresh]: t("Refresh"),
+      [LIBRARY_UI.refresh]: t("Reread locally"),
     };
   }
 
@@ -370,17 +438,25 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
       this.model(),
       this.webviewDocument.assets(vscode.Uri.joinPath(this.context.extensionUri, MEDIA_DIRECTORY), view.webview),
     );
-    this.webviewDocument.paint(view.webview, document);
+    if (document === this.lastHtml) { return; }
+    this.lastHtml = document;
+    if (!this.painted) {
+      this.webviewDocument.paint(view.webview, document);
+      this.painted = true;
+    } else {
+      const model = this.model();
+      void view.webview.postMessage({ type: "libraryUpdate", html: document, state: libraryClientState(model), networkSearch: model.networkSearch });
+    }
   }
 
   private model(): LibraryModel {
     const snapshot = this.snapshot;
     const ui = this.labels();
     if (snapshot === undefined) {
-      return this.emptyModel(ui, t("Reading the index…"), t("Reading the index…"));
+      return this.emptyModel(ui, this.error ?? t("Reading the index…"), t("Reading the index…"));
     }
     const entries = snapshot.entries;
-    const rows = [...entries.map(rowOf), ...this.extra];
+    const rows = [...entries.map((entry) => rowOf(entry, snapshot.roots.some((root) => root.kind === "custom"))), ...this.extra];
     const notice =
       snapshot.roots.length === 0
         ? ui[LIBRARY_UI.noIndex]
@@ -390,10 +466,14 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
     return {
       ui,
       rows,
+      selectedKey: this.selectedKey,
       query: this.query,
       networkSearch: this.networkSearch(),
       networkSearchSetting: "mcpp.library.networkSearch",
       dataSource: this.dataSource(snapshot.roots, entries.length),
+      sourceDetails: snapshot.roots.map((root) => `${root.kind === "official" ? t("Official index") : t("Custom index")}: ${root.path}${root.updatedAt === undefined ? "" : ` · ${new Date(root.updatedAt).toLocaleString()}`}`).join("\n"),
+      status: [this.error, this.searchNote, this.updateNote].filter(Boolean).join(" ") || undefined,
+      projectNotice: this.deps.projectRoot() === undefined ? t("Browse libraries; select an mcpp project in the detail page to add dependencies.") : undefined,
       countTemplate: ui[LIBRARY_UI.count],
       total: rows.length,
       ...(rows.length === 0 ? { notice } : {}),
@@ -416,25 +496,18 @@ class LibraryViewProvider implements vscode.WebviewViewProvider, vscode.Disposab
 
   /** The footer, in plain words: where the rows came from and whether it is offline. */
   private dataSource(roots: readonly IndexRoot[], total: number): string {
-    const registries = roots.map((root) => root.registry).join(", ");
-    const base =
-      roots.length === 0
-        ? t("No local index was read.")
-        : t(
-            "{0} descriptor(s) from {1} local index folder(s): {2}. Read offline.",
-            total,
-            roots.length,
-            registries,
-          );
-    const sentence = `${t("Data source")}: ${base}`;
-    return this.searchNote === undefined ? sentence : `${sentence} ${this.searchNote}`;
+    if (roots.length === 0) { return t("No local mcpp-index found"); }
+    const name = roots.length === 1 && roots[0].kind === "official" ? "mcpp-index" : t("Custom index");
+    return t("{0} · {1} packages · local", name, total);
   }
 }
 
 /** One entry as the row the document renders. */
-function rowOf(entry: LibraryEntry): LibraryRow {
+function rowOf(entry: LibraryEntry, showSource = false): LibraryRow {
   return {
     id: entry.id,
+    key: entry.file,
+    ...(showSource ? { source: entry.registry } : {}),
     haystack: searchText(entry),
     ...(entry.namespace === undefined ? {} : { namespace: entry.namespace }),
     name: entry.name,

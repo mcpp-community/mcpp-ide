@@ -40,7 +40,8 @@ import { languagePreference, setLanguagePreference, t, type LanguagePreference }
 import { readCacheSnapshot, registerCacheView } from "./cache/cacheView";
 import { registerLanguageServerCommands } from "./views/languageServerView";
 import { createLibraryDetailOpener } from "./library/detailPanel";
-import { loadSnapshot } from "./library/indexLocator";
+import { loadSnapshot, invalidateIndexCache } from "./library/indexLocator";
+import { watchProjectFiles } from "./library/projectWatcher";
 import { registerLibraryView } from "./library/libraryView";
 import { registerProjectView } from "./views/projectView";
 
@@ -322,22 +323,77 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   // The library ecosystem: a sidebar view plus an editor-area package page. The
   // detail page writes `mcpp.toml` through `mcpp add`, so it tells the view to
   // refresh — no save event fires for a file written outside the editor.
+  // Keep the selected library project when an editor-area webview takes focus.
+  let libraryProjectRoot: string | undefined = vscode.window.activeTextEditor?.document.uri.scheme === "file"
+    || vscode.workspace.workspaceFolders?.length === 1 ? findCurrentProject()?.root : undefined;
+  const libraryProject = (): string | undefined => libraryProjectRoot;
+  const chooseLibraryProject = async (): Promise<string | undefined> => {
+    const manifests = await vscode.workspace.findFiles(MCPP_MANIFEST_GLOB, "**/{node_modules,target,.git}/**", 200);
+    const roots = [...new Set(manifests.map((uri) => uri.fsPath.slice(0, -"/mcpp.toml".length)))];
+    const active = libraryProject();
+    if (active && !roots.includes(active)) { roots.unshift(active); }
+    const selected = await vscode.window.showQuickPick(roots.map((root) => ({ label: vscode.workspace.asRelativePath(root), description: root, root })), {
+      title: t("Choose the target mcpp project"), placeHolder: t("Dependencies will be added to this project's mcpp.toml"),
+    });
+    if (selected) { libraryProjectRoot = selected.root; watchSelectedLibraryProject(); refreshLibraries(); }
+    return selected?.root;
+  };
   const openLibraryDetail = createLibraryDetailOpener(extensionContext, {
-    mcppExecutable: () => cliController.mcppExecutable(findCurrentProject()),
-    projectRoot: () => findCurrentProject()?.root,
+    mcppExecutable: (root) => cliController.mcppExecutable(root ? { root, manifestPath: `${root}/mcpp.toml` } : undefined),
+    projectRoot: libraryProject,
+    chooseProject: chooseLibraryProject,
+    onPackageOpened: (key) => library.select(key),
     output,
     isTrusted: () => vscode.workspace.isTrusted,
-    onDependenciesChanged: () => void library.refresh(),
+    onDependenciesChanged: () => { void library.refresh(); },
+    onProjectFilesRead: (root, manifest, lock) => { if (root === libraryProjectRoot) { selectedLibraryPoll?.observe(manifest, lock); } },
   });
   const library = registerLibraryView(extensionContext, {
-    projectRoot: () => findCurrentProject()?.root,
-    mcppExecutable: () => cliController.mcppExecutable(findCurrentProject()),
+    projectRoot: libraryProject,
+    mcppExecutable: () => cliController.mcppExecutable(libraryProjectRoot ? { root: libraryProjectRoot, manifestPath: `${libraryProjectRoot}/mcpp.toml` } : undefined),
     openDetail: openLibraryDetail,
     output,
-    // The cross-registry search runs `mcpp search`, and `mcpp.path` is
-    // resource-scoped: an untrusted workspace must not name the program.
     isTrusted: () => vscode.workspace.isTrusted,
   });
+  const dependencyWatcher = vscode.workspace.createFileSystemWatcher("**/mcpp.{toml,lock}");
+  let selectedLibraryWatcher: vscode.Disposable | undefined;
+  let selectedLibraryPoll: ReturnType<typeof watchProjectFiles> | undefined;
+  let libraryTimer: NodeJS.Timeout | undefined;
+  const refreshLibraries = (): void => {
+    void selectedLibraryPoll?.check();
+    if (libraryTimer) { clearTimeout(libraryTimer); }
+    libraryTimer = setTimeout(() => {
+      libraryTimer = undefined;
+      void library.refresh();
+      void openLibraryDetail.refresh();
+    }, 120);
+  };
+  // A non-recursive RelativePattern also observes scratch/gitignored projects
+  // which a workspace's recursive watcher may intentionally exclude.
+  function watchSelectedLibraryProject(): void {
+    selectedLibraryWatcher?.dispose();
+    selectedLibraryWatcher = undefined;
+    selectedLibraryPoll = undefined;
+    if (!libraryProjectRoot) { return; }
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(libraryProjectRoot), "mcpp.{toml,lock}"));
+    selectedLibraryPoll = watchProjectFiles(libraryProjectRoot, refreshLibraries);
+    selectedLibraryWatcher = vscode.Disposable.from(selectedLibraryPoll, watcher, watcher.onDidCreate(refreshLibraries), watcher.onDidChange(refreshLibraries), watcher.onDidDelete(refreshLibraries));
+  }
+  watchSelectedLibraryProject();
+  extensionContext.subscriptions.push(
+    { dispose: () => selectedLibraryWatcher?.dispose() },
+    dependencyWatcher,
+    dependencyWatcher.onDidCreate(refreshLibraries),
+    dependencyWatcher.onDidChange(refreshLibraries),
+    dependencyWatcher.onDidDelete(refreshLibraries),
+    vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor?.document.uri.scheme === "file") { const active = findCurrentProject()?.root; if (active && active !== libraryProjectRoot) { libraryProjectRoot = active; watchSelectedLibraryProject(); } refreshLibraries(); } }),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => { libraryProjectRoot = undefined; watchSelectedLibraryProject(); refreshLibraries(); }),
+    vscode.workspace.onDidGrantWorkspaceTrust(refreshLibraries),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("mcpp.library") || event.affectsConfiguration("mcpp.path") || event.affectsConfiguration("mcpp.ui.language")) { refreshLibraries(); }
+    }),
+    { dispose: () => { if (libraryTimer) { clearTimeout(libraryTimer); } } },
+  );
   // `registerLibraryView` registers its own webview provider; these are only the
   // entry points a menu or the project view can name.
   extensionContext.subscriptions.push(
@@ -351,41 +407,30 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     }),
     vscode.commands.registerCommand(LIBRARY_COMMANDS.updateIndex, async () => {
       if (!vscode.workspace.isTrusted) {
-        void vscode.window.showWarningMessage(
-          t("This workspace is not trusted. mcpp commands may run external programs named by workspace settings; trust the workspace first."),
-        );
+        void vscode.window.showWarningMessage(t("This workspace is not trusted. mcpp commands may run external programs named by workspace settings; trust the workspace first."));
         return;
       }
-      const project = findCurrentProject();
-      // A refresh that reaches the network is worth a progress notification, and
-      // a refresh that succeeds has to *say so*: the command produced no visible
-      // change at all before, which reads exactly like a broken button.
+      const root = libraryProject();
+      const project = root ? { root, manifestPath: `${root}/mcpp.toml` } : undefined;
+      if (read<string>("mcpp.library.indexPath").trim()) {
+        output.appendLine(t("Updating the global mcpp index; a configured custom checkout is only reread."));
+      }
+      library.setUpdateStatus(t("Updating mcpp index…"));
       const result = await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: t("Refreshing the mcpp Package Index…") },
-          () =>
-            runMcpp(vscode.workspace.isTrusted, cliController.mcppExecutable(project), ["index", "update"], project?.root, {
-              timeoutMs: 300_000,
-            }),
-        );
-        await library.refresh();
-        if (result === undefined || result.exitCode !== 0) {
-          void vscode.window.showErrorMessage(
-            result === undefined
-              ? t("This workspace is not trusted. mcpp commands may run external programs named by workspace settings; trust the workspace first.")
-              : t("mcpp index update failed with exit code {0}", result.exitCode),
-          );
-          return;
-      }
-      // `library.refresh()` has just filled the snapshot cache, so this second
-      // look is the count the view is showing, not another read of the index.
-      const snapshot = await loadSnapshot(project === undefined ? {} : { projectRoot: project.root });
-      void vscode.window.showInformationMessage(
-        t(
-          "mcpp Package Index refreshed: {0} package(s) from {1} index folder(s).",
-          snapshot.entries.length,
-          snapshot.roots.length,
-        ),
+        () => runMcpp(vscode.workspace.isTrusted, cliController.mcppExecutable(project), ["index", "update"], project?.root, { timeoutMs: 300_000 }),
       );
+      if (result === undefined || result.exitCode !== 0) {
+        library.setUpdateStatus(t("Index update failed; showing the last available local snapshot."));
+        if (result?.stderr) { output.appendLine(result.stderr.trimEnd()); }
+        void vscode.window.showErrorMessage(t("mcpp index update failed with exit code {0}", result?.exitCode ?? -1));
+        return;
+      }
+      invalidateIndexCache();
+      await library.refresh();
+      await openLibraryDetail.refresh();
+      const snapshot = await loadSnapshot({ projectRoot: root });
+      library.setUpdateStatus(t("Index updated; {0} local packages.", snapshot.entries.length));
     }),
   );
   // There is no `mcpp.library.indexFound` context key and no `viewsWelcome`

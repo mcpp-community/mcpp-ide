@@ -283,8 +283,9 @@ main {
 
 body.detail {
   background-color: var(--vscode-editor-background);
-  max-width: 900px;
-  padding: 0 20px 40px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 clamp(16px, 2vw, 40px) 40px;
 }
 
 .detail-header {
@@ -442,6 +443,8 @@ body.detail {
   margin: 0;
   padding: 8px 10px;
   overflow-x: auto;
+  max-height: min(52vh, 440px);
+  overflow-y: auto;
   background-color: var(--vscode-textCodeBlock-background, transparent);
   border: 1px solid var(--vscode-panel-border, transparent);
   border-radius: 3px;
@@ -465,6 +468,11 @@ body.detail {
 }
 
 pre.detail-code code {
+  display: block;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 12px;
   line-height: 1.5;
@@ -630,3 +638,108 @@ pre.detail-code code {
   font-size: 10px;
   border-top: 1px solid var(--vscode-panel-border, transparent);
 }
+
+/* Libraries: keep the search control stable while replacing results in place. */
+.toolbar { position: sticky; }
+.search { padding-right: 24px; }
+.clear-search { position: absolute; right: 18px; top: 10px; font-size: 16px; }
+.row[aria-current="true"] { background: var(--vscode-list-inactiveSelectionBackground); box-shadow: inset 2px 0 var(--vscode-focusBorder); }
+.group-title { margin: 12px 10px 4px; font-size: 11px; color: var(--vscode-descriptionForeground); }
+.search-status { margin: 8px 10px; color: var(--vscode-descriptionForeground); }
+.footer details { margin-bottom: 6px; }
+.footer summary, .detail-footer summary, .detail-aside summary { cursor: pointer; }
+.footer-actions { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.source { white-space: pre-wrap; }
+.project-notice { margin-top: 2px; }
+
+/* Use the editor width; reserve a compact metadata column instead of scaling it with the code. */
+.detail-title { overflow-wrap: anywhere; }
+.detail-primary { margin: 0; padding: 8px 0 10px; }
+.project-context, .detail-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 8px 0; }
+.project-context { color: var(--vscode-descriptionForeground); }
+.project-context strong { font-weight: 500; overflow-wrap: anywhere; }
+.detail-controls label { display: flex; align-items: center; gap: 6px; }
+.detail-controls select { padding: 3px 8px; font: inherit; color: var(--vscode-dropdown-foreground); background: var(--vscode-dropdown-background); border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border, transparent)); }
+.detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(240px, 24vw, 320px); gap: 28px; }
+.detail-layout > *, .detail-command-row > *, .detail-usage-line > * { min-width: 0; }
+.detail-aside { min-width: 0; }
+.detail-aside .detail-version-group { display: block; }
+.detail-aside .detail-platform { display: block; margin-bottom: 4px; }
+.detail-version-list { display: flex; flex-wrap: wrap; gap: 4px; }
+span.detail-version { cursor: default; color: var(--vscode-descriptionForeground); background: var(--vscode-textCodeBlock-background); border-color: transparent; }
+span.detail-version[data-installed] { color: var(--vscode-testing-iconPassed, var(--vscode-foreground)); }
+.detail-usage > h2:not(:first-child) { margin-top: 20px; }
+.detail-command { white-space: pre; }
+.detail-command-row { min-width: 0; }
+.detail-command-row .detail-command { flex: 1; }
+.detail-command-row .detail-copy { flex-shrink: 0; }
+.example-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 20px 0 8px; }
+.example-heading h2 { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.snippet-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.snippet-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 7px; border: 1px solid transparent; border-radius: 4px; color: var(--vscode-descriptionForeground); background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.snippet-action:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }
+.snippet-action:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.vscode-high-contrast .snippet-action, .vscode-high-contrast-light .snippet-action { border-color: var(--vscode-contrastBorder); }
+.result-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+button:disabled, select:disabled { cursor: default; opacity: 0.65; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+.detail-footer { overflow-wrap: anywhere; }
+@media (max-width: 899px) {
+  .detail-layout { display: block; }
+  body.detail { padding-left: 16px; padding-right: 16px; }
+}
+@media (max-width: 520px) {
+  .detail-actions { gap: 8px; }
+  .detail-actions button { padding: 5px 8px; }
+  .detail-command-row { flex-wrap: wrap; }
+  .detail-command-row .detail-command { flex-basis: 100%; }
+}
+
+.toolbar .count { margin: 0 0 0 auto; align-self: center; }
+.detail-actions .link-button { color: var(--vscode-textLink-foreground); background: transparent; border-color: transparent; padding: 4px 0; }
+.detail-actions .link-button:hover { background: transparent; text-decoration: underline; }
+
+/* A single, compact context row; empty feedback reserves no vertical space. */
+.project-context { margin: 0 0 8px; gap: 8px; font-size: 11px; }
+.project-picker { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; margin: 0; padding: 2px 0; font: inherit; color: var(--vscode-descriptionForeground); background: transparent; border: 0; cursor: pointer; }
+.project-picker strong { color: var(--vscode-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-picker:hover strong { color: var(--vscode-textLink-foreground); }
+.context-platform::before { content: "·"; margin-right: 8px; }
+.detail-controls { margin: 4px 0 10px; gap: 8px 14px; }
+.detail-command-row { margin-top: 8px; }
+.detail-command { margin: 0; }
+.detail-result { margin: 8px 0 0; }
+.detail-layout { gap: 24px; }
+.detail-aside .detail-section { padding: 10px 0; margin: 0; }
+.detail-aside summary { font-size: 12px; font-weight: 500; }
+.detail-aside details[open] > summary { margin-bottom: 10px; }
+.detail-usage { padding-top: 12px; }
+.detail-footer { margin-top: 14px; }
+
+/* Package identity and context share one header; tags remain readable in every theme. */
+.detail-heading-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px 18px; }
+.detail-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.detail-heading .detail-title { max-width: 100%; }
+.detail-heading-row .project-context { justify-content: flex-end; max-width: 220px; margin: 0; padding-top: 2px; }
+.detail-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.detail-tag { display: inline-block; padding: 1px 6px; border: 1px solid currentColor; border-radius: 4px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; line-height: 1.6; font-weight: 500; }
+.detail-tag[data-tag="surface"] { color: var(--vscode-symbolIcon-interfaceForeground, var(--vscode-textLink-foreground)); background: color-mix(in srgb, var(--vscode-symbolIcon-interfaceForeground, var(--vscode-textLink-foreground)) 12%, transparent); }
+.detail-tag[data-tag="standard"] { color: var(--vscode-charts-purple, var(--vscode-textLink-foreground)); background: color-mix(in srgb, var(--vscode-charts-purple, var(--vscode-textLink-foreground)) 12%, transparent); }
+.detail-tag[data-tag="license"] { color: var(--vscode-charts-green, var(--vscode-foreground)); background: color-mix(in srgb, var(--vscode-charts-green, var(--vscode-foreground)) 12%, transparent); }
+.vscode-high-contrast .detail-tag, .vscode-high-contrast-light .detail-tag { background: transparent; color: var(--vscode-foreground); }
+.dependency-kind-label { color: var(--vscode-descriptionForeground); font-family: var(--vscode-editor-font-family); font-size: 11px; }
+.detail-add-group { position: relative; display: inline-flex; align-items: stretch; }
+.detail-add-group .detail-add { border-radius: 2px 0 0 2px; }
+.detail-add-group .detail-kind-toggle { width: 28px; min-width: 28px; padding: 4px; border-radius: 0 2px 2px 0; border-left-color: var(--vscode-button-separator, var(--vscode-contrastBorder, transparent)); }
+.detail-kind-menu { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; width: 270px; max-width: calc(100vw - 36px); padding: 4px; border: 1px solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent)); border-radius: 4px; background: var(--vscode-menu-background, var(--vscode-editorWidget-background)); box-shadow: 0 4px 12px var(--vscode-widget-shadow, transparent); }
+.detail-actions .detail-kind-menu button { position: relative; display: grid; width: 100%; gap: 2px; padding: 7px 10px 7px 26px; text-align: left; color: var(--vscode-menu-foreground, var(--vscode-foreground)); background: transparent; border: 0; border-radius: 2px; }
+.detail-kind-menu button[aria-checked="true"]::before { content: "✓"; position: absolute; left: 7px; top: 7px; }
+.detail-kind-menu code { font-size: 10px; color: var(--vscode-descriptionForeground); }
+.detail-actions .detail-kind-menu button:hover, .detail-actions .detail-kind-menu button:focus { color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground)); background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground)); }
+@media (max-width: 520px) {
+  .detail-heading-row { display: flex; flex-direction: column; gap: 4px; }
+  .detail-heading-row .project-context { align-self: flex-end; }
+}
+
+.detail-kind-menu code { background: transparent; padding: 0; }
+.detail-kind-menu button:hover code, .detail-kind-menu button:focus code { color: inherit; }

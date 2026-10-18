@@ -1,3 +1,18 @@
+## Unreleased
+
+## 0.8.0 - 2026-10-19
+
+- Package details use the available editor width on fullscreen displays, with bounded side gutters and a compact metadata column.
+- Add C++ Modules Deps backed by mcppls JSON, with entry/source cards, one-hop external boundaries and read-only source navigation. Share the package graph canvas with depth/branch folding, hidden-node search, focused views and 150-node/300-edge layout budgets. Move direct Dependencies after Basics as a collapsed sibling.
+
+- Example code uses a uniform background and compact heading actions; local and bundled example sources both open read-only. Direct dependency rows now resolve namespaces correctly, show package coordinates and sources, and focus the selected node in the simplified colored graph.
+- Usage pages restore real index test examples even when the installed index omits tests, using a pinned offline snapshot with full read-only source access. Focused search shows a single clear button.
+- Project dependencies offer a Mermaid graph of the nearest three levels, based on manifests and local index metadata, with refresh, zoom and Mermaid copy controls.
+- Libraries now defaults to the official `mcpp-index` in `<mcpp home>/indices/mcpplibs`, with support for the old location. The xlings tool index is no longer substituted for the library catalog.
+- Package details put usage, standard and license tags beside the name, and project selection in the header. A split action chooses project, development or build dependencies. The CLI handles project/development additions; build dependencies and group migrations provide a TOML preview and a manifest editing entry point.
+- Search and detail updates preserve the document, selection and scroll state. Cross-registry hits have explicit limited previews. Stale searches and results from another package/project cannot update the current page.
+- Dependency state is refreshed independently from cached descriptors, including external file changes. Local rereads and index updates are separate actions; failures retain usable results.
+
 ## 0.7.0 - 2026-10-14
 
 `build.mcpp` is C++ again, compiled by C++ Modules as the build program it is, and the project

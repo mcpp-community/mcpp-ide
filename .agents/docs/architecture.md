@@ -1,6 +1,6 @@
 # mcpp-vscode 架构
 
-> 状态：0.4.0（mcppls 语言服务迁移之后）。本文记录**当前**结构；变动请同步更新。
+> 第 1–6 节保留 0.4.0 迁移背景；Libraries 的当前架构与边界见第 7 节（2026-10-18）。
 
 ## 1. 一句话定位
 
@@ -75,3 +75,29 @@ extension.ts                 VS Code 装配层：激活、命令注册、provide
   （build / restart）不符。
 
 具体建议见 `.agents/reviews/` 下的评审报告。
+
+
+## 7. Libraries（2026-10-18）
+
+- `library/indexLocator.ts`：显式索引路径或 CLI home 下的官方索引发现；新位置 `indices/mcpplibs` 优先，兼容 `registry/data/mcpplibs`。不默认收集 xim。缓存按源路径、平台、描述符 stat 和更新标记区分；项目状态是单独的 overlay。
+- `library/projectState.ts`：复用 TOML 解析器，区分普通、开发与构建声明、源码依赖、锁定结果和有歧义的短名；生成清单预览的目标 section/key。
+- `library/libraryView.ts` 与 `library/detailPanel.ts`：VS Code 生命周期和 CLI 编排；搜索响应绑定请求代次，添加操作绑定包、项目、页面代次，详情读取还单独校验渲染请求顺序。
+- `library/libraryHtml.ts`、`library/detailHtml.ts`：纯渲染器。初始文档只安装一次；mounted 仅请求重放最新数据，后续用 message 更新局部 DOM，保留查询、版本、依赖类型、折叠状态与焦点，不形成 reload loop。
+- `library/projectWatcher.ts`：只比较选中项目的 manifest/lock 内容；详情实际读到的内容更新比较基线，保证短暂 lock 状态也能恢复。监听和计时器随窗口或项目切换释放。
+- `library/addDependency.ts`：普通和开发依赖由 `mcpp add` 修改，构建依赖/分组迁移只提供复制片段与打开清单。扩展不自行改写 TOML，也不将 lock-only 误称为已声明/已安装。
+
+本地真实 UI 验证入口：`tools/test-libraries-ui.mjs`；专用 profile 和产物均在 gitignored 的 `.dev-profile/`。
+
+- `library/examples.ts`：官方安装版索引未携带测试时，读取带来源提交的内置测试快照；checkout 的本地测试优先，自定义索引不使用此兜底。完整代码通过只读 `mcpp-example` 文档打开。
+- `projects/dependencyGraph.ts`：纯声明图遍历，默认三跳（公共画布可请求更深数据），处理路径包、共享节点和循环；lock 只补版本。`dependencyGraphPanel.ts` 负责只读文件编排和本地 Mermaid Webview。Mermaid 固定版本与许可证由编译脚本复制至 `dist/vendor`，无需 CDN。
+
+- `views/models.ts` 与 Libraries 共用直接声明解析，树节点携带项目、依赖和分组身份；点击进入声明图并居中高亮对应节点。Webview 使用 SVG 平移/缩放变换，滚轮保留鼠标锚点，Pointer Events 区分点击与拖动；Fit 可恢复完整图。
+
+## 8. Shared dependency canvas and C++ Modules graph
+
+- `graphs/model.ts` defines a provider-independent graph, component roots, depth/branch projection, 150-node/300-edge layout budgets and escaped Mermaid output. Complete module data is retained independently of the visible subgraph.
+- `projects/dependencyGraphPanel.ts` owns one persistent Webview with separate per-project/per-kind graph and navigation states. `graphs/panelHtml.ts` and `media/graph.js` share rendering, wheel/pointer navigation, folding, focus, search and theme handling. Layouts are serialized; obsolete provider requests are discarded.
+- `cli/moduleGraph.ts` is a trust-gated, time/output-bounded consumer of mcppls CLI JSON. This extends the integration boundary with structured queries, without taking over C++ parsing, resolution, LSP ownership or mcppls settings. Prefer the installed dependency extension's payload, with PATH fallback when absent.
+- `projects/moduleGraph.ts` validates the result, reads manifest entry conventions and determines file ownership by the nearest project manifest. Preserve all internal edges and just the first hop into another package; `external=false` alone cannot identify project ownership. Generated sources outside the project boundary are conservatively treated as external.
+- `webview/readOnlyDocuments.ts` is the shared content-addressed virtual-document store used by examples and graph navigation; graph messages contain node identities, and the host opens only provider files attached to those identities.
+- Basics contains C++ Modules Deps; declared package Dependencies follow as a collapsed sibling before Common commands. Existing language-server module-graph forwarding commands remain compatible.

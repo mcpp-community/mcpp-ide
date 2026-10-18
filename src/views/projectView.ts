@@ -1,9 +1,8 @@
 /**
- * The project view: two labelled sections — 「基本信息」 and 「常用命令」.
+ * The project view: 「基本信息」, folded 「依赖」, then 「常用命令」.
  *
  * The first section is what the project is (identity, target, toolchain, the
- * declared dependencies and the folded C++ Modules block); the second is what can
- * be done to it. The summary is read from `mcpp.toml` and refreshed when the
+ * module graph and the folded C++ Modules block); the final section contains actions. The summary is read from `mcpp.toml` and refreshed when the
  * manifest changes; anything unreadable is omitted rather than guessed, and
  * `mcpp: Environment Self-check` is the place that reports what mcpp itself
  * resolves.
@@ -29,6 +28,7 @@ import {
   type ProjectSummary,
 } from "./models";
 import { registerTreeView } from "./treeProvider";
+import { registerDependencyGraph } from "../projects/dependencyGraphPanel";
 
 export const PROJECT_VIEW_ID = "mcpp.project";
 
@@ -54,7 +54,13 @@ export function summariseProject(project: McppProjectDiscovery | undefined): Pro
     const text = readFileSync(project.manifestPath, "utf8");
     const lines = text.split(/\r?\n/);
     const summary = readProjectSummary(project.root, lines);
-    const dependencies = readDependencies(lines);
+    const dependencies = readDependencies(lines).map((entry) => {
+      if (!entry.path || entry.version) { return entry; }
+      try {
+        const local = readProjectSummary(path.resolve(project.root, entry.path), readFileSync(path.resolve(project.root, entry.path, "mcpp.toml"), "utf8").split(/\r?\n/));
+        return { ...entry, ...(local.version ? { version: local.version } : {}) };
+      } catch { return entry; }
+    });
     return dependencies.length === 0 ? summary : { ...summary, dependencies };
   } catch (error) {
     return {
@@ -96,6 +102,7 @@ export function registerProjectView(context: vscode.ExtensionContext, deps: Proj
   });
 
   let current = snapshot(deps.currentProject(), true);
+  registerDependencyGraph(context, () => current.summary);
 
   const view = registerTreeView(PROJECT_VIEW_ID, () =>
     buildProjectTree(current.summary, {
@@ -108,7 +115,11 @@ export function registerProjectView(context: vscode.ExtensionContext, deps: Proj
   context.subscriptions.push(view.disposable);
 
   const reload = (freshSources: boolean): void => {
-    current = snapshot(deps.currentProject(), freshSources);
+    const active = vscode.window.activeTextEditor;
+    const project = (!active || active.document.uri.scheme !== "file") && current.summary
+      ? { root: current.summary.root, manifestPath: path.join(current.summary.root, "mcpp.toml") }
+      : deps.currentProject();
+    current = snapshot(project, freshSources);
     view.provider.refresh();
   };
 
@@ -124,7 +135,7 @@ export function registerProjectView(context: vscode.ExtensionContext, deps: Proj
     lockWatcher.onDidChange(() => reload(false)),
     lockWatcher.onDidDelete(() => reload(false)),
     vscode.window.onDidChangeActiveTextEditor(() => reload(false)),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => reload(true)),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => { current = snapshot(deps.currentProject(), true); view.provider.refresh(); }),
     vscode.workspace.onDidGrantWorkspaceTrust(() => reload(true)),
   );
 
