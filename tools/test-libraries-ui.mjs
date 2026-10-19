@@ -91,10 +91,11 @@ let browser;
 await eventually(async () => { browser = await chromium.connectOverCDP(endpoint); return true; }, Boolean, 'VS Code CDP startup');
 const page = browser.contexts()[0].pages()[0];
 await page.setViewportSize({ width: 1600, height: 1000 });
+await page.bringToFront();
 page.on('pageerror', (error) => console.error('renderer:', error.message));
-async function frameWith(selector) {
+async function frameWith(selector, projectName) {
   return eventually(async () => {
-    for (const frame of page.frames()) { if (await frame.locator(selector).count()) { return frame; } }
+    for (const frame of page.frames()) { if (await frame.locator(selector).count() && (!projectName || await frame.locator('#project-name').textContent() === projectName)) { return frame; } }
   }, Boolean, `frame ${selector}`);
 }
 async function palette(command) {
@@ -104,6 +105,7 @@ async function palette(command) {
   await page.locator('.quick-input-list .monaco-list-row').filter({ hasText: command }).filter({ visible: true }).first().click();
 }
 async function check(name, action) {
+  if (process.env.MCPP_UI_ONLY_REAL && !name.startsWith('real mcppls modules graph navigates')) return;
   if (process.env.MCPP_UI_ONLY_LAYOUT && name !== 'responsive layouts and themes') return;
   if (process.env.MCPP_UI_ONLY_MODULES && !name.startsWith('real mcppls modules') && !name.startsWith('module source')) return;
   const start = Date.now(); await action();
@@ -401,6 +403,7 @@ try {
     assert.match(await graph.locator('.edgeLabel').allTextContents().then(labels=>labels.join(' ')),/compat\.libpng@1\.6\.50/);
     const colors=await graph.evaluate(()=>['project','manifest','index'].map(kind=>getComputedStyle(document.querySelector('.node.'+kind+' rect')).fill));
     assert.equal(new Set(colors).size,3,'project, path and index cards have distinct colors');
+    await graph.locator('#graph-export summary').click();
     await graph.locator('[data-action=copy]').click();
     await eventually(()=>graph.locator('#feedback').innerText(),text=>text==='Copied','graph copied');
     await graph.locator('[data-zoom="+"]').click();
@@ -465,14 +468,16 @@ try {
     if(await basics.getAttribute('aria-expanded')==='false')await basics.click();
     await page.getByRole('treeitem',{name:'C++ Modules Deps',exact:true}).click();
     const graph=await frameWith('#graph');
-    await eventually(()=>graph.locator('#graph').innerText(),text=>text.includes('demo.l3'),'real module graph',35000);
+    await eventually(()=>graph.locator('#graph').innerText(),text=>text.includes('demo.l2'),'real module graph',35000);
     assert.match(await graph.locator('#graph').innerText(),/src\/main.cpp/);
     assert.match(await graph.locator('#graph').innerText(),/entry · lib · export module/);
-    assert.doesNotMatch(await graph.locator('#graph').innerText(),/demo.l4|external.hidden/);
-    await graph.locator('.node[data-node-key="demo.l3"] .fold-control').click();
-    await eventually(()=>graph.locator('#graph').innerText(),text=>text.includes('demo.l4'),'expand one module level');
+    assert.doesNotMatch(await graph.locator('#graph').innerText(),/demo.l3|external.hidden/);
+    await graph.locator('.node[data-node-key="demo.l2"] .fold-control').click();
+    await eventually(()=>graph.locator('#graph').innerText(),text=>text.includes('demo.l3'),'expand one module level');
+    await graph.locator('#graph-view-menu summary').click();
     await graph.locator('#graph-depth').selectOption('5');
-    await eventually(()=>graph.locator('#graph').innerText(),text=>text.includes('demo.l5')&&!text.includes('demo.l6'),'five-level view');
+    await eventually(()=>graph.locator('#graph').innerText(),text=>text.includes('demo.l4')&&!text.includes('demo.l5'),'five-level view');
+    await graph.locator('#graph-view-menu summary').click();
     await graph.locator('#graph-depth').selectOption('all');
     await eventually(()=>graph.locator('#graph').innerText(),text=>text.includes('external.api'),'all internal depths');
     assert.doesNotMatch(await graph.locator('#graph').innerText(),/external.hidden/);
@@ -480,7 +485,9 @@ try {
     await graph.locator('#graph-search').fill('demo.l6');
     await graph.locator('#graph-search').press('Enter');
     await eventually(()=>graph.locator('.node.is-focused').textContent(),text=>text.includes('demo.l6'),'hidden module search focuses graph');
+    await graph.locator('#graph-view-menu summary').click();
     await graph.locator('[data-action=overview]').click();
+    await graph.locator('#graph-view-menu summary').click();
     await graph.locator('#graph-depth').selectOption('3');
     await eventually(()=>graph.locator('#graph').innerText(),text=>!text.includes('demo.l4'),'depth reset');
     await graph.locator('[data-zoom=fit]').click();
@@ -490,6 +497,11 @@ try {
     const graph=await frameWith('#graph');
     const original=await fs.readFile(path.join(scratch,'module-project/src/l0.cppm'),'utf8');
     await graph.locator('.node[data-node-key="demo.l0"]').click();
+    assert.equal(await page.locator('.monaco-editor:visible').filter({hasText:'export module demo.l0;'}).count(),0,'single click only selects');
+    await graph.locator('.node[data-node-key="demo.l0"]').click({button:'right'});
+    await graph.locator('[data-context-action=locate]').click();
+    assert.equal(await graph.locator('#graph-node-context').isVisible(),false,'node context menu closes after action');
+    await graph.locator('.node[data-node-key="demo.l0"]').dblclick();
     const editor=page.locator('.monaco-editor:visible').filter({hasText:'export module demo.l0;'});
     await editor.waitFor();
     await editor.locator('.view-lines').click({position:{x:25,y:20}});
@@ -509,6 +521,48 @@ try {
     await eventually(()=>graph.locator('.node.is-focused').textContent(),text=>text.includes('demo.l0'),'module selection restored');
     assert.equal(await transform(),before,'module viewport survives view switch');
     await page.screenshot({path:path.join(artifacts,'module-source-readonly.png')});
+  });
+  await check('module source dependency status refreshes without hiding or clearing usable rows', async()=>{
+    const graph=await frameWith('#graph');
+    await graph.locator('[data-mode=packages]').click();
+    await eventually(()=>graph.locator('[data-mode=packages]').getAttribute('aria-pressed'),state=>state==='true','package mode for dependency state');
+    const manifest=path.join(scratch,'module-project/mcpp.toml'), original=await fs.readFile(manifest,'utf8');
+    const dependencyGroup=()=>page.getByRole('treeitem').filter({hasText:'Dependencies (1)'});
+    try {
+      await fs.writeFile(manifest,original.replace(/\[dependencies\][\s\S]*$/,''));
+      const empty=page.getByRole('treeitem',{name:'This project declares no dependencies',exact:true});
+      await empty.waitFor();assert.equal(await empty.getAttribute('aria-expanded'),null,'empty dependency status is one plain row');
+      await fs.writeFile(manifest,original);await dependencyGroup().waitFor();
+      await fs.writeFile(manifest,original+'\n[dev-dependencies]\nincomplete=');
+      await eventually(()=>dependencyGroup().innerText(),text=>text.includes('Refresh pending'),'last dependencies preserved during incomplete manifest');
+      await page.screenshot({path:path.join(artifacts,'dependency-state-stale.png')});
+    } finally { await fs.writeFile(manifest,original); }
+    await eventually(()=>dependencyGroup().innerText(),text=>!text.includes('Refresh pending'),'dependencies recover automatically');
+  });
+  if (process.env.MCPP_UI_REAL_PROJECT) await check('real mcppls modules graph navigates the large project and pages tests', async()=>{
+    const realRoot=path.resolve(process.env.MCPP_UI_REAL_PROJECT);
+    run(code, ['--extensions-dir', extensions, '--user-data-dir', userData, '--add', realRoot]);
+    await palette('View: Single Column Editor Layout');
+    await page.keyboard.press('Control+P');
+    await page.locator('.quick-input-widget:visible input').fill(path.join(realRoot,'mcpp.toml'));
+    await page.locator('.quick-input-list .monaco-list-row').filter({visible:true}).first().click();
+    await eventually(()=>page.locator('.monaco-editor:visible').allTextContents().then(text=>text.join(' ')),text=>text.includes('[package]'),'real manifest');
+    await palette('mcpp: Show C++ Modules Dependency Graph');
+    const graph=await frameWith('#graph','mcpp');
+    await eventually(()=>graph.locator('#graph').innerText(),text=>text.includes('src/main.cpp')&&text.includes('mcpp.'),'large project graph',45000);
+    assert.ok(await graph.locator('.edgePath,.flowchart-link').count()>0,'default entry has dependency edges');
+    assert.ok(await graph.locator('.node').count()<=60,'visible node budget');
+    await graph.locator('#graph-entries').selectOption('@group/tests');
+    await eventually(()=>graph.locator('#entry-page').innerText(),text=>text.startsWith('1–20 /'),'first test page');
+    await graph.locator('#entry-next').click();
+    await eventually(()=>graph.locator('#entry-page').innerText(),text=>text.startsWith('21–40 /'),'second test page');
+    const item=graph.locator('.node[data-node-key^="tests/"]').first();
+    await item.click(); await graph.locator('[data-action=focus]').click();
+    await eventually(()=>graph.locator('#focus-node').innerText(),text=>text.includes('tests/'),'focus selected test');
+    assert.equal(await graph.locator('#entry-next').isVisible(),false,'a focused entry leaves the group pager');
+    await graph.locator('[data-action=locate]').click();
+    await graph.locator('[data-zoom=fit]').click();
+    await graph.locator('body').screenshot({path:path.join(artifacts,'large-project-tests.png')});
   });
   await fs.writeFile(path.join(artifacts, 'results.json'), JSON.stringify({ checks, testedAt: new Date().toISOString(), codeVersion: run(code, ['--version']).trim(), mcppEnv: JSON.parse(run(realMcpp, ['self', 'env', '--format', 'json'])) }, null, 2));
   console.log(`UI checks passed. Evidence: ${artifacts}`);
