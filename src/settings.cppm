@@ -7,7 +7,7 @@ export module mcppide.settings;
 
 import std;
 import nlohmann.json;
-import mcppide.generated.spec;
+import mcppide.spec;
 
 export namespace mcppide::settings {
 
@@ -19,9 +19,9 @@ struct Checked {
     std::string expectation;          // what the setting takes
 };
 
-const generated::Setting* find(std::string_view key);
-Json default_of(const generated::Setting& s);
-Checked check(const generated::Setting& s, const Json& given);
+const spec::Setting* find(std::string_view key);
+Json default_of(const spec::Setting& s);
+Checked check(const spec::Setting& s, const Json& given);
 // Every setting: the values to use, the rejections, and the renames an
 // earlier key asks for (`aliases`).
 Json resolve(const Json& given);
@@ -33,32 +33,32 @@ std::optional<Json> preset(std::string_view id);
 
 namespace mcppide::settings {
 
-const generated::Setting* find(std::string_view key) {
-    for (const auto& s : generated::kSettings) if (s.key == key) return &s;
+const spec::Setting* find(std::string_view key) {
+    for (const auto& s : spec::settings()) if (s.key == key) return &s;
     return nullptr;
 }
 
-Json default_of(const generated::Setting& s) {
-    auto v = Json::parse(s.defaultJson, nullptr, false);
-    return v.is_discarded() ? Json(nullptr) : v;
-}
+Json default_of(const spec::Setting& s) { return s.defaultValue; }
 
 namespace {
-std::string expectation_of(const generated::Setting& s) {
-    if (!s.enumJson.empty()) {
-        auto e = Json::parse(s.enumJson, nullptr, false);
+std::string number_text(double d) {
+    auto t = std::format("{}", d);
+    return t;
+}
+
+std::string expectation_of(const spec::Setting& s) {
+    if (s.allowed.is_array()) {
         std::string out;
-        for (const auto& v : e) { if (!out.empty()) out += " | "; out += v.get<std::string>(); }
+        for (const auto& v : s.allowed) { if (!out.empty()) out += " | "; out += v.is_string() ? v.get<std::string>() : v.dump(); }
         return out;
     }
-    if (s.type == "number" && (!s.minimum.empty() || !s.maximum.empty()))
-        return std::format("{} … {}", s.minimum.empty() ? "-∞" : std::string(s.minimum),
-                           s.maximum.empty() ? "∞" : std::string(s.maximum));
-    return s.type == "array" ? "array of strings" : std::string(s.type);
+    if (s.type == "number" && (s.minimum || s.maximum))
+        return std::format("{} … {}", s.minimum ? number_text(*s.minimum) : "-∞", s.maximum ? number_text(*s.maximum) : "∞");
+    return s.type == "array" ? "array of strings" : s.type;
 }
 }  // namespace
 
-Checked check(const generated::Setting& s, const Json& v) {
+Checked check(const spec::Setting& s, const Json& v) {
     Checked out{default_of(s), std::nullopt, expectation_of(s)};
     auto reject = [&](std::string why) { out.reason = std::move(why); return out; };
     if (v.is_null()) return out;
@@ -67,14 +67,11 @@ Checked check(const generated::Setting& s, const Json& v) {
     } else if (s.type == "number") {
         if (!v.is_number()) return reject("type");
         const double d = v.get<double>();
-        if (!s.minimum.empty() && d < std::stod(std::string(s.minimum))) return reject("minimum");
-        if (!s.maximum.empty() && d > std::stod(std::string(s.maximum))) return reject("maximum");
+        if (s.minimum && d < *s.minimum) return reject("minimum");
+        if (s.maximum && d > *s.maximum) return reject("maximum");
     } else if (s.type == "string") {
         if (!v.is_string()) return reject("type");
-        if (!s.enumJson.empty()) {
-            auto e = Json::parse(s.enumJson, nullptr, false);
-            if (std::ranges::find(e, v) == e.end()) return reject("enum");
-        }
+        if (s.allowed.is_array() && std::ranges::find(s.allowed, v) == s.allowed.end()) return reject("enum");
     } else if (s.type == "array") {
         if (!v.is_array()) return reject("type");
         for (const auto& item : v) if (!item.is_string()) return reject("items");
@@ -85,44 +82,42 @@ Checked check(const generated::Setting& s, const Json& v) {
 
 Json resolve(const Json& given) {
     Json values = Json::object(), rejected = Json::array(), renames = Json::array(), deprecated = Json::array();
-    for (const auto& s : generated::kSettings) {
-        Json v = given.is_object() && given.contains(std::string(s.key)) ? given[std::string(s.key)] : Json(nullptr);
+    for (const auto& s : spec::settings()) {
+        Json v = given.is_object() && given.contains(s.key) ? given[s.key] : Json(nullptr);
         if (v.is_null()) {
             // An earlier spelling of this setting still in the user's file.
-            auto aliases = Json::parse(s.aliasesJson, nullptr, false);
-            if (!aliases.is_discarded())
-                for (const auto& a : aliases)
-                    if (a.is_string() && given.is_object() && given.contains(a.get<std::string>())) {
-                        v = given[a.get<std::string>()];
-                        renames.push_back(Json{{"from", a}, {"to", s.key}, {"value", v}});
-                        break;
-                    }
+            for (const auto& a : s.aliases)
+                if (given.is_object() && given.contains(a)) {
+                    v = given[a];
+                    renames.push_back(Json{{"from", a}, {"to", s.key}, {"value", v}});
+                    break;
+                }
         }
         auto c = check(s, v);
         if (c.reason) rejected.push_back(Json{{"key", s.key}, {"reason", *c.reason}, {"expectation", c.expectation},
                                               {"given", v}});
         if (s.deprecated && !v.is_null()) deprecated.push_back(s.key);
-        values[std::string(s.key)] = c.value;
+        values[s.key] = c.value;
     }
     return Json{{"values", values}, {"rejected", rejected}, {"renames", renames}, {"deprecated", deprecated}};
 }
 
 Json registry() {
     Json entries = Json::array();
-    for (const auto& s : generated::kSettings) {
+    for (const auto& s : spec::settings()) {
         Json e{{"key", s.key}, {"type", s.type}, {"default", default_of(s)}, {"group", s.group},
                {"scope", s.scope}, {"applies", s.applies}, {"tier", s.tier}, {"deprecated", s.deprecated},
                {"title", s.title}, {"description", s.description}, {"expectation", expectation_of(s)}};
-        if (!s.enumJson.empty()) e["enum"] = Json::parse(s.enumJson);
-        if (!s.minimum.empty()) e["minimum"] = std::stod(std::string(s.minimum));
-        if (!s.maximum.empty()) e["maximum"] = std::stod(std::string(s.maximum));
+        if (s.allowed.is_array()) e["enum"] = s.allowed;
+        if (s.minimum) e["minimum"] = *s.minimum;
+        if (s.maximum) e["maximum"] = *s.maximum;
         entries.push_back(std::move(e));
     }
-    return Json{{"settings", entries}, {"presets", Json::parse(generated::kPresetsJson)["presets"]}};
+    return Json{{"settings", entries}, {"presets", spec::presets()}};
 }
 
 std::optional<Json> preset(std::string_view id) {
-    for (const auto& p : Json::parse(generated::kPresetsJson)["presets"])
+    for (const auto& p : spec::presets())
         if (p.value("id", "") == id) return p;
     return std::nullopt;
 }

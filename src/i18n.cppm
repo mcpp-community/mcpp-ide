@@ -6,7 +6,7 @@ export module mcppide.i18n;
 
 import std;
 import nlohmann.json;
-import mcppide.generated.spec;
+import mcppide.spec;
 
 export namespace mcppide::i18n {
 
@@ -28,21 +28,11 @@ std::string normalize_locale(std::string_view locale) {
     return "en";
 }
 
-namespace {
-const std::map<std::string_view, std::string_view>& zh() {
-    static const auto table = [] {
-        std::map<std::string_view, std::string_view> m;
-        for (const auto& t : generated::kZhCn) m.emplace(t.en, t.zh);
-        return m;
-    }();
-    return table;
-}
-}  // namespace
 
 std::string translate(std::string_view key, std::string_view locale, const std::vector<std::string>& args) {
     std::string text(key);
     if (normalize_locale(locale) == "zh-cn")
-        if (auto it = zh().find(key); it != zh().end()) text = std::string(it->second);
+        if (auto it = spec::runtime_zh_cn().find(key); it != spec::runtime_zh_cn().end()) text = it->second;
     for (std::size_t i = 0; i < args.size(); ++i) {
         const auto marker = std::format("{{{}}}", i);
         for (auto pos = text.find(marker); pos != std::string::npos; pos = text.find(marker, pos + args[i].size()))
@@ -54,7 +44,7 @@ std::string translate(std::string_view key, std::string_view locale, const std::
 nlohmann::json bundle(std::string_view locale) {
     nlohmann::json out = nlohmann::json::object();
     if (normalize_locale(locale) == "zh-cn")
-        for (const auto& [en, z] : zh()) out[std::string(en)] = z;
+        for (const auto& [en, z] : spec::runtime_zh_cn()) out[en] = z;
     return out;
 }
 

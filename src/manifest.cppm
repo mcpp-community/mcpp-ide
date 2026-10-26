@@ -12,7 +12,7 @@ export module mcppide.manifest;
 
 import std;
 import nlohmann.json;
-import mcppide.generated.spec;
+import mcppide.spec;
 
 export namespace mcppide::manifest {
 
@@ -49,12 +49,10 @@ namespace mcppide::manifest {
 namespace {
 
 const Json& schema() {
-    static const Json s = Json::parse(generated::kTomlSchemaJson);
-    return s;
+    return spec::toml_schema();
 }
 const Json& api() {
-    static const Json a = Json::parse(generated::kBuildScriptApiJson);
-    return a;
+    return spec::buildscript_api();
 }
 
 std::vector<std::string_view> split_lines(std::string_view text) {
