@@ -41,6 +41,8 @@ struct Request {
     bool supersede = false;                // cancel a running job of this kind
     std::vector<std::string> deny;
     std::string client = "mcpp-ide";
+    // Variables set (or, with no value, removed) for this run, over the backend's environment.
+    std::vector<std::pair<std::string, std::optional<std::string>>> env;
 };
 
 struct Sink {
@@ -240,6 +242,7 @@ void Jobs::execute(const std::shared_ptr<Job>& job) {
     o.deny = job->request.deny;
     o.client = job->request.client;
     o.color = job->request.color;
+    o.extraEnv = job->request.env;
     mcpp::Client client;
     {
         std::lock_guard lock(mutex_);

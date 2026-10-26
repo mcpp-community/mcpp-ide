@@ -37,7 +37,9 @@ struct Protocol {
 };
 
 // `mcpp --version` and `mcpp --protocol-version`.
-std::expected<Protocol, std::string> handshake(const std::filesystem::path& program);
+// The environment overrides apply to these two runs as to every run of mcpp the backend makes.
+using Environment = std::vector<std::pair<std::string, std::optional<std::string>>>;
+std::expected<Protocol, std::string> handshake(const std::filesystem::path& program, const Environment& env = {});
 
 // Compares dotted versions numerically ("2026.10.26.2" > "2026.10.26.1").
 int compare_versions(std::string_view a, std::string_view b);
@@ -135,11 +137,12 @@ std::expected<Located, std::string> locate(const std::string& configuredPath) {
         "mcpp was not found: set mcpp.path, put mcpp on PATH, or install it (xlings install mcpp)"));
 }
 
-std::expected<Protocol, std::string> handshake(const std::filesystem::path& program) {
+std::expected<Protocol, std::string> handshake(const std::filesystem::path& program, const Environment& env) {
     mcpplibs::os::process::spawn_options o;
     o.program = program;
     o.args = {"--version"};
     o.in = mcpplibs::os::process::stdio::null;
+    o.env = env;
     auto v = mcpplibs::os::process::run(o);
     if (!v) return std::unexpected(v.error().message());
     if (!v->status.success()) return std::unexpected(std::format("{} --version exited {}", program.string(), v->status.shell_code()));
