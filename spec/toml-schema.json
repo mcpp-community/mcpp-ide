@@ -1,5 +1,5 @@
 {
-  "sourceVersion": "2026.10.17.1",
+  "sourceVersion": "2026.10.26.2",
   "sourceCommit": "684a306bced037014da08b038412f57c203d0bc9",
   "sections": [
     {
@@ -664,10 +664,11 @@
             "bin",
             "lib",
             "shared",
-            "app"
+            "app",
+            "entry"
           ],
           "since": "2026.9.12.3",
-          "note": "\"app\" requires mcpp 2026.9.12.3+; library/binary/dylib/so/shlib are accepted aliases"
+          "note": "\"app\" requires mcpp 2026.9.12.3+ and \"entry\" 2026.10.26.2+; library/binary/dylib/so/shlib are accepted aliases"
         },
         {
           "key": "linkage",
@@ -680,7 +681,8 @@
         },
         {
           "key": "main",
-          "type": "string"
+          "type": "string",
+          "note": "a file, or { from = \"<dependency>/<entry>\" } naming a dependency's kind = \"entry\" target (2026.10.26.2+)"
         },
         {
           "key": "required_features",
@@ -689,6 +691,12 @@
         {
           "key": "soname",
           "type": "string"
+        },
+        {
+          "key": "start",
+          "type": "string",
+          "since": "2026.10.26.2",
+          "note": "the symbol a freestanding image is entered at"
         },
         {
           "key": "windows_auto_export",
@@ -742,6 +750,19 @@
           "key": "discover",
           "type": "array",
           "note": "globs whose every match is one test program"
+        },
+        {
+          "key": "main",
+          "type": "string",
+          "since": "2026.10.26.2",
+          "note": "{ from = \"<dependency>/<entry>\" }: the entry every test program begins in",
+          "unmodelled": true
+        },
+        {
+          "key": "start",
+          "type": "string",
+          "since": "2026.10.26.2",
+          "note": "the symbol every test image is entered at, on a freestanding target"
         }
       ]
     },
