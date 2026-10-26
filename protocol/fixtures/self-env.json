@@ -1,0 +1,30 @@
+{
+  "data": {
+    "android": false,
+    "buildCache": "@HOME@/.mcpp/build-cache/v1",
+    "config": "@HOME@/.mcpp/config.toml",
+    "defaultToolchain": "gcc@16.1.0",
+    "engineModules": "@HOME@/.mcpp/engine/2026.10.26.1/modules",
+    "homeLocator": "",
+    "homeSource": "user",
+    "initialized": true,
+    "mcppHome": "@HOME@/.mcpp",
+    "mcppVersion": "2026.10.26.1",
+    "originalHome": "@HOME@/.mcpp",
+    "registry": "@HOME@/.mcpp/registry",
+    "xlingsBinary": "@HOME@/.mcpp/registry/bin/xlings",
+    "xlingsHome": "@HOME@/.mcpp/registry"
+  },
+  "diagnostics": [],
+  "effects": [],
+  "kind": "mcpp.env",
+  "kindVersion": 1,
+  "mcpp": {
+    "protocol": {
+      "max": 1,
+      "min": 1
+    },
+    "version": "2026.10.26.1"
+  },
+  "schemaVersion": 1
+}

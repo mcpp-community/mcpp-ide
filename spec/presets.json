@@ -1,0 +1,66 @@
+{
+  "presets": [
+    {
+      "id": "defaults",
+      "title": "Defaults",
+      "description": "Put every mcpp setting back to its shipped default.",
+      "values": {}
+    },
+    {
+      "id": "quiet",
+      "title": "Quiet",
+      "description": "No status-bar counters, no automatic refresh, no editor diagnostics from this extension.",
+      "values": {
+        "mcpp.cache.statusBar": false,
+        "mcpp.cache.autoRefreshSeconds": 0,
+        "mcpp.languageService.stateRefreshSeconds": 0,
+        "mcpp.ui.notifications.success": "silent",
+        "mcpp.task.focusTerminal": false,
+        "mcpp.toml.diagnostics.unknownKey": "off",
+        "mcpp.toml.diagnostics.legacyKeys": "off",
+        "mcpp.buildScript.diagnostics": false
+      }
+    },
+    {
+      "id": "everything",
+      "title": "Everything on",
+      "description": "All observation and editing help enabled, including the ones that run mcpp a little more often.",
+      "values": {
+        "mcpp.cache.statusBar": true,
+        "mcpp.cache.autoRefreshSeconds": 60,
+        "mcpp.cache.warnAboveGiB": 10,
+        "mcpp.languageService.readState": true,
+        "mcpp.languageService.stateRefreshSeconds": 30,
+        "mcpp.languageService.notifyOnDegraded": true,
+        "mcpp.toml.hover": true,
+        "mcpp.toml.navigation": true,
+        "mcpp.toml.diagnostics.enabled": true,
+        "mcpp.toml.diagnostics.unknownSection": "warning",
+        "mcpp.toml.diagnostics.unknownKey": "warning",
+        "mcpp.toml.diagnostics.planeSeparation": "warning",
+        "mcpp.toml.diagnostics.legacyKeys": "info",
+        "mcpp.buildScript.intelligence": true,
+        "mcpp.buildScript.diagnostics": true,
+        "mcpp.buildScript.snippets": true,
+        "mcpp.buildScript.imports.knownModules": true,
+        "mcpp.views.cache.topN": 10,
+        "mcpp.ui.notifications.success": "statusBar",
+        "mcpp.log.level": "info"
+      }
+    },
+    {
+      "id": "diagnose",
+      "title": "Diagnose",
+      "description": "Turn the logging up and read the C++ Modules state, for when something is wrong.",
+      "values": {
+        "mcpp.log.level": "debug",
+        "mcpp.languageService.readState": true,
+        "mcpp.languageService.stateRefreshSeconds": 15,
+        "mcpp.languageService.notifyOnDegraded": true,
+        "mcpp.diagnostics.selfCheckOnStartup": true,
+        "mcpp.toml.diagnostics.unknownSection": "warning",
+        "mcpp.toml.diagnostics.unknownKey": "warning"
+      }
+    }
+  ]
+}

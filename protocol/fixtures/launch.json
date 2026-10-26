@@ -1,0 +1,31 @@
+{
+  "data": {
+    "argv": [
+      "@ROOT@/target/x86_64-linux-gnu/b95fa85150d74e3d/bin/app"
+    ],
+    "cwd": "@ROOT@",
+    "env": {
+      "GBM_BACKENDS_PATH": "@HOME@/.mcpp/registry/subos/default/usr/lib/gbm:@HOME@/.xlings/subos/speak-agent-private/usr/lib/gbm",
+      "LIBGL_DRIVERS_PATH": "@HOME@/.mcpp/registry/subos/default/usr/lib/dri:@HOME@/.xlings/subos/speak-agent-private/usr/lib/dri",
+      "XDG_DATA_DIRS": "@HOME@/.mcpp/registry/subos/default/share:@HOME@/.xlings/subos/speak-agent-private/share:/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop",
+      "__EGL_VENDOR_LIBRARY_DIRS": "@HOME@/.mcpp/registry/subos/default/share/glvnd/egl_vendor.d:@HOME@/.xlings/subos/speak-agent-private/share/glvnd/egl_vendor.d"
+    },
+    "program": "@ROOT@/target/x86_64-linux-gnu/b95fa85150d74e3d/bin/app",
+    "via": null
+  },
+  "diagnostics": [],
+  "effects": [
+    "read-project",
+    "write-project"
+  ],
+  "kind": "mcpp.launch",
+  "kindVersion": 1,
+  "mcpp": {
+    "protocol": {
+      "max": 1,
+      "min": 1
+    },
+    "version": "2026.10.26.1"
+  },
+  "schemaVersion": 1
+}

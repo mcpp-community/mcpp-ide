@@ -1,0 +1,27 @@
+{
+  "data": {
+    "indices": [],
+    "registries": [
+      {
+        "default": true,
+        "name": "mcpplibs",
+        "url": "https://github.com/mcpplibs/mcpp-index.git"
+      }
+    ]
+  },
+  "diagnostics": [],
+  "effects": [
+    "init-mcpp-home",
+    "read-project"
+  ],
+  "kind": "mcpp.index",
+  "kindVersion": 1,
+  "mcpp": {
+    "protocol": {
+      "max": 1,
+      "min": 1
+    },
+    "version": "2026.10.26.1"
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,38 @@
+# mcpp-ide: the IDE backend for mcpp (one C++ program, `mcpp-ide serve`, JSON-RPC
+# on its standard streams), the shared panels, and the editor adapters that host
+# it (vscode/, jetbrains/). This file builds the backend.
+#
+# The backend speaks POSIX and Win32 itself (src/platform). A Linux release is
+# linked statically against musl (`--target x86_64-linux-musl --static`), so
+# one file runs on every distribution; macOS and Windows use their system
+# toolchains.
+[package]
+name        = "mcpp-ide"
+version     = "0.1.0"
+description = "The IDE backend for mcpp: sessions, jobs, records and view models over mcpp's control contract"
+license     = "Apache-2.0"
+authors     = ["mcpp-community"]
+repo        = "https://github.com/mcpp-community/mcpp-ide"
+mcpp        = ">=2026.10.26.1"
+
+[language]
+standard   = "c++23"
+modules    = true
+import_std = true
+
+[build]
+sources = ["src/**/*.cppm", "src/**/*.cpp"]
+macos_deployment_target = "12.0"
+
+[targets.mcpp-ide]
+kind = "bin"
+main = "src/main.cpp"
+
+# Stands in for mcpp in the tests: answers the control contract from the
+# golden fixtures under protocol/fixtures.
+[targets.mcpp-ide-mock-mcpp]
+kind = "bin"
+main = "src/bin/mockmcpp.cpp"
+
+[dependencies.nlohmann]
+json = "3.12.0"

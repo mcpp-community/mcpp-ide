@@ -1,0 +1,33 @@
+{
+  "data": {
+    "formats": [
+      {
+        "builtin": true,
+        "name": "tar",
+        "providers": []
+      },
+      {
+        "builtin": true,
+        "name": "dir",
+        "providers": []
+      }
+    ]
+  },
+  "diagnostics": [],
+  "effects": [
+    "init-mcpp-home",
+    "read-project",
+    "write-global-cache",
+    "exec-build-script"
+  ],
+  "kind": "mcpp.pack.formats",
+  "kindVersion": 1,
+  "mcpp": {
+    "protocol": {
+      "max": 1,
+      "min": 1
+    },
+    "version": "2026.10.26.1"
+  },
+  "schemaVersion": 1
+}

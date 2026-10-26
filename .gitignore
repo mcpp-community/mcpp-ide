@@ -1,0 +1,13 @@
+target/
+.mcpp/
+node_modules/
+vscode/dist/
+vscode/out/
+vscode/*.vsix
+vscode/bin/
+jetbrains/build/
+jetbrains/.gradle/
+jetbrains/.intellijPlatform/
+webui/dist/
+*.log
+compile_commands.json

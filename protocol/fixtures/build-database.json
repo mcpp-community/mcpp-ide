@@ -1,0 +1,223 @@
+{
+  "data": {
+    "database": {
+      "ide": {
+        "generator": {
+          "name": "mcpp",
+          "version": "2026.10.26.1"
+        },
+        "profile-version": "0.3.0",
+        "toolchains": {
+          "gcc-16.1.0-x86_64-unknown-linux-gnu": {
+            "build-id": "8048a6111c0aebdb",
+            "config-files": [
+              "@HOME@/.mcpp/registry/data/xpkgs/xim-x-gcc/16.1.0/lib/gcc/x86_64-linux-gnu/16.1.0/specs"
+            ],
+            "driver": "@HOME@/.mcpp/registry/data/xpkgs/xim-x-gcc/16.1.0/bin/g++",
+            "family": "gcc",
+            "stdlib": {
+              "name": "libstdc++",
+              "version": "16.1.0"
+            },
+            "sysroot": "@HOME@/.mcpp/registry/subos/default",
+            "target": "x86_64-unknown-linux-gnu",
+            "version": "16.1.0"
+          }
+        }
+      },
+      "revision": 0,
+      "sets": [
+        {
+          "baseline-arguments": [
+            "-std=c++23",
+            "-fmodules",
+            "-O0",
+            "-g",
+            "-fPIC",
+            "--sysroot=@HOME@/.mcpp/registry/subos/default",
+            "-B@HOME@/.mcpp/registry/data/xpkgs/xim-x-binutils/2.42/bin",
+            "-D__MCPP_TARGET_LINUX__=1"
+          ],
+          "family-name": "app",
+          "ide": {
+            "configuration": "dev",
+            "kind": "executable",
+            "toolchain": "gcc-16.1.0-x86_64-unknown-linux-gnu"
+          },
+          "name": "app",
+          "translation-units": [
+            {
+              "arguments": [
+                "@HOME@/.mcpp/registry/data/xpkgs/xim-x-gcc/16.1.0/bin/g++",
+                "-std=c++23",
+                "-fmodules",
+                "-O0",
+                "-g",
+                "-fPIC",
+                "--sysroot=@HOME@/.mcpp/registry/subos/default",
+                "-B@HOME@/.mcpp/registry/data/xpkgs/xim-x-binutils/2.42/bin",
+                "-D__MCPP_TARGET_LINUX__=1",
+                "-c",
+                "@ROOT@/src/main.cpp",
+                "-o",
+                "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d/obj/main.o"
+              ],
+              "ide": {
+                "role": "non-module"
+              },
+              "local-arguments": [],
+              "object": "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d/obj/main.o",
+              "private": false,
+              "provides": {},
+              "requires": [
+                "std"
+              ],
+              "source": "@ROOT@/src/main.cpp",
+              "work-directory": "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d"
+            }
+          ],
+          "visible-sets": [
+            "app:test",
+            "mcpp:std"
+          ]
+        },
+        {
+          "baseline-arguments": [
+            "-std=c++23",
+            "-fmodules",
+            "-O0",
+            "-g",
+            "-fPIC",
+            "--sysroot=@HOME@/.mcpp/registry/subos/default",
+            "-B@HOME@/.mcpp/registry/data/xpkgs/xim-x-binutils/2.42/bin",
+            "-D__MCPP_TARGET_LINUX__=1"
+          ],
+          "family-name": "app",
+          "ide": {
+            "configuration": "dev",
+            "kind": "test",
+            "toolchain": "gcc-16.1.0-x86_64-unknown-linux-gnu"
+          },
+          "name": "app:test",
+          "translation-units": [
+            {
+              "arguments": [
+                "@HOME@/.mcpp/registry/data/xpkgs/xim-x-gcc/16.1.0/bin/g++",
+                "-std=c++23",
+                "-fmodules",
+                "-O0",
+                "-g",
+                "-fPIC",
+                "--sysroot=@HOME@/.mcpp/registry/subos/default",
+                "-B@HOME@/.mcpp/registry/data/xpkgs/xim-x-binutils/2.42/bin",
+                "-D__MCPP_TARGET_LINUX__=1",
+                "-c",
+                "@ROOT@/tests/test_smoke.cpp",
+                "-o",
+                "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d/obj/test_smoke.o"
+              ],
+              "ide": {
+                "role": "non-module"
+              },
+              "local-arguments": [],
+              "object": "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d/obj/test_smoke.o",
+              "private": false,
+              "provides": {},
+              "requires": [
+                "std"
+              ],
+              "source": "@ROOT@/tests/test_smoke.cpp",
+              "work-directory": "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d"
+            }
+          ],
+          "visible-sets": [
+            "app",
+            "mcpp:std"
+          ]
+        },
+        {
+          "baseline-arguments": [
+            "-std=c++23",
+            "-fmodules",
+            "-O2",
+            "--sysroot=@HOME@/.mcpp/registry/subos/default",
+            "-B@HOME@/.mcpp/registry/data/xpkgs/xim-x-binutils/2.42/bin"
+          ],
+          "family-name": "mcpp:std",
+          "ide": {
+            "configuration": "dev",
+            "kind": "library",
+            "toolchain": "gcc-16.1.0-x86_64-unknown-linux-gnu"
+          },
+          "name": "mcpp:std",
+          "translation-units": [
+            {
+              "arguments": [
+                "@HOME@/.mcpp/registry/data/xpkgs/xim-x-gcc/16.1.0/bin/g++",
+                "-std=c++23",
+                "-fmodules",
+                "-O2",
+                "--sysroot=@HOME@/.mcpp/registry/subos/default",
+                "-B@HOME@/.mcpp/registry/data/xpkgs/xim-x-binutils/2.42/bin",
+                "-c",
+                "@HOME@/.mcpp/registry/data/xpkgs/xim-x-gcc/16.1.0/include/c++/16.1.0/bits/std.cc",
+                "-o",
+                "std.o"
+              ],
+              "ide": {
+                "role": "module-interface"
+              },
+              "local-arguments": [],
+              "object": "@HOME@/.mcpp/build-cache/v1/std/9affbc96421d2ab1/std.o",
+              "private": false,
+              "provides": {
+                "std": "@HOME@/.mcpp/build-cache/v1/std/9affbc96421d2ab1/gcm.cache/std.gcm"
+              },
+              "requires": [],
+              "source": "@HOME@/.mcpp/registry/data/xpkgs/xim-x-gcc/16.1.0/include/c++/16.1.0/bits/std.cc",
+              "work-directory": "@HOME@/.mcpp/build-cache/v1/std/9affbc96421d2ab1"
+            }
+          ],
+          "visible-sets": [
+            "app",
+            "app:test"
+          ]
+        }
+      ],
+      "version": 1
+    },
+    "inputs-fingerprint": "fnv1a:a7fbe48a39924203",
+    "spec": {
+      "name": "s1",
+      "version": "0.3.0"
+    },
+    "watch": [
+      "@HOME@/.mcpp/config.toml",
+      "mcpp.lock",
+      "mcpp.toml",
+      "src/**/*.S",
+      "src/**/*.asm",
+      "src/**/*.c",
+      "src/**/*.cc",
+      "src/**/*.cpp",
+      "src/**/*.cppm",
+      "src/**/*.s",
+      "tests/**/*.cpp"
+    ]
+  },
+  "diagnostics": [],
+  "effects": [
+    "read-project",
+    "write-global-cache"
+  ],
+  "kind": "mcpp.build-database",
+  "kindVersion": 1,
+  "mcpp": {
+    "protocol": {
+      "max": 1,
+      "min": 1
+    },
+    "version": "2026.10.26.1"
+  },
+  "schemaVersion": 1
+}
