@@ -7,7 +7,7 @@ import std;
 import nlohmann.json;
 import mcppide.rpc;
 import mcppide.server;
-import mcppide.platform.stdio;
+import mcpplibs.os;
 
 int main(int argc, char** argv) {
     std::vector<std::string_view> args(argv + 1, argv + argc);
@@ -43,6 +43,6 @@ int main(int argc, char** argv) {
         for (const auto& c : report["checks"]) bad = bad || c.value("status", "") == "error";
         return bad ? 1 : 0;
     }
-    platform::write_stderr(std::format("mcpp-ide: unknown command '{}' (serve, self-check, --version)\n", args[0]));
+    (void)mcpplibs::os::stdio::write_error(std::format("mcpp-ide: unknown command '{}' (serve, self-check, --version)\n", args[0]));
     return 2;
 }

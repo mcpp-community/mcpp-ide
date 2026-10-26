@@ -19,7 +19,7 @@ import mcppide.policy;
 import mcppide.settings;
 import mcppide.i18n;
 import mcppide.manifest;
-import mcppide.platform.process;
+import mcpplibs.os;
 
 export namespace mcppide::server {
 
@@ -246,7 +246,7 @@ Json Session::self_check() {
                   {mcppPart["version"].get<std::string>(), std::string(mcpp::kContractFloor)}));
         else add("contract", "ok", t("the control contract is available"));
     }
-    if (auto xlings = platform::find_on_path("xlings")) add("xlings", "ok", t("xlings at {0}", {xlings->generic_string()}));
+    if (auto xlings = mcpplibs::os::env::find_executable("xlings")) add("xlings", "ok", t("xlings at {0}", {xlings->generic_string()}));
     else add("xlings", "info", t("xlings is not on PATH; mcpp uses the one it bundles"));
     {
         std::lock_guard lock(mutex_);

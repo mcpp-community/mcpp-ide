@@ -16,7 +16,7 @@ export module mcppide.jobs;
 
 import std;
 import nlohmann.json;
-import mcppide.platform.process;
+import mcpplibs.os;
 import mcppide.mcpp;
 
 export namespace mcppide::jobs {
@@ -70,7 +70,7 @@ private:
         std::string id;
         Request request;
         std::string state = "waiting";   // waiting | running | done
-        std::shared_ptr<platform::Process> process;
+        std::shared_ptr<mcpplibs::os::process::process> process;
         bool cancelled = false;
     };
     struct Lane {
@@ -254,14 +254,15 @@ void Jobs::execute(const std::shared_ptr<Job>& job) {
                                          for (const auto& x : job->request.args) a.push_back(x);
                                          return a;
                                      }()}});
-    auto spawned = platform::Process::spawn(client.spawn_options(o));
+    auto spawned = mcpplibs::os::process::process::spawn(client.spawn_options(o));
     if (!spawned) {
-        if (sink_.narration) sink_.narration(job->id, spawned.error() + "\n");
+        const auto why = spawned.error().message();
+        if (sink_.narration) sink_.narration(job->id, why + "\n");
         if (sink_.finished) sink_.finished(job->id, Json{{"status", "failed"}, {"exitCode", nullptr},
-                                                         {"error", spawned.error()}});
+                                                         {"error", why}});
         return;
     }
-    auto process = std::make_shared<platform::Process>(std::move(*spawned));
+    auto process = std::make_shared<mcpplibs::os::process::process>(std::move(*spawned));
     {
         std::lock_guard lock(mutex_);
         job->process = process;
@@ -270,7 +271,7 @@ void Jobs::execute(const std::shared_ptr<Job>& job) {
     // Standard error: the narration, as it comes.
     std::jthread errors([&] {
         for (;;) {
-            auto chunk = process->read_error();
+            auto chunk = process->read_error().value_or(std::string{});
             if (chunk.empty()) break;
             if (sink_.narration) sink_.narration(job->id, chunk);
         }
@@ -280,7 +281,7 @@ void Jobs::execute(const std::shared_ptr<Job>& job) {
     Json envelope = nullptr;
     std::string pending;
     for (;;) {
-        auto chunk = process->read_output();
+        auto chunk = process->read_output().value_or(std::string{});
         if (chunk.empty()) break;
         if (job->request.mode == Mode::narration) {
             if (sink_.narration) sink_.narration(job->id, chunk);
@@ -312,7 +313,9 @@ void Jobs::execute(const std::shared_ptr<Job>& job) {
     }
     if (!pending.empty() && sink_.narration) sink_.narration(job->id, pending);
     errors.join();
-    const int code = process->wait();
+    // The status as a shell reports it (128 + N for a program its system ended).
+    const auto ended = process->wait();
+    const int code = ended ? ended->shell_code() : -1;
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started);
     std::string status = code == 0 ? "ok" : (code == 5 ? "denied" : "failed");
     {

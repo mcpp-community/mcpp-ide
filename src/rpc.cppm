@@ -9,11 +9,21 @@ export module mcppide.rpc;
 
 import std;
 import nlohmann.json;
-import mcppide.platform.stdio;
+import mcpplibs.os;
 
 export namespace mcppide::rpc {
 
 using Json = nlohmann::json;
+
+// The whole of `bytes` on standard output, which carries the protocol: one message at a time,
+// as bytes (mcpplibs.os's streams translate nothing), or false once the output is gone.
+inline bool write_stdout(std::string_view bytes) {
+    static std::mutex lock;
+    std::lock_guard guard(lock);
+    if (!mcpplibs::os::stdio::write_output(bytes)) return false;
+    (void)mcpplibs::os::stdio::flush_output();
+    return true;
+}
 
 inline constexpr int PARSE_ERROR = -32700;
 inline constexpr int INVALID_REQUEST = -32600;
@@ -56,7 +66,7 @@ class Server {
 public:
     // Output goes to `write`, which is the backend's standard output in
     // production and a capture in the tests.
-    explicit Server(std::function<bool(std::string_view)> write = platform::write_stdout);
+    explicit Server(std::function<bool(std::string_view)> write = write_stdout);
 
     void on(std::string method, Handler handler);
     void on_notification(std::string method, NotificationHandler handler);
@@ -226,10 +236,9 @@ void Server::drain() {
 }
 
 int Server::serve() {
-    platform::binary_stdio();
     FrameReader reader;
     while (!exit_.load()) {
-        auto chunk = platform::read_stdin();
+        auto chunk = mcpplibs::os::stdio::read_input().value_or(std::string{});
         if (chunk.empty()) break;
         reader.feed(chunk);
         while (auto body = reader.next()) {

@@ -5,6 +5,21 @@
 # file must not change depending on which command ran last.
 version = 2
 
+[package."os"]
+version = "os-0.1.0"
+source  = "git+https://github.com/mcpplibs/os.git#branch=os-0.1.0@5476bb62613ea6b7e29bf268632e4bb6670835ed"
+hash    = "fnv1a:0b8682dfa4c33f65"
+
+[package."openkal"]
+version = "openkal-0.17.0"
+source  = "git+https://github.com/mcpplibs/openkal.git#branch=openkal-0.17.0@18b36578808d2095fb6cf5f29f1e76463c2998b4"
+hash    = "fnv1a:125ff2b9e8c59497"
+
+[package."openkal-linux"]
+version = "openkal-0.17.0"
+source  = "git+https://github.com/mcpplibs/openkal-linux.git#branch=openkal-0.17.0@ea4f39e239711166dcc46498a31726beea469e42"
+hash    = "fnv1a:648b8e8438d4845f"
+
 [package."nlohmann.json"]
 namespace = "nlohmann"
 version = "3.12.0"

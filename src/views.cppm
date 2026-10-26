@@ -196,10 +196,12 @@ Json toolchains(const Json& envelope) {
             Json row{{"target", t.value("target", "")}, {"toolchain", t.value("toolchain", "")},
                      {"pin", t.value("pin", "")}, {"status", t.value("status", "")},
                      {"default", t.value("default", false)}, {"note", t.value("note", "")}};
-            // "gcc 16.1.0" -> the spec a command takes: "gcc@16.1.0".
+            // "gcc 16.1.0" -> the spec a command takes: "gcc@16.1.0"; a target with no toolchain
+            // ("—") has none to offer.
             auto tc = row["toolchain"].get<std::string>();
-            if (auto sp = tc.find(' '); sp != std::string::npos) tc[sp] = '@';
-            row["spec"] = tc;
+            const auto sp = tc.find(' ');
+            if (sp != std::string::npos) tc[sp] = '@';
+            row["spec"] = sp == std::string::npos ? std::string{} : tc;
             if (row["default"].get<bool>()) defaults.push_back(row);
             rows.push_back(std::move(row));
         }

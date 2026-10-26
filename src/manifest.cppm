@@ -311,7 +311,9 @@ Json hover(const Json& p) {
 }
 
 Json symbols(const Json& p) {
-    const auto lines = split_lines(p.value("text", ""));
+    // The views name the text, so the text outlives them.
+    const std::string text = p.value("text", std::string{});
+    const auto lines = split_lines(text);
     Json out = Json::array();
     Json* current = nullptr;
     for (int i = 0; i < static_cast<int>(lines.size()); ++i) {
@@ -333,7 +335,9 @@ Json symbols(const Json& p) {
 }
 
 Json buildscript_complete(const Json& p) {
-    const auto lines = split_lines(p.value("text", ""));
+    // The views name the text, so the text outlives them.
+    const std::string text = p.value("text", std::string{});
+    const auto lines = split_lines(text);
     const int line = p.value("line", 0), character = p.value("character", 0);
     if (line < 0 || line >= static_cast<int>(lines.size())) return Json{{"items", Json::array()}};
     const auto cur = lines[line];

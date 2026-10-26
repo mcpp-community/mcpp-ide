@@ -2,10 +2,11 @@
 # on its standard streams), the shared panels, and the editor adapters that host
 # it (vscode/, jetbrains/). This file builds the backend.
 #
-# The backend speaks POSIX and Win32 itself (src/platform). A Linux release is
-# linked statically against musl (`--target x86_64-linux-musl --static`), so
-# one file runs on every distribution; macOS and Windows use their system
-# toolchains.
+# The operating system is reached through mcpplibs.os (processes, the
+# environment, the standard streams, a request to end), which is openkal
+# beneath: the backend names no system header and no platform macro, and the
+# same source builds for a system (M1) and as an ok image (`<arch>-openkal`,
+# M2/M3), where the system it runs upon is answered when the image is loaded.
 [package]
 name        = "mcpp-ide"
 version     = "0.1.0"
@@ -21,7 +22,7 @@ modules    = true
 import_std = true
 
 [build]
-sources = ["src/**/*.cppm", "src/**/*.cpp"]
+sources = ["src/*.cppm", "src/generated/*.cppm"]
 macos_deployment_target = "12.0"
 
 [targets.mcpp-ide]
@@ -33,6 +34,9 @@ main = "src/main.cpp"
 [targets.mcpp-ide-mock-mcpp]
 kind = "bin"
 main = "src/bin/mockmcpp.cpp"
+
+[dependencies]
+os = { git = "https://github.com/mcpplibs/os.git", branch = "os-0.1.0" }
 
 [dependencies.nlohmann]
 json = "3.12.0"
