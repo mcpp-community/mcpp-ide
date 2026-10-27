@@ -28,7 +28,8 @@ async function main(): Promise<void> {
     "security.workspace.trust.enabled": false,
   }));
   const executable = process.env.MCPP_E2E_CODE;
-  const extensionDevelopmentPath = path.join(repo, "vscode", "dist", "extension");
+  // MCPP_E2E_EXTENSION: another extension directory (an unpacked .vsix) in place of the staged one.
+  const extensionDevelopmentPath = process.env.MCPP_E2E_EXTENSION ?? path.join(repo, "vscode", "dist", "extension");
   await runTests({
     ...(executable ? { vscodeExecutablePath: executable } : { version: "1.91.0" }),
     extensionDevelopmentPath,
