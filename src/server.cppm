@@ -909,7 +909,10 @@ void Session::install() {
     auto& s = rpc_;
     s.on("initialize", [this](const Json& p, const rpc::Context&) { return initialize(p); });
     s.on("settings/update", [this](const Json& p, const rpc::Context&) { return update_settings(p); });
-    s.on("settings/registry", [](const Json&, const rpc::Context&) -> Result { return settings::registry(); });
+    s.on("settings/registry", [this](const Json&, const rpc::Context&) -> Result {
+        std::lock_guard lock(localeMutex_);
+        return settings::registry(locale_);
+    });
     s.on("settings/preset", [](const Json& p, const rpc::Context&) -> Result {
         auto preset = settings::preset(p.value("id", ""));
         if (!preset) return std::unexpected(invalid("no such preset"));

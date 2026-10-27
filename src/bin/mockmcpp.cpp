@@ -5,7 +5,8 @@
 //
 //   MCPPIDE_FIXTURES     the fixtures directory (default: the repository's protocol/fixtures)
 //   MOCK_MCPP_FAIL       "build": the build fails with the compiler's diagnostic;
-//                        "manifest": it fails on the manifest
+//                        "manifest": it fails on the manifest (also read from the
+//                        project's `.mock-mcpp-fail`)
 //   MOCK_MCPP_SLOW_MS    the build waits this long before it ends, so a test can
 //                        cancel it; SIGTERM then leaves the record `cancelled`
 //   MOCK_MCPP_LOG        every argv is appended here, one line each
@@ -69,8 +70,18 @@ void on_term() {
     std::quick_exit(143);
 }
 
+// The failure to play: MOCK_MCPP_FAIL, else the content of `.mock-mcpp-fail` in the project (an
+// editor's test cannot change the environment of a backend it did not start).
+std::string failure() {
+    if (auto f = env("MOCK_MCPP_FAIL"); !f.empty()) return f;
+    std::error_code ec;
+    auto text = slurp(std::filesystem::current_path(ec) / ".mock-mcpp-fail");
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
+    return text;
+}
+
 int build(bool message) {
-    const auto fail = env("MOCK_MCPP_FAIL");
+    const auto fail = failure();
     std::string stream = fixture(fail == "build" ? "build-failed.ndjson"
                                  : fail == "manifest" ? "build-manifest-error.ndjson" : "build-ok.ndjson");
     std::println(std::cerr, "   Compiling app v0.1.0 (.)");
@@ -109,7 +120,7 @@ int main(int argc, char** argv) {
     if (first(0) == "toolchain" && first(1) == "list") { std::cout << fixture("toolchain-list.json"); return 0; }
     if (first(0) == "cache" && first(1) == "list") { std::cout << fixture("cache-list.json"); return 0; }
     if (first(0) == "emit") {
-        if (env("MOCK_MCPP_FAIL") == "manifest") {
+        if (failure() == "manifest") {
             std::cout << replace_all(fixture("build-manifest-error.ndjson"), "\"mcpp.build\"", "\"mcpp.build-database\"");
             return 1;
         }
