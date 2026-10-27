@@ -15,20 +15,26 @@ env:
   XLINGS_NON_INTERACTIVE: '1'
 
 jobs:
-  # The backend on each system: build (every program: the backend, the mock mcpp, the dev tool),
-  # then the tests -- the protocol against its schema and the fixtures against mcpp's contract
-  # among them -- and the translations.
+  # The backend on each system the editors run on: build every program (the backend, the mock mcpp,
+  # the dev tool), run the tests -- the protocol against its schema and the fixtures against mcpp's
+  # contract among them -- check the translations, then build the release program the editor
+  # packages carry, laid out bin/<platform>/.
+  #
+  # When mcpp's platforms ship (mcpp design 2026-10-28), the release program becomes one ok image per
+  # architecture (`--target <arch>-openkal`) made into a program of each system by
+  # `mcpp pack --mode self-contained`; only the last two steps change, not the layout they upload.
   backend:
-    name: backend (${{ matrix.os }})
+    name: backend (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-24.04, target: '', llvm: 'false', platform: linux-x64 }
-          - { os: macos-14, target: '--target aarch64-macos', llvm: 'true', platform: darwin-arm64 }
-          - { os: windows-2022, target: '--target x86_64-windows-gnu', llvm: 'true', platform: win32-x64 }
+          - { os: ubuntu-24.04, platform: linux-x64, target: '', release: '--target x86_64-linux-musl', llvm: 'false', exe: mcpp-ide }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64, target: '', release: '--target aarch64-linux-musl', llvm: 'false', exe: mcpp-ide }
+          - { os: macos-14, platform: darwin-arm64, target: '--target aarch64-macos', release: '--target aarch64-macos', llvm: 'true', exe: mcpp-ide }
+          - { os: windows-2022, platform: win32-x64, target: '--target x86_64-windows-gnu', release: '--target x86_64-windows-gnu', llvm: 'true', exe: mcpp-ide.exe }
     defaults:
       run:
         shell: bash
@@ -43,14 +49,23 @@ jobs:
         run: mcpp test ${{ matrix.target }}
       - name: Every string has its translation
         run: mcpp run ${{ matrix.target }} mcpp-ide-dev -- check-i18n
-      - name: The backend answers
-        run: mcpp run ${{ matrix.target }} mcpp-ide -- --version
+      - name: Release program
+        run: |
+          mcpp build --release ${{ matrix.release }}
+          mkdir -p "out/${{ matrix.platform }}"
+          cp "$(ls -t target/*/*/bin/${{ matrix.exe }} | head -1)" "out/${{ matrix.platform }}/"
+          "out/${{ matrix.platform }}/${{ matrix.exe }}" --version
+      - uses: actions/upload-artifact@v5
+        with:
+          name: backend-${{ matrix.platform }}
+          path: out
 
   # The VS Code extension: unit tests (the wire, the mappings) and the shared panels in a DOM, both
-  # against the backend built here; then the extension in a real VS Code (the oldest it supports)
-  # over the mock mcpp; then the package, and its file list.
+  # against the backend built here; the extension in a real VS Code (the oldest it supports) over the
+  # mock mcpp; then the package carrying every system's backend, and its file list.
   vscode:
     name: VS Code extension
+    needs: backend
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -64,8 +79,15 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: vscode/package-lock.json
-      - name: Build the backend
-        run: mcpp build
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: backend-*
+          path: backends
+          merge-multiple: true
+      - name: Build the backend and its test programs
+        run: |
+          chmod +x backends/*/mcpp-ide*
+          mcpp build
       - name: Install
         working-directory: vscode
         run: npm ci
@@ -77,26 +99,25 @@ jobs:
         run: npm run check:webui
       - name: The extension in VS Code ${{ env.VSCODE_VERSION }}
         working-directory: vscode
-        run: |
-          mkdir -p dist/backends/linux-x64
-          cp "$(ls -t ../target/*/*/bin/mcpp-ide | head -1)" dist/backends/linux-x64/
-          export MCPP_IDE_BACKENDS="$PWD/dist/backends"
-          xvfb-run -a npm run test:e2e
+        run: MCPP_IDE_BACKENDS="$GITHUB_WORKSPACE/backends" xvfb-run -a npm run test:e2e
       - name: Package
         working-directory: vscode
         run: |
-          export MCPP_IDE_BACKENDS="$PWD/dist/backends"
-          npm run package
-          cd dist/extension && npx vsce ls --no-dependencies
+          MCPP_IDE_BACKENDS="$GITHUB_WORKSPACE/backends" npm run package
+          (cd dist/extension && npx vsce ls --no-dependencies) | tee files.txt
+          for p in linux-x64 linux-arm64 darwin-arm64; do grep -qx "bin/$p/mcpp-ide" files.txt; done
+          grep -qx "bin/win32-x64/mcpp-ide.exe" files.txt
       - uses: actions/upload-artifact@v5
         with:
-          name: mcpp-vscode-ci
+          name: mcpp-vscode-vsix
           path: vscode/dist/*.vsix
 
-  # The CLion plugin: its tests (the wire and a session over the mock mcpp), the archive, and the
-  # Plugin Verifier against the oldest CLion it claims (2025.2) and the one it is built on.
+  # The CLion plugin: its tests (the wire and a session over the mock mcpp), the archive carrying
+  # every system's backend, and the Plugin Verifier against the oldest CLion it claims (2025.2) and
+  # the one it is built on.
   jetbrains:
     name: CLion plugin
+    needs: backend
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     defaults:
@@ -109,25 +130,32 @@ jobs:
         run: xlings install gradle -y -g
       - uses: actions/cache@v5
         with:
-          path: |
-            ~/.gradle/caches/modules-2
-            ~/.gradle/caches/transforms-4
-            jetbrains/.intellijPlatform
-          key: gradle-clion-${{ hashFiles('jetbrains/gradle.properties', 'jetbrains/build.gradle.kts') }}
-      - name: Build the backend
-        run: mcpp build
-      - name: Test and build
+          path: ~/.gradle/caches/modules-2
+          key: gradle-clion-${{ hashFiles('jetbrains/gradle.properties', 'jetbrains/build.gradle.kts', 'jetbrains/settings.gradle.kts') }}
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: backend-*
+          path: backends
+          merge-multiple: true
+      - name: Build the backend and its test programs
+        run: |
+          chmod +x backends/*/mcpp-ide*
+          mcpp build
+      - name: Test and package
         working-directory: jetbrains
         run: |
-          bin="$(dirname "$(ls -t ../target/*/*/bin/mcpp-ide | head -1)")"
+          bin="$(cd "$(dirname "$(ls -t ../target/*/*/bin/mcpp-ide | head -1)")" && pwd)"
           export MCPP_IDE_DEV="$bin/mcpp-ide-dev" MCPP_IDE_BACKEND="$bin/mcpp-ide" MCPP_IDE_MOCK_MCPP="$bin/mcpp-ide-mock-mcpp"
+          export MCPP_IDE_BACKENDS="$GITHUB_WORKSPACE/backends"
           gradle --no-daemon test buildPlugin
+          unzip -l build/distributions/mcpp-clion-*.zip | tee files.txt
+          for p in linux-x64/mcpp-ide linux-arm64/mcpp-ide darwin-arm64/mcpp-ide win32-x64/mcpp-ide.exe; do grep -q "mcpp-clion/bin/$p" files.txt; done
       - name: Plugin Verifier
         working-directory: jetbrains
         run: |
-          export MCPP_IDE_DEV="$(ls -t ../target/*/*/bin/mcpp-ide-dev | head -1)"
+          export MCPP_IDE_DEV="$(cd "$(dirname "$(ls -t ../target/*/*/bin/mcpp-ide-dev | head -1)")" && pwd)/mcpp-ide-dev"
           gradle --no-daemon verifyPlugin
       - uses: actions/upload-artifact@v5
         with:
-          name: mcpp-clion-ci
+          name: mcpp-clion-zip
           path: jetbrains/build/distributions/*.zip

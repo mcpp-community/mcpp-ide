@@ -50,7 +50,13 @@ export function locateBackend(options: {
     return { program: options.configured.trim(), source: "setting" };
   }
   const bundled = path.join(options.extensionRoot, "bin", platformDir(platform, options.arch ?? process.arch), exe);
-  if (isFile(bundled)) return { program: bundled, source: "bundled" };
+  if (isFile(bundled)) {
+    // A package's archive need not keep the mode bits.
+    if (platform !== "win32") {
+      try { fs.accessSync(bundled, fs.constants.X_OK); } catch { try { fs.chmodSync(bundled, 0o755); } catch { /* reported when it is started */ } }
+    }
+    return { program: bundled, source: "bundled" };
+  }
   const home = options.home ?? os.homedir();
   const xlingsHome = env.XLINGS_HOME;
   for (const candidate of [

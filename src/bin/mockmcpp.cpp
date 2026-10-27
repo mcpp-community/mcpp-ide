@@ -67,7 +67,7 @@ void write_record(std::string_view status) {
 // As mcpp does: a build asked to end leaves its record `cancelled`.
 void on_term() {
     write_record("cancelled");
-    std::quick_exit(143);
+    std::_Exit(143);
 }
 
 // The failure to play: MOCK_MCPP_FAIL, else the content of `.mock-mcpp-fail` in the project (an
