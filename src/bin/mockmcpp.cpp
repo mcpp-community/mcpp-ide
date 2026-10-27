@@ -25,6 +25,14 @@ std::string slurp(const std::filesystem::path& p) {
     return std::string(std::istreambuf_iterator<char>(in), {});
 }
 
+// What mcpp prints, as bytes: the standard streams of mcpplibs.os translate nothing (a C++ stream on
+// Windows writes every \n as \r\n), and each write is complete when it returns.
+void out(std::string_view text) {
+    (void)mcpplibs::os::stdio::write_output(text);
+    (void)mcpplibs::os::stdio::flush_output();
+}
+void err(std::string_view text) { (void)mcpplibs::os::stdio::write_error(text); }
+
 std::string replace_all(std::string s, std::string_view from, std::string_view to) {
     for (auto pos = s.find(from); pos != std::string::npos; pos = s.find(from, pos + to.size())) s.replace(pos, from.size(), to);
     return s;
@@ -84,15 +92,15 @@ int build(bool message) {
     const auto fail = failure();
     std::string stream = fixture(fail == "build" ? "build-failed.ndjson"
                                  : fail == "manifest" ? "build-manifest-error.ndjson" : "build-ok.ndjson");
-    std::println(std::cerr, "   Compiling app v0.1.0 (.)");
+    err("   Compiling app v0.1.0 (.)\n");
     if (const auto slow = env("MOCK_MCPP_SLOW_MS"); !slow.empty()) {
         write_record("running");
         // A request to end (SIGTERM, a console control event) is taken over and answered as mcpp
         // answers it: the record says `cancelled` (mcpplibs.os.interrupt).
         if (mcpplibs::os::interrupt::wait(std::chrono::milliseconds(std::stoi(slow)))) on_term();
     }
-    if (message) std::cout << stream << std::flush;
-    if (fail.empty()) { write_record("ok"); std::println(std::cerr, "    Finished dev [unoptimized + debuginfo] in 0.01s"); return 0; }
+    if (message) out(stream);
+    if (fail.empty()) { write_record("ok"); err("    Finished dev [unoptimized + debuginfo] in 0.01s\n"); return 0; }
     if (fail == "build") write_record("failed");
     return 1;
 }
@@ -109,28 +117,28 @@ int main(int argc, char** argv) {
     auto has = [&](std::string_view a) { return std::ranges::find(args, a) != args.end(); };
     auto first = [&](std::size_t i) { return i < args.size() ? args[i] : std::string{}; };
     if (args.empty()) return 2;
-    if (first(0) == "--version") { std::cout << fixture("version.txt"); return 0; }
-    if (first(0) == "--protocol-version") { std::cout << fixture("protocol-version.json"); return 0; }
+    if (first(0) == "--version") { out(fixture("version.txt")); return 0; }
+    if (first(0) == "--protocol-version") { out(fixture("protocol-version.json")); return 0; }
     if (first(0) == "build") return build(has("--message-format"));
-    if (first(0) == "test") { std::cout << fixture(has("--list") ? "test-list.ndjson" : "test.ndjson"); return 0; }
-    if (first(0) == "run" && has("--print-launch")) { std::cout << fixture("launch.json"); return 0; }
-    if (first(0) == "search") { std::cout << fixture("search.json"); return 0; }
-    if (first(0) == "index" && first(1) == "list") { std::cout << fixture("index-list.json"); return 0; }
-    if (first(0) == "pack" && has("--list-formats")) { std::cout << fixture("pack-formats.json"); return 0; }
-    if (first(0) == "toolchain" && first(1) == "list") { std::cout << fixture("toolchain-list.json"); return 0; }
-    if (first(0) == "cache" && first(1) == "list") { std::cout << fixture("cache-list.json"); return 0; }
+    if (first(0) == "test") { out(fixture(has("--list") ? "test-list.ndjson" : "test.ndjson")); return 0; }
+    if (first(0) == "run" && has("--print-launch")) { out(fixture("launch.json")); return 0; }
+    if (first(0) == "search") { out(fixture("search.json")); return 0; }
+    if (first(0) == "index" && first(1) == "list") { out(fixture("index-list.json")); return 0; }
+    if (first(0) == "pack" && has("--list-formats")) { out(fixture("pack-formats.json")); return 0; }
+    if (first(0) == "toolchain" && first(1) == "list") { out(fixture("toolchain-list.json")); return 0; }
+    if (first(0) == "cache" && first(1) == "list") { out(fixture("cache-list.json")); return 0; }
     if (first(0) == "emit") {
         if (failure() == "manifest") {
-            std::cout << replace_all(fixture("build-manifest-error.ndjson"), "\"mcpp.build\"", "\"mcpp.build-database\"");
+            out(replace_all(fixture("build-manifest-error.ndjson"), "\"mcpp.build\"", "\"mcpp.build-database\""));
             return 1;
         }
-        std::cout << fixture("build-database.json");
+        out(fixture("build-database.json"));
         return 0;
     }
-    if (first(0) == "self" && first(1) == "env") { std::cout << fixture("self-env.json"); return 0; }
+    if (first(0) == "self" && first(1) == "env") { out(fixture("self-env.json")); return 0; }
     // Everything else is a command a person reads: say what ran.
     std::string line;
     for (const auto& a : args) { if (!line.empty()) line += ' '; line += a; }
-    std::println(std::cerr, "mock mcpp: {}", line);
+    err(std::format("mock mcpp: {}\n", line));
     return 0;
 }

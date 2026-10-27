@@ -44,6 +44,10 @@ int main() {
         CHECK(seen.finished.contains(ok));
         CHECK(seen.finished[ok]["status"] == "ok");
         CHECK(!seen.records.empty());
+        if (!seen.finished[ok].contains("envelope")) {
+            std::println(std::cerr, "no envelope; the summary: {}", seen.finished[ok].dump());
+            for (const auto& r : seen.records) std::println(std::cerr, "record: {}", r.dump().substr(0, 200));
+        }
         CHECK(seen.finished[ok].contains("envelope"));
     }
 
