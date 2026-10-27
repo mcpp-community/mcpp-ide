@@ -1,9 +1,9 @@
 // A stand-in for mcpp in the tests: answers mcpp's control contract from the
 // golden fixtures (protocol/fixtures, captured from a real mcpp by
-// tools/capture-fixtures.sh). `@ROOT@` in a fixture becomes the directory the
+// `mcpp-ide-dev capture`). `@ROOT@` in a fixture becomes the directory the
 // command runs in, `@HOME@` the home.
 //
-//   MCPPIDE_FIXTURES     the fixtures directory (required)
+//   MCPPIDE_FIXTURES     the fixtures directory (default: the repository's protocol/fixtures)
 //   MOCK_MCPP_FAIL       "build": the build fails with the compiler's diagnostic;
 //                        "manifest": it fails on the manifest
 //   MOCK_MCPP_SLOW_MS    the build waits this long before it ends, so a test can
@@ -29,8 +29,20 @@ std::string replace_all(std::string s, std::string_view from, std::string_view t
     return s;
 }
 
+// The fixtures: MCPPIDE_FIXTURES, else the repository's, found above this program (it is built
+// under target/ of the repository).
+std::filesystem::path fixtures_dir() {
+    if (auto d = env("MCPPIDE_FIXTURES"); !d.empty()) return d;
+    std::error_code ec;
+    for (auto d = mcpplibs::os::env::image().value_or(std::filesystem::path{}).parent_path(); !d.empty(); d = d.parent_path()) {
+        if (std::filesystem::is_directory(d / "protocol" / "fixtures", ec)) return d / "protocol" / "fixtures";
+        if (d == d.parent_path()) break;
+    }
+    return {};
+}
+
 std::string fixture(std::string_view name) {
-    const auto dir = env("MCPPIDE_FIXTURES");
+    const auto dir = fixtures_dir();
     auto text = slurp(std::filesystem::path(dir) / name);
     std::error_code ec;
     text = replace_all(std::move(text), "@ROOT@", std::filesystem::current_path(ec).generic_string());
@@ -89,7 +101,7 @@ int main(int argc, char** argv) {
     if (first(0) == "--version") { std::cout << fixture("version.txt"); return 0; }
     if (first(0) == "--protocol-version") { std::cout << fixture("protocol-version.json"); return 0; }
     if (first(0) == "build") return build(has("--message-format"));
-    if (first(0) == "test") { std::cout << fixture("test.ndjson"); return 0; }
+    if (first(0) == "test") { std::cout << fixture(has("--list") ? "test-list.ndjson" : "test.ndjson"); return 0; }
     if (first(0) == "run" && has("--print-launch")) { std::cout << fixture("launch.json"); return 0; }
     if (first(0) == "search") { std::cout << fixture("search.json"); return 0; }
     if (first(0) == "index" && first(1) == "list") { std::cout << fixture("index-list.json"); return 0; }

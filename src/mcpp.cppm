@@ -75,6 +75,15 @@ public:
     };
     std::expected<EnvelopeResult, std::string> envelope(const RunOptions& o) const;
 
+    // Runs a command whose standard output is NDJSON (`mcpp test --list --message-format json`):
+    // every line that is a JSON document, in order.
+    struct RecordsResult {
+        int exitCode = -1;
+        std::vector<Json> records;
+        std::string narration;
+    };
+    std::expected<RecordsResult, std::string> records(const RunOptions& o) const;
+
 private:
     std::filesystem::path program_;
     Protocol protocol_;
@@ -222,6 +231,27 @@ std::expected<Client::EnvelopeResult, std::string> Client::envelope(const RunOpt
         }
     }
     out.envelope = doc.is_discarded() ? Json(nullptr) : std::move(doc);
+    return out;
+}
+
+std::expected<Client::RecordsResult, std::string> Client::records(const RunOptions& o) const {
+    auto r = mcpplibs::os::process::run(spawn_options(o));
+    if (!r) return std::unexpected(r.error().message());
+    RecordsResult out;
+    out.exitCode = r->status.shell_code();
+    out.narration = std::move(r->err);
+    std::size_t pos = 0;
+    while (pos < r->out.size()) {
+        auto end = r->out.find('\n', pos);
+        if (end == std::string::npos) end = r->out.size();
+        auto line = std::string_view(r->out).substr(pos, end - pos);
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+        if (!line.empty()) {
+            auto doc = Json::parse(line, nullptr, false);
+            if (!doc.is_discarded()) out.records.push_back(std::move(doc));
+        }
+        pos = end + 1;
+    }
     return out;
 }
 

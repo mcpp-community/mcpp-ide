@@ -4,12 +4,12 @@
     "buildCache": "@HOME@/.mcpp/build-cache/v1",
     "config": "@HOME@/.mcpp/config.toml",
     "defaultToolchain": "gcc@16.1.0",
-    "engineModules": "@HOME@/.mcpp/engine/2026.10.26.1/modules",
+    "engineModules": "@HOME@/.mcpp/engine/2026.10.26.2/modules",
     "homeLocator": "",
     "homeSource": "user",
     "initialized": true,
     "mcppHome": "@HOME@/.mcpp",
-    "mcppVersion": "2026.10.26.1",
+    "mcppVersion": "2026.10.26.2",
     "originalHome": "@HOME@/.mcpp",
     "registry": "@HOME@/.mcpp/registry",
     "xlingsBinary": "@HOME@/.mcpp/registry/bin/xlings",
@@ -24,7 +24,7 @@
       "max": 1,
       "min": 1
     },
-    "version": "2026.10.26.1"
+    "version": "2026.10.26.2"
   },
   "schemaVersion": 1
 }

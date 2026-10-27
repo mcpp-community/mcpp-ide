@@ -9,6 +9,9 @@
 //   package_graph     `mcpp emit build-database`           sets and what each sees
 //   module_graph      the same                             modules, who provides, who imports
 //   project_summary   the same and the result record       targets, tests, artifacts, last build
+//   targets           `mcpp toolchain list --format json`  one row per target: its toolchains, its platform
+//   platform_text     a `platform` object of mcpp's        "openkal-platform 0.17.1 (built-in)"
+//   stream_record     one record of a `--message-format json` stream, normalised
 export module mcppide.views;
 
 import std;
@@ -42,6 +45,18 @@ Json library_detail(const Json& searchEnvelope, std::string_view id);
 Json package_graph(const Json& buildDatabaseEnvelope);
 Json module_graph(const Json& buildDatabaseEnvelope);
 Json project_summary(const Json& buildDatabaseEnvelope, const Json& lastResult);
+
+// The targets mcpp knows, one row each, with the toolchains installed for it and, where mcpp
+// reports one (design 2026-10-28 §9), the platform that configures it. `selected` is the target the
+// adapter builds for ("" for the host).
+Json targets(const Json& toolchainListEnvelope, std::string_view selected);
+// "openkal-platform 0.17.1 (built-in)", "host conventions (built-in)"; "" for null or a non-object.
+std::string platform_text(const Json& platform);
+
+// One record of a `--message-format json` stream (a build's events, a test's records), as the
+// adapters consume it: {"type": "plan" | "progress" | "diagnostic" | "artifact" | "test" | "summary" |
+// "other", ...}.
+Json stream_record(const Json& record);
 
 // "1.5 GiB" -- binary units, one decimal.
 std::string format_bytes(std::int64_t bytes);
@@ -349,6 +364,107 @@ Json project_summary(const Json& envelope, const Json& lastResult) {
         out["compileDatabase"] = r.contains("compileDatabase") ? r["compileDatabase"] : Json(nullptr);
     }
     return out;
+}
+
+std::string platform_text(const Json& p) {
+    if (!p.is_object()) return {};
+    const auto name = p.value("name", "");
+    const auto version = p.contains("version") && p["version"].is_string() ? p["version"].get<std::string>() : std::string{};
+    const auto source = p.value("source", "");
+    std::string out = name.empty() ? std::string("host conventions") : name;
+    if (!version.empty()) out += " " + version;
+    if (!source.empty()) out += " (" + source + ")";
+    return out;
+}
+
+Json targets(const Json& envelope, std::string_view selected) {
+    const auto& data = data_of(envelope);
+    const auto host = data.value("host", "");
+    std::map<std::string, Json> rows;
+    std::vector<std::string> order;
+    if (data.contains("targets") && data["targets"].is_array())
+        for (const auto& t : data["targets"]) {
+            if (!t.is_object()) continue;
+            const auto target = t.value("target", "");
+            if (target.empty()) continue;
+            auto [it, fresh] = rows.try_emplace(target, Json{{"target", target}, {"note", t.value("note", "")},
+                                                             {"pin", t.value("pin", "")}, {"tier", t.value("tier", "")},
+                                                             {"host", target == host}, {"toolchains", Json::array()},
+                                                             {"platform", nullptr}});
+            if (fresh) order.push_back(target);
+            auto& row = it->second;
+            // mcpp reports the platform per row of the target table; every row of one target names the same.
+            if (row["platform"].is_null() && t.contains("platform") && t["platform"].is_object()) row["platform"] = t["platform"];
+            auto tc = t.value("toolchain", "");
+            const auto sp = tc.find(' ');
+            if (sp != std::string::npos) tc[sp] = '@';
+            if (sp != std::string::npos || !t.value("status", "").empty())
+                row["toolchains"].push_back(Json{{"spec", sp == std::string::npos ? std::string{} : tc},
+                                                 {"status", t.value("status", "")}, {"default", t.value("default", false)}});
+        }
+    Json out = Json::array();
+    const std::string chosen = selected.empty() ? host : std::string(selected);
+    for (const auto& name : order) {
+        auto row = rows[name];
+        row["platformText"] = platform_text(row["platform"]);
+        row["selected"] = name == chosen;
+        bool installed = false;
+        for (const auto& tc : row["toolchains"]) installed = installed || tc.value("status", "") == "installed";
+        row["installed"] = installed;
+        out.push_back(std::move(row));
+    }
+    Json result{{"host", host}, {"selected", chosen}, {"rows", out}, {"hostPlatform", nullptr}};
+    if (data.contains("hostPlatform") && data["hostPlatform"].is_object()) {
+        result["hostPlatform"] = data["hostPlatform"];
+        result["hostPlatformText"] = platform_text(data["hostPlatform"]);
+    }
+    return result;
+}
+
+Json stream_record(const Json& r) {
+    if (!r.is_object()) return Json{{"type", "other"}, {"record", r}};
+    // `mcpp test --message-format json`: one record per test, then the summary.
+    if (r.contains("summary") && r["summary"].is_object()) {
+        const auto& s = r["summary"];
+        return Json{{"type", "summary"}, {"member", s.value("member", "")}, {"passed", s.value("passed", 0)},
+                    {"failed", s.value("failed", 0)}, {"notRun", s.value("not_run", 0)},
+                    {"notRunReason", s.value("not_run_reason", "")}, {"elapsedMs", s.value("elapsed_ms", 0)}};
+    }
+    if (r.contains("test") && r["test"].is_string()) {
+        const auto raw = r.value("status", "");
+        const std::string status = raw == "pass" ? "passed"
+                                 : raw == "fail" ? (r.value("timed_out", false) ? "timedOut" : "failed")
+                                 : raw == "skip" || raw == "not_run" ? "skipped" : "errored";
+        std::string output = r.value("compile_output", "");
+        output += r.value("run_output", "");
+        return Json{{"type", "test"}, {"member", r.value("member", "")}, {"test", r["test"]}, {"status", status},
+                    {"durationMs", r.value("duration_ms", 0)}, {"exitCode", r.contains("exit_code") ? r["exit_code"] : Json(nullptr)},
+                    {"reason", r.value("reason", "")}, {"output", output}};
+    }
+    const auto event = r.value("event", "");
+    if (r.value("kind", "") == "mcpp.event") {
+        if (event == "plan") {
+            Json out{{"type", "plan"}, {"configuration", r.contains("configuration") ? r["configuration"] : Json(nullptr)},
+                     {"platform", r.contains("platform") ? r["platform"] : Json(nullptr)},
+                     {"hostPlatform", r.contains("hostPlatform") ? r["hostPlatform"] : Json(nullptr)}};
+            out["platformText"] = platform_text(out["platform"]);
+            out["hostPlatformText"] = platform_text(out["hostPlatform"]);
+            return out;
+        }
+        if (event == "progress")
+            return Json{{"type", "progress"}, {"finished", r.value("finished", 0)}, {"total", r.value("total", 0)}};
+        if (event == "artifact" && r.contains("artifact") && r["artifact"].is_object())
+            return Json{{"type", "artifact"}, {"artifact", r["artifact"]}};
+        if (event == "diagnostic" && r.contains("diagnostic") && r["diagnostic"].is_object()) {
+            const auto& d = r["diagnostic"];
+            Json n{{"type", "diagnostic"}, {"severity", d.value("severity", "error")}, {"message", d.value("message", "")},
+                   {"code", d.value("code", "")}, {"source", "mcpp"}};
+            if (d.contains("path") && d["path"].is_string()) n["path"] = d["path"];
+            if (d.contains("range") && d["range"].is_object()) n["range"] = d["range"];
+            return n;
+        }
+    }
+    return Json{{"type", "other"}, {"record", r}};
 }
 
 }  // namespace mcppide::views

@@ -35,6 +35,11 @@ main = "src/main.cpp"
 kind = "bin"
 main = "src/bin/mockmcpp.cpp"
 
+# The repository's tools: fixture capture, the editors' declarations from spec/, the i18n check.
+[targets.mcpp-ide-dev]
+kind = "bin"
+main = "src/bin/dev.cpp"
+
 [dependencies]
 os = "0.2.0"
 

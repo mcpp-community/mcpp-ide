@@ -1087,7 +1087,7 @@
       "order": 5,
       "tier": "advanced",
       "applies": "restart",
-      "since": "0.10.0",
+      "since": "1.0.0",
       "title": "Set the mcpp-ide backend path",
       "description": "The mcpp-ide program the extension starts. Empty: the backend shipped with the extension, then the one xlings installed, then PATH."
     },
@@ -1100,7 +1100,7 @@
       "order": 30,
       "tier": "public",
       "applies": "immediate",
-      "since": "0.10.0",
+      "since": "1.0.0",
       "title": "Build when a file is saved",
       "description": "Start a build of the file's project when a source or mcpp.toml is saved. A save while a build waits replaces it; a running build is cancelled and started again."
     },
@@ -1117,9 +1117,22 @@
       "order": 31,
       "tier": "public",
       "applies": "immediate",
-      "since": "0.10.0",
+      "since": "1.0.0",
       "title": "Choose the build profile",
       "description": "The profile build, run, test and debug use: dev (unoptimised, debug information) or release."
+    },
+    {
+      "key": "mcpp.build.target",
+      "type": "string",
+      "default": "",
+      "scope": "resource",
+      "group": "tasks",
+      "order": 33,
+      "tier": "public",
+      "applies": "immediate",
+      "since": "1.0.0",
+      "title": "Choose the build target",
+      "description": "The target build, run, test, debug and pack use, as mcpp names it (x86_64-linux-musl, x86_64-openkal). Empty: this machine. The Targets panel lists the targets and the platform that configures each."
     },
     {
       "key": "mcpp.trust.denyEffects",
@@ -1133,7 +1146,7 @@
       "order": 10,
       "tier": "advanced",
       "applies": "immediate",
-      "since": "0.10.0",
+      "since": "1.0.0",
       "title": "Effects denied in an untrusted workspace",
       "description": "What mcpp may not do while the workspace is not trusted (mcpp --deny): a run that needs one of them stops before it and says so. Trusting the workspace lifts the list."
     },
@@ -1153,7 +1166,7 @@
       "order": 32,
       "tier": "public",
       "applies": "immediate",
-      "since": "0.10.0",
+      "since": "1.0.0",
       "title": "Choose the debugger",
       "description": "The debug adapter a debug session uses. auto: CodeLLDB when it is installed, then the C/C++ extension's gdb or lldb, then lldb-dap."
     }
