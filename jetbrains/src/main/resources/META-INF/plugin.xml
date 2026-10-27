@@ -1,0 +1,49 @@
+<idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
+    <id>io.github.mcpp-community.mcpp-clion</id>
+    <!-- The Marketplace refuses a product name in a plugin's name (TemplateWordInPluginName): the plugin
+         is "mcpp" there, its ID and its archive say mcpp-clion. -->
+    <name>mcpp</name>
+    <vendor url="https://github.com/mcpp-community/mcpp-ide">mcpp-community</vendor>
+    <resource-bundle>messages.McppClionBundle</resource-bundle>
+
+    <description><![CDATA[
+        Build, run, test, debug and pack <a href="https://github.com/mcpp-community/mcpp">mcpp</a> C++23 module
+        projects in CLion: an "mcpp" run configuration type with a PTY console and a ▶ beside <code>main</code>,
+        the test tree, CLion's own debugger, links in the console, and the mcpp tool window (project, libraries,
+        cache, targets and platforms, dependency and module graphs, pack, settings).
+        <br/><br/>
+        Language features of C++ files come from the C++ Modules language server (mcppls), whose CLion plugin
+        this one depends on; mcpp-clion registers no language service. The mcpp-ide backend it runs reads only
+        mcpp's machine contract, so CLion and VS Code (mcpp-vscode) behave alike.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.clion</depends>
+    <depends>com.intellij.modules.cidr.debugger</depends>
+    <depends>io.github.sunrisepeak.mcppls</depends>
+    <!-- Since 2026.1 the panels' browser and the test tree are plugins of their own; in 2025.2 they are
+         the platform's. Optional, so the classes are found either way. -->
+    <depends optional="true" config-file="mcpp-jcef.xml">com.intellij.modules.jcef</depends>
+    <depends optional="true" config-file="mcpp-testrunner.xml">intellij.testRunner.plugin</depends>
+
+    <xi:include href="/META-INF/mcpp-actions.xml" xpointer="xpointer(/idea-plugin/*)"/>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="io.github.mcppcommunity.mcppclion.settings.McppSettings"/>
+        <projectConfigurable parentId="tools" instance="io.github.mcppcommunity.mcppclion.settings.McppConfigurable"
+                             id="io.github.mcppcommunity.mcppclion.settings" displayName="mcpp"/>
+        <postStartupActivity implementation="io.github.mcppcommunity.mcppclion.McppStartup"/>
+        <notificationGroup id="mcpp" displayType="BALLOON"/>
+
+        <toolWindow id="mcpp" anchor="right" icon="io.github.mcppcommunity.mcppclion.McppIcons.Logo"
+                    factoryClass="io.github.mcppcommunity.mcppclion.webui.McppPanels$Factory"/>
+
+        <configurationType implementation="io.github.mcppcommunity.mcppclion.run.McppRunConfigurationType"/>
+        <runConfigurationProducer implementation="io.github.mcppcommunity.mcppclion.run.McppConfigurationProducer"/>
+        <programRunner implementation="io.github.mcppcommunity.mcppclion.run.McppDebugRunner"/>
+        <!-- C++ is CLion Nova's language id, ObjectiveC the classic engine's. -->
+        <runLineMarkerContributor language="C++" implementationClass="io.github.mcppcommunity.mcppclion.run.McppRunLineMarker"/>
+        <runLineMarkerContributor language="ObjectiveC" implementationClass="io.github.mcppcommunity.mcppclion.run.McppRunLineMarker"/>
+        <consoleFilterProvider implementation="io.github.mcppcommunity.mcppclion.run.McppConsoleFilterProvider"/>
+    </extensions>
+</idea-plugin>
