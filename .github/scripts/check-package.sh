@@ -18,7 +18,10 @@ case "$(uname -m)" in x86_64|amd64|AMD64) arch=x86_64 va=x64 ;; aarch64|arm64|AR
 exe=""; [ "$os" = windows ] && exe=".exe"
 
 answers() {   # <argv...>: the backend says who it is
-    "$@" --version | tee /dev/stderr | grep -q '^mcpp-ide '
+    local said
+    said="$("$@" --version)"
+    echo "$said"
+    grep -q '^mcpp-ide ' <<< "$said"
 }
 
 okbs="$(find "$root" -name '*.okb' | wc -l | tr -d ' ')"
