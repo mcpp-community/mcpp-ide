@@ -1,0 +1,106 @@
+name: Release
+
+# A release: CI on the tagged commit, the backend for each system the editors run on, the VS Code
+# extension and the CLion plugin carrying all of them, and a GitHub release with both packages and
+# their checksums. The two Marketplaces are uploaded to by the maintainer, from those assets.
+#
+# The backends are built per system here. When mcpp's platforms ship (mcpp design 2026-10-28), each
+# becomes one ok image per architecture (`mcpp build --target <arch>-openkal`) made into a program
+# of each system by `mcpp pack --mode self-contained`; only the `backend` job changes, the layout
+# it uploads (`bin/<platform>/mcpp-ide[.exe]`) does not.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  XLINGS_NON_INTERACTIVE: '1'
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  backend:
+    name: backend (${{ matrix.platform }})
+    needs: ci
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-24.04, platform: linux-x64, target: '--target x86_64-linux-musl', llvm: 'false', exe: mcpp-ide }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64, target: '--target aarch64-linux-musl', llvm: 'false', exe: mcpp-ide }
+          - { os: macos-14, platform: darwin-arm64, target: '--target aarch64-macos', llvm: 'true', exe: mcpp-ide }
+          - { os: windows-2022, platform: win32-x64, target: '--target x86_64-windows-gnu', llvm: 'true', exe: mcpp-ide.exe }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+        with:
+          llvm: ${{ matrix.llvm }}
+      - name: Build
+        run: mcpp build --release ${{ matrix.target }}
+      - name: Lay out bin/${{ matrix.platform }}
+        run: |
+          mkdir -p "out/${{ matrix.platform }}"
+          cp "$(ls -t target/*/*/bin/${{ matrix.exe }} | head -1)" "out/${{ matrix.platform }}/"
+          "out/${{ matrix.platform }}/${{ matrix.exe }}" --version
+      - uses: actions/upload-artifact@v5
+        with:
+          name: backend-${{ matrix.platform }}
+          path: out
+
+  package:
+    name: packages
+    needs: backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: backend-*
+          path: backends
+          merge-multiple: true
+      - name: Backends are executable
+        run: chmod +x backends/*/mcpp-ide* && ls -lR backends
+      - name: Build the dev tool
+        run: mcpp build
+      - name: VS Code extension
+        working-directory: vscode
+        run: |
+          npm ci
+          MCPP_IDE_BACKENDS="$GITHUB_WORKSPACE/backends" npm run package
+          (cd dist/extension && npx vsce ls --no-dependencies)
+      - name: Gradle (xim:gradle brings its JDK)
+        run: xlings install gradle -y -g
+      - name: CLion plugin
+        working-directory: jetbrains
+        run: |
+          export MCPP_IDE_DEV="$(ls -t ../target/*/*/bin/mcpp-ide-dev | head -1)" MCPP_IDE_BACKENDS="$GITHUB_WORKSPACE/backends"
+          gradle --no-daemon buildPlugin
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
+          mkdir -p dist
+          cp "vscode/dist/mcpp-vscode-$(node -p "require('./vscode/package.json').version").vsix" dist/
+          cp jetbrains/build/distributions/mcpp-clion-*.zip dist/
+          (cd backends && for d in */; do tar -czf "../dist/mcpp-ide-${version}-${d%/}.tar.gz" -C "$d" .; done)
+          (cd dist && sha256sum * > SHA256SUMS)
+          gh release create "v${version}" dist/* --target "$GITHUB_SHA" --title "mcpp-ide ${version}" --notes-file CHANGELOG.md

@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XLINGS_NON_INTERACTIVE: '1'
+
+jobs:
+  # The backend on each system: build (every program: the backend, the mock mcpp, the dev tool),
+  # then the tests -- the protocol against its schema and the fixtures against mcpp's contract
+  # among them -- and the translations.
+  backend:
+    name: backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, target: '', llvm: 'false', platform: linux-x64 }
+          - { os: macos-14, target: '--target aarch64-macos', llvm: 'true', platform: darwin-arm64 }
+          - { os: windows-2022, target: '--target x86_64-windows-gnu', llvm: 'true', platform: win32-x64 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+        with:
+          llvm: ${{ matrix.llvm }}
+      - name: Build
+        run: mcpp build ${{ matrix.target }}
+      - name: Test
+        run: mcpp test ${{ matrix.target }}
+      - name: Every string has its translation
+        run: mcpp run ${{ matrix.target }} mcpp-ide-dev -- check-i18n
+      - name: The backend answers
+        run: mcpp run ${{ matrix.target }} mcpp-ide -- --version
+
+  # The VS Code extension: unit tests (the wire, the mappings) and the shared panels in a DOM, both
+  # against the backend built here; then the extension in a real VS Code (the oldest it supports)
+  # over the mock mcpp; then the package, and its file list.
+  vscode:
+    name: VS Code extension
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+      - name: Build the backend
+        run: mcpp build
+      - name: Install
+        working-directory: vscode
+        run: npm ci
+      - name: Unit and panel tests
+        working-directory: vscode
+        run: npm test
+      - name: The panels type-check
+        working-directory: vscode
+        run: npm run check:webui
+      - name: The extension in VS Code ${{ env.VSCODE_VERSION }}
+        working-directory: vscode
+        run: |
+          mkdir -p dist/backends/linux-x64
+          cp "$(ls -t ../target/*/*/bin/mcpp-ide | head -1)" dist/backends/linux-x64/
+          export MCPP_IDE_BACKENDS="$PWD/dist/backends"
+          xvfb-run -a npm run test:e2e
+      - name: Package
+        working-directory: vscode
+        run: |
+          export MCPP_IDE_BACKENDS="$PWD/dist/backends"
+          npm run package
+          cd dist/extension && npx vsce ls --no-dependencies
+      - uses: actions/upload-artifact@v5
+        with:
+          name: mcpp-vscode-ci
+          path: vscode/dist/*.vsix
+
+  # The CLion plugin: its tests (the wire and a session over the mock mcpp), the archive, and the
+  # Plugin Verifier against the oldest CLion it claims (2025.2) and the one it is built on.
+  jetbrains:
+    name: CLion plugin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+      - name: Gradle (xim:gradle brings its JDK)
+        run: xlings install gradle -y -g
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/caches/transforms-4
+            jetbrains/.intellijPlatform
+          key: gradle-clion-${{ hashFiles('jetbrains/gradle.properties', 'jetbrains/build.gradle.kts') }}
+      - name: Build the backend
+        run: mcpp build
+      - name: Test and build
+        working-directory: jetbrains
+        run: |
+          bin="$(dirname "$(ls -t ../target/*/*/bin/mcpp-ide | head -1)")"
+          export MCPP_IDE_DEV="$bin/mcpp-ide-dev" MCPP_IDE_BACKEND="$bin/mcpp-ide" MCPP_IDE_MOCK_MCPP="$bin/mcpp-ide-mock-mcpp"
+          gradle --no-daemon test buildPlugin
+      - name: Plugin Verifier
+        working-directory: jetbrains
+        run: |
+          export MCPP_IDE_DEV="$(ls -t ../target/*/*/bin/mcpp-ide-dev | head -1)"
+          gradle --no-daemon verifyPlugin
+      - uses: actions/upload-artifact@v5
+        with:
+          name: mcpp-clion-ci
+          path: jetbrains/build/distributions/*.zip
