@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!-- The shared panels. The host fills the placeholders: its content security policy, the base URL
+     of this directory, the script nonce, the language. -->
+<html lang="{{lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="{{csp}}">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{base}}styles.css">
+  <title>mcpp</title>
+</head>
+<body>
+  <main id="app"></main>
+  <script nonce="{{nonce}}" src="{{base}}js/core.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/host.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/graph-layout.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/panels/project.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/panels/libraries.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/panels/cache.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/panels/settings.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/panels/graph.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/panels/pack.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/panels/targets.js"></script>
+  <script nonce="{{nonce}}" src="{{base}}js/app.js"></script>
+</body>
+</html>
