@@ -281,12 +281,18 @@ int gen_vscode(std::span<const std::string> args) {
         copy_tree(root / "vscode" / "out" / "src", out / "out" / "src");
         copy_tree(root / "vscode" / "media", out / "media");
         copy_tree(root / "vscode" / "syntaxes", out / "syntaxes");
-        static constexpr std::array<std::string_view, 2> webuiSkip{"tests", "tsconfig.json"};
+        static constexpr std::array<std::string_view, 3> webuiSkip{"tests", "tsconfig.json", "js/types.d.ts"};
         copy_tree(root / "webui", out / "webui", webuiSkip);
         for (const auto* f : {"README.md", "CHANGELOG.md", ".vscodeignore"})
             if (fs::exists(root / "vscode" / f)) fs::copy_file(root / "vscode" / f, out / f, fs::copy_options::overwrite_existing);
         fs::copy_file(root / "LICENSE", out / "LICENSE.txt", fs::copy_options::overwrite_existing);
-        if (auto backends = option(args, "--backends")) copy_tree(*backends, out / "bin");
+        // The runtime strings, for what the extension says before its backend runs.
+        fs::create_directories(out / "i18n");
+        fs::copy_file(root / "spec" / "i18n" / "runtime.zh-cn.json", out / "i18n" / "runtime.zh-cn.json", fs::copy_options::overwrite_existing);
+        // The backend programs, laid out bin/<platform>/mcpp-ide[.exe]: --backends, else MCPP_IDE_BACKENDS.
+        auto backends = option(args, "--backends");
+        if (!backends) backends = mcpplibs::os::env::get("MCPP_IDE_BACKENDS");
+        if (backends && !backends->empty()) copy_tree(*backends, out / "bin");
     }
     std::println("vscode declarations in {}", out.generic_string());
     return 0;
