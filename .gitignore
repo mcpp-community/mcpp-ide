@@ -13,3 +13,4 @@ webui/dist/
 compile_commands.json
 dist-upload/
 jetbrains/.kotlin/
+.xlings/
