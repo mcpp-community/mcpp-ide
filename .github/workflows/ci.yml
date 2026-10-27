@@ -30,11 +30,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `releases`: the release programs a leg builds, as `<platform>=<target>` (empty target: this
+        # system). The arm64 Linux program is cross-built on x86_64, where musl-gcc's cross payload is.
         include:
-          - { os: ubuntu-24.04, platform: linux-x64, target: '', release: '--target x86_64-linux-musl', llvm: 'false', exe: mcpp-ide }
-          - { os: ubuntu-24.04-arm, platform: linux-arm64, target: '', release: '--target aarch64-linux-musl', llvm: 'false', exe: mcpp-ide }
-          - { os: macos-14, platform: darwin-arm64, target: '--target aarch64-macos', release: '--target aarch64-macos', llvm: 'true', exe: mcpp-ide }
-          - { os: windows-2022, platform: win32-x64, target: '--target x86_64-windows-gnu', release: '--target x86_64-windows-gnu', llvm: 'true', exe: mcpp-ide.exe }
+          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', releases: 'linux-x64=x86_64-linux-musl linux-arm64=aarch64-linux-musl' }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64, llvm: 'false', releases: '' }
+          - { os: macos-14, platform: darwin-arm64, llvm: 'true', releases: 'darwin-arm64=' }
+          - { os: windows-2022, platform: win32-x64, llvm: 'true', releases: 'win32-x64=' }
     defaults:
       run:
         shell: bash
@@ -44,18 +46,32 @@ jobs:
         with:
           llvm: ${{ matrix.llvm }}
       - name: Build
-        run: mcpp build ${{ matrix.target }}
+        run: mcpp build
       - name: Test
-        run: mcpp test ${{ matrix.target }}
+        run: mcpp test
       - name: Every string has its translation
-        run: mcpp run ${{ matrix.target }} mcpp-ide-dev -- check-i18n
-      - name: Release program
+        run: mcpp run mcpp-ide-dev -- check-i18n
+      - name: Release programs
+        if: matrix.releases != ''
         run: |
-          mcpp build --release ${{ matrix.release }}
-          mkdir -p "out/${{ matrix.platform }}"
-          cp "$(ls -t target/*/*/bin/${{ matrix.exe }} | head -1)" "out/${{ matrix.platform }}/"
-          "out/${{ matrix.platform }}/${{ matrix.exe }}" --version
+          set -euo pipefail
+          for entry in ${{ matrix.releases }}; do
+            platform="${entry%%=*}" target="${entry#*=}"
+            case "$platform" in win32-*) exe=mcpp-ide.exe ;; *) exe=mcpp-ide ;; esac
+            if [ -n "$target" ]; then
+              mcpp build --release --target "$target"
+              built="$(ls -t target/"$target"/*/bin/$exe | head -1)"
+            else
+              mcpp build --release
+              built="$(ls -t target/*/*/bin/$exe | head -1)"
+            fi
+            mkdir -p "out/$platform"
+            cp "$built" "out/$platform/"
+            file "out/$platform/$exe" 2>/dev/null || true
+          done
+          case "${{ matrix.platform }}" in win32-*) out/win32-x64/mcpp-ide.exe --version ;; *) "out/${{ matrix.platform }}/mcpp-ide" --version ;; esac
       - uses: actions/upload-artifact@v5
+        if: matrix.releases != ''
         with:
           name: backend-${{ matrix.platform }}
           path: out
