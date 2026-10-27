@@ -33,8 +33,8 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/.mcpp/registry/data/xpkgs
-        key: mcpp-xpkgs-${{ runner.os }}-${{ env.MCPP_VERSION }}-${{ hashFiles('mcpp.toml', 'mcpp.lock') }}
-        restore-keys: mcpp-xpkgs-${{ runner.os }}-${{ env.MCPP_VERSION }}-
+        key: mcpp-xpkgs-${{ runner.os }}-${{ runner.arch }}-${{ env.MCPP_VERSION }}-${{ hashFiles('mcpp.toml', 'mcpp.lock') }}
+        restore-keys: mcpp-xpkgs-${{ runner.os }}-${{ runner.arch }}-${{ env.MCPP_VERSION }}-
     - name: Install mcpp
       shell: bash
       run: |

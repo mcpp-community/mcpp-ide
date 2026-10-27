@@ -50,12 +50,23 @@ std::filesystem::path fixtures_dir() {
     return {};
 }
 
+// A path as it stands inside a JSON string of a fixture: `/`-separated, and escaped. (A Windows
+// runner's HOME is `C:\Users\...`, whose backslashes are escapes inside JSON.)
+std::string json_path(const std::filesystem::path& p) {
+    std::string out;
+    for (char c : p.generic_string()) {
+        if (c == '\\' || c == '"') out += '\\';
+        out += c;
+    }
+    return out;
+}
+
 std::string fixture(std::string_view name) {
     const auto dir = fixtures_dir();
     auto text = slurp(std::filesystem::path(dir) / name);
     std::error_code ec;
-    text = replace_all(std::move(text), "@ROOT@", std::filesystem::current_path(ec).generic_string());
-    text = replace_all(std::move(text), "@HOME@", env("HOME"));
+    text = replace_all(std::move(text), "@ROOT@", json_path(std::filesystem::current_path(ec)));
+    text = replace_all(std::move(text), "@HOME@", json_path(env("HOME")));
     return text;
 }
 
