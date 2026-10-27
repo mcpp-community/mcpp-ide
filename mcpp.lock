@@ -7,21 +7,21 @@ version = 2
 
 [package."openkal"]
 namespace = "mcpplibs"
-version = "0.17.0"
-source  = "index+mcpplibs@0.17.0"
-hash    = "fnv1a:d9a6fe1043f0f4d5"
+version = "0.17.1"
+source  = "index+mcpplibs@0.17.1"
+hash    = "fnv1a:d9a6fd1043f0f322"
 
 [package."openkal-linux"]
 namespace = "mcpplibs"
-version = "0.18.0"
-source  = "index+mcpplibs@0.18.0"
-hash    = "fnv1a:2947b74ddbcf8b79"
+version = "0.18.2"
+source  = "index+mcpplibs@0.18.2"
+hash    = "fnv1a:2947b54ddbcf8813"
 
 [package."os"]
 namespace = "mcpplibs"
-version = "0.1.0"
-source  = "index+mcpplibs@0.1.0"
-hash    = "fnv1a:39268fa86705b0c4"
+version = "0.2.0"
+source  = "index+mcpplibs@0.2.0"
+hash    = "fnv1a:2fbee4a8617c3781"
 
 [package."nlohmann.json"]
 namespace = "nlohmann"

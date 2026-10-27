@@ -36,7 +36,7 @@ kind = "bin"
 main = "src/bin/mockmcpp.cpp"
 
 [dependencies]
-os = "0.1.0"
+os = "0.2.0"
 
 [dependencies.nlohmann]
 json = "3.12.0"
