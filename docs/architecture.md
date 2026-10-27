@@ -31,6 +31,19 @@ build through mcpp's result record, and an older or missing mcppls is reported w
 5. mcpp writes the result record; the backend's watcher sends `result/changed`; mcppls reads the
    same record and refreshes.
 
+## Distribution
+
+The backend is one program for every editor; each editor package carries it for every system:
+
+| Form | Layout in the package | Started as |
+|---|---|---|
+| ok-image bundle (mcpp design 2026-10-28 part 2 §15) | `backend/mcpp-ide.okb`, `backend/okrun/<os>-<arch>/okrun[.exe]` | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
+| a program per system, until the bundle is built | `bin/<platform>/mcpp-ide[.exe]` | `mcpp-ide serve` |
+
+Before either, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after them, an
+installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. CI opens both
+packages on every system and starts what they carry for it (`.github/scripts/check-package.sh`).
+
 ## Generated declarations
 
 `spec/` is the source of everything the editors declare statically. `mcpp-ide-dev gen vscode` writes

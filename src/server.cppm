@@ -117,6 +117,15 @@ private:
     std::map<std::string, std::pair<std::filesystem::path, std::string>, std::less<>> jobOf_;
     // The configuration (and platforms) the last plan of each project named.
     std::map<std::filesystem::path, Json> plans_;
+    // What `mcpp pack` accepts, read from its help once per mcpp (SPEC-014: `--pkg-format` names the
+    // package format since the platforms release; an earlier mcpp knows it as `--format`).
+    struct PackOptions {
+        std::filesystem::path program;
+        std::string pkgFormatFlag = "--format";
+        bool linkage = false;
+    };
+    std::optional<PackOptions> packOptions_;
+    PackOptions pack_options(const std::filesystem::path& cwd);
 };
 
 }  // namespace mcppide::server
@@ -494,9 +503,11 @@ std::expected<Json, rpc::Error> Session::job_start(const Json& p) {
             r.mode = jobs::Mode::ndjson;
             break;
         case jobs::Kind::pack: {
+            const auto options = pack_options(root);
             r.args = {"pack"};
-            if (p.contains("format") && p["format"].is_string()) { r.args.push_back("--format"); r.args.push_back(p["format"]); }
-            if (p.contains("mode") && p["mode"].is_string()) { r.args.push_back("--mode"); r.args.push_back(p["mode"]); }
+            if (auto f = p.value("pkgFormat", ""); !f.empty()) { r.args.push_back(options.pkgFormatFlag); r.args.push_back(f); }
+            if (auto m = p.value("mode", ""); !m.empty()) { r.args.push_back("--mode"); r.args.push_back(m); }
+            if (auto l = p.value("linkage", ""); !l.empty() && options.linkage) { r.args.push_back("--linkage"); r.args.push_back(l); }
             if (release) r.args.push_back("--release");
             append(target);
             r.args.push_back("--message-format");
@@ -905,6 +916,25 @@ std::expected<Json, rpc::Error> Session::test_list(const Json& p) {
     return Json{{"root", root.generic_string()}, {"tests", tests}};
 }
 
+Session::PackOptions Session::pack_options(const std::filesystem::path& cwd) {
+    mcpp::Client client;
+    {
+        std::lock_guard lock(mutex_);
+        client = client_;
+        if (packOptions_ && packOptions_->program == client.program()) return *packOptions_;
+    }
+    PackOptions o;
+    o.program = client.program();
+    if (auto r = query(cwd, {"pack", "--help"})) {
+        const auto help = r->output + r->narration;
+        if (help.find("--pkg-format") != std::string::npos) o.pkgFormatFlag = "--pkg-format";
+        o.linkage = help.find("--linkage") != std::string::npos;
+    }
+    std::lock_guard lock(mutex_);
+    packOptions_ = o;
+    return o;
+}
+
 void Session::install() {
     auto& s = rpc_;
     s.on("initialize", [this](const Json& p, const rpc::Context&) { return initialize(p); });
@@ -1015,7 +1045,13 @@ void Session::install() {
     s.on("pack/formats", [this](const Json& p, const rpc::Context&) -> Result {
         auto r = query(any_root(p), {"pack", "--list-formats"});
         if (!r) return std::unexpected(r.error());
-        return r->envelope.is_object() ? r->envelope["data"] : Json(nullptr);
+        Json out = r->envelope.is_object() && r->envelope.contains("data") ? r->envelope["data"] : Json::object();
+        const auto options = pack_options(any_root(p));
+        // The closures every mcpp since 2026.10.26.1 packs (SPEC-014), and the linkages where it
+        // takes them apart from the closure.
+        out["modes"] = Json::array({"vendored", "system", "self-contained", "static"});
+        out["linkages"] = options.linkage ? Json::array({"static", "shared"}) : Json::array();
+        return out;
     });
     s.on("pack/start", [this](const Json& p, const rpc::Context&) -> Result {
         Json job = p;

@@ -5,11 +5,11 @@
 //       The golden fixtures under protocol/fixtures, from a real mcpp: the envelopes, streams and
 //       records the backend reads. The mock mcpp and both adapters' tests replay them, so a change in
 //       mcpp's contract shows up as a diff here first.
-//   mcpp-ide-dev gen vscode --out DIR [--stage] [--backends DIR]
+//   mcpp-ide-dev gen vscode --out DIR [--stage] [--okb FILE] [--okrun DIR] [--backends DIR]
 //       The VS Code extension's declarations from spec/: package.json (vscode/package.json with the
 //       generated commands, keybindings, menus and configuration), package.nls.json and
 //       package.nls.zh-cn.json. With --stage, also the files the extension ships (vscode/out, media,
-//       syntaxes, the webui, README, CHANGELOG, LICENSE, and bin/<platform>/ from --backends): the
+//       syntaxes, the webui, README, CHANGELOG, LICENSE, and the backend: see stage_backend): the
 //       directory `vsce package` packs.
 //   mcpp-ide-dev gen jetbrains --out DIR
 //       The CLion plugin's declarations from spec/: META-INF/mcpp-actions.xml (included by
@@ -129,6 +129,10 @@ int capture(std::span<const std::string> args) {
     save("build-database.json", run(mcpp, {"emit", "build-database", "--format", "json"}, app).out);
     save("index-list.json", run(mcpp, {"index", "list", "--format", "json"}, app).out);
     save("pack-formats.json", run(mcpp, {"pack", "--list-formats"}, app).out);
+    {
+        auto help = run(mcpp, {"pack", "--help"}, app);
+        save("pack-help.txt", help.out + help.err);
+    }
     save("self-env.json", run(mcpp, {"self", "env", "--format", "json"}, app).out);
 
     // A developer's home holds hundreds of cache entries and the index hundreds of packages; the
@@ -263,6 +267,27 @@ void copy_tree(const fs::path& from, const fs::path& to, std::span<const std::st
     }
 }
 
+// What an editor package carries of the backend (mcpp design 2026-10-28 part 2 §15):
+//   --okb FILE (MCPP_IDE_OKB)      the ok-image bundle, as backend/mcpp-ide.okb: one for every system
+//   --okrun DIR (MCPP_IDE_OKRUN)   okrun for each system and architecture, laid out
+//                                  <os>-<arch>/okrun[.exe], as backend/okrun/
+//   --backends DIR (MCPP_IDE_BACKENDS)
+//                                  programs laid out <platform>/mcpp-ide[.exe], as bin/: the form
+//                                  packages take until the bundle is built
+void stage_backend(std::span<const std::string> args, const fs::path& out) {
+    auto from = [&](std::string_view flag, const char* variable) {
+        auto v = option(args, flag);
+        if (!v) v = mcpplibs::os::env::get(variable);
+        return v && !v->empty() ? std::optional<fs::path>(*v) : std::nullopt;
+    };
+    if (auto okb = from("--okb", "MCPP_IDE_OKB")) {
+        fs::create_directories(out / "backend");
+        fs::copy_file(*okb, out / "backend" / "mcpp-ide.okb", fs::copy_options::overwrite_existing);
+    }
+    if (auto okrun = from("--okrun", "MCPP_IDE_OKRUN")) copy_tree(*okrun, out / "backend" / "okrun");
+    if (auto backends = from("--backends", "MCPP_IDE_BACKENDS")) copy_tree(*backends, out / "bin");
+}
+
 int gen_vscode(std::span<const std::string> args) {
     const auto root = repo();
     const auto out = fs::path(option(args, "--out").value_or((root / "vscode" / "dist" / "extension").string()));
@@ -289,10 +314,7 @@ int gen_vscode(std::span<const std::string> args) {
         // The runtime strings, for what the extension says before its backend runs.
         fs::create_directories(out / "i18n");
         fs::copy_file(root / "spec" / "i18n" / "runtime.zh-cn.json", out / "i18n" / "runtime.zh-cn.json", fs::copy_options::overwrite_existing);
-        // The backend programs, laid out bin/<platform>/mcpp-ide[.exe]: --backends, else MCPP_IDE_BACKENDS.
-        auto backends = option(args, "--backends");
-        if (!backends) backends = mcpplibs::os::env::get("MCPP_IDE_BACKENDS");
-        if (backends && !backends->empty()) copy_tree(*backends, out / "bin");
+        stage_backend(args, out);
     }
     std::println("vscode declarations in {}", out.generic_string());
     return 0;

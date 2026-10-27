@@ -100,9 +100,10 @@ export class Session implements vscode.Disposable {
       });
       return false;
     }
-    this.output.appendLine(`mcpp-ide: starting ${this.located.program} (${this.located.source})`);
+    this.output.appendLine(`mcpp-ide: starting ${[this.located.program, ...this.located.args].join(" ")} (${this.located.source})`);
     const backend = new Backend({
       program: this.located.program,
+      args: [...this.located.args, "serve"],
       log: (line) => this.output.appendLine(`[backend] ${line}`),
     });
     this.backend = backend;

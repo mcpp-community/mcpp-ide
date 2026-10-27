@@ -51,7 +51,8 @@ C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-lan
 | CLion 2025.2+ | JetBrains Marketplace（`mcpp-clion`），或 `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk；先安装 mcppls CLion 插件 |
 | Agent、其他客户端 | `mcpp-ide-<version>-<platform>.tar.gz`，或 `xlings install mcpp-ide` | 运行 `mcpp-ide serve` |
 
-两个编辑器的包都带有 Linux、macOS、Windows 的后端。
+每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`）加上各系统 × 架构的 okrun 携带
+（mcpp 的平台、openkal 0.17.2）；在该映像包构建出来之前，包内携带 Linux x64/arm64、macOS arm64、Windows x64 各一份程序。
 
 ### 从源码构建
 

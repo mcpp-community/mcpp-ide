@@ -128,6 +128,11 @@ int main() {
     for (const auto& c : cmds["commands"]) CHECK(c["action"]["kind"] != "forward");
     result_of("menu/quick", rooted);
     result_of("languageService/status", Json{{"candidates", Json::array()}});
+    // The pack panel's choices: the closures SPEC-014 names, and linkages only where mcpp takes them.
+    auto pack = result_of("pack/formats", rooted);
+    CHECK(pack["modes"].size() == 4);
+    const bool helpNamesLinkage = testsupport::read(testsupport::fixtures() / "pack-help.txt").find("--linkage") != std::string::npos;
+    CHECK(pack["linkages"].empty() != helpNamesLinkage);
     result_of("graph/packages", rooted);
     result_of("graph/modules", rooted);
     result_of("manifest/check", rooted);

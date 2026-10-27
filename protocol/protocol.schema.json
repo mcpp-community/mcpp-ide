@@ -138,8 +138,9 @@
           "target": { "type": "string", "description": "The target triple; absent: the mcpp.build.target setting; empty: this machine." },
           "profile": { "enum": ["dev", "release"] },
           "filter": { "type": "string" },
-          "format": { "type": "string" },
+          "pkgFormat": { "type": "string", "description": "The package format (mcpp pack --pkg-format; --format before mcpp's platforms release)." },
           "mode": { "type": "string" },
+          "linkage": { "enum": ["static", "shared"] },
           "spec": { "type": "string" },
           "dependency": { "type": "string" },
           "args": { "type": "array", "items": { "type": "string" } },
@@ -245,10 +246,14 @@
     },
     "graph/packages": { "params": { "$ref": "#/$defs/rooted" }, "result": { "$ref": "#/$defs/graph" } },
     "graph/modules": { "params": { "$ref": "#/$defs/rooted" }, "result": { "$ref": "#/$defs/graph" } },
-    "pack/formats": { "params": { "type": "object" }, "result": { "type": ["object", "null"] } },
+    "pack/formats": {
+      "description": "The package formats mcpp offers here (mcpp pack --list-formats), the closures it packs and the linkages it takes apart from them.",
+      "params": { "type": "object" },
+      "result": { "type": "object", "required": ["modes", "linkages"], "properties": { "formats": { "type": "array" }, "modes": { "type": "array", "items": { "type": "string" } }, "linkages": { "type": "array", "items": { "type": "string" } } } }
+    },
     "pack/start": {
       "description": "A pack job (`mcpp pack --message-format json`): its envelope arrives in job/finished.",
-      "params": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "format": { "type": "string" }, "mode": { "type": "string" }, "target": { "type": "string" }, "profile": { "type": "string" } } },
+      "params": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "pkgFormat": { "type": "string" }, "mode": { "type": "string" }, "linkage": { "enum": ["static", "shared"] }, "target": { "type": "string" }, "profile": { "type": "string" } } },
       "result": { "$ref": "#/$defs/jobRef" }
     },
     "manifest/check": {

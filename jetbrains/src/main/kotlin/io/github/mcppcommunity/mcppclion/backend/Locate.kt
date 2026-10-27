@@ -1,5 +1,12 @@
-// Where the backend is: the configured path, the one the plugin carries for this system
-// (`bin/<platform>/mcpp-ide[.exe]`), the one xlings installed, then PATH.
+// Where the backend is, as the command that starts it (mcpp design 2026-10-28 part 2 §15), in the
+// same order as the VS Code extension:
+//
+//   1. mcpp.ide.backendPath: a program, or an ok-image bundle (`*.okb`) run by okrun;
+//   2. the bundle the plugin carries, `backend/mcpp-ide.okb`, run by the okrun it carries for this
+//      system (`backend/okrun/<os>-<arch>/okrun[.exe]`), else by okrun on PATH;
+//   3. a program the plugin carries for this system (`bin/<platform>/mcpp-ide[.exe]`), the form
+//      packages take until the bundle is built;
+//   4. the mcpp-ide xlings installed, then PATH.
 package io.github.mcppcommunity.mcppclion.backend
 
 import java.io.File
@@ -7,44 +14,67 @@ import java.io.File
 object Locate {
     val windows: Boolean = System.getProperty("os.name").lowercase().startsWith("windows")
 
-    /** "linux-x64", "darwin-arm64", "win32-x64": the same directory names the VS Code extension uses. */
-    fun platformDir(os: String = System.getProperty("os.name"), arch: String = System.getProperty("os.arch")): String {
+    private fun system(os: String): String {
         val o = os.lowercase()
-        val system = when {
-            o.startsWith("windows") -> "win32"
-            o.startsWith("mac") || o.contains("darwin") -> "darwin"
+        return when {
+            o.startsWith("windows") -> "windows"
+            o.startsWith("mac") || o.contains("darwin") -> "macos"
             else -> "linux"
         }
-        val machine = when (arch.lowercase()) {
-            "amd64", "x86_64" -> "x64"
-            "aarch64", "arm64" -> "arm64"
-            else -> arch.lowercase()
-        }
-        return "$system-$machine"
     }
 
-    private fun exe(name: String) = if (windows) "$name.exe" else name
+    private fun machine(arch: String): String = when (arch.lowercase()) {
+        "amd64", "x86_64", "x64" -> "x86_64"
+        "aarch64", "arm64" -> "aarch64"
+        else -> arch.lowercase()
+    }
+
+    /** "linux-x64", "darwin-arm64", "win32-x64": the bin/ directories, named as the VS Code extension names them. */
+    fun platformDir(os: String = System.getProperty("os.name"), arch: String = System.getProperty("os.arch")): String {
+        val s = when (system(os)) { "windows" -> "win32"; "macos" -> "darwin"; else -> "linux" }
+        val m = when (machine(arch)) { "x86_64" -> "x64"; "aarch64" -> "arm64"; else -> machine(arch) }
+        return "$s-$m"
+    }
+
+    /** "linux-x86_64", "macos-aarch64", "windows-x86_64": mcpp's names, which the okrun directories use. */
+    fun okrunDir(os: String = System.getProperty("os.name"), arch: String = System.getProperty("os.arch")): String =
+        "${system(os)}-${machine(arch)}"
+
+    private fun exe(name: String, onWindows: Boolean = windows) = if (onWindows) "$name.exe" else name
 
     fun onPath(name: String, path: String? = System.getenv("PATH")): File? =
         (path ?: "").split(File.pathSeparatorChar).filter { it.isNotEmpty() }
             .map { File(it, exe(name)) }.firstOrNull { it.isFile && it.canExecute() }
 
-    data class Located(val program: File, val source: String)
+    data class Located(val command: List<String>, val source: String)
 
-    fun backend(configured: String, pluginRoot: File?): Located? {
-        if (configured.isNotBlank()) return Located(File(configured.trim()), "setting")
-        pluginRoot?.let { root ->
-            val bundled = File(root, "bin/${platformDir()}/${exe("mcpp-ide")}")
-            if (bundled.isFile) {
-                if (!bundled.canExecute()) bundled.setExecutable(true)
-                return Located(bundled, "bundled")
-            }
+    private fun runnable(f: File): File {
+        if (!windows && !f.canExecute()) f.setExecutable(true)
+        return f
+    }
+
+    fun backend(configured: String, pluginRoot: File?, path: String? = System.getenv("PATH"),
+                os: String = System.getProperty("os.name"), arch: String = System.getProperty("os.arch"),
+                home: String = System.getProperty("user.home")): Located? {
+        val onWin = system(os) == "windows"
+        val bundledOkrun = pluginRoot?.let { File(it, "backend/okrun/${okrunDir(os, arch)}/${exe("okrun", onWin)}") }
+        fun okrun(): File? = bundledOkrun?.takeIf { it.isFile }?.let(::runnable) ?: onPath("okrun", path)
+
+        val c = configured.trim()
+        if (c.isNotEmpty()) {
+            if (c.endsWith(".okb")) return okrun()?.let { Located(listOf(it.path, c), "setting") }
+            return Located(listOf(c), "setting")
         }
-        val home = System.getProperty("user.home")
-        listOfNotNull(System.getenv("XLINGS_HOME")?.let { File(it, "subos/current/bin/${exe("mcpp-ide")}") },
-            File(home, ".xlings/subos/current/bin/${exe("mcpp-ide")}"),
-            File(home, ".xlings/subos/default/bin/${exe("mcpp-ide")}"))
-            .firstOrNull { it.isFile }?.let { return Located(it, "xlings") }
-        return onPath("mcpp-ide")?.let { Located(it, "PATH") }
+        pluginRoot?.let { root ->
+            val bundle = File(root, "backend/mcpp-ide.okb")
+            if (bundle.isFile) okrun()?.let { return Located(listOf(it.path, bundle.path), "bundle") }
+            val bundled = File(root, "bin/${platformDir(os, arch)}/${exe("mcpp-ide", onWin)}")
+            if (bundled.isFile) return Located(listOf(runnable(bundled).path), "bundled")
+        }
+        listOfNotNull(System.getenv("XLINGS_HOME")?.let { File(it, "subos/current/bin/${exe("mcpp-ide", onWin)}") },
+            File(home, ".xlings/subos/current/bin/${exe("mcpp-ide", onWin)}"),
+            File(home, ".xlings/subos/default/bin/${exe("mcpp-ide", onWin)}"))
+            .firstOrNull { it.isFile }?.let { return Located(listOf(it.path), "xlings") }
+        return onPath("mcpp-ide", path)?.let { Located(listOf(it.path), "PATH") }
     }
 }

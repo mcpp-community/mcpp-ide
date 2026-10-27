@@ -11,8 +11,8 @@
     mount(el, params) {
       const rootDir = params.root;
       const format = h("select");
-      const mode = h("select", ["", "static", "bundle-project", "bundle-all", "self-contained"].map((m) =>
-        h("option", { value: m }, m || t("the project's default"))));
+      const mode = h("select", h("option", { value: "" }, t("the project's default")));
+      const linkage = h("select", h("option", { value: "" }, t("the project's default")));
       const profile = h("select", ["release", "dev"].map((p) => h("option", { value: p }, p)));
       const target = h("input", { type: "text", placeholder: t("this machine") });
       const output = h("pre.log");
@@ -21,8 +21,8 @@
       const go = ui.button(t("Pack"), async () => {
         ui.clear(output); ui.clear(result);
         try {
-          const r = await ui.rpc("pack/start", { root: rootDir, format: format.value || undefined, mode: mode.value || undefined,
-                                                 profile: profile.value, target: target.value });
+          const r = await ui.rpc("pack/start", { root: rootDir, pkgFormat: format.value || undefined, mode: mode.value || undefined,
+                                                 linkage: linkage.value || undefined, profile: profile.value, target: target.value });
           jobId = r.jobId; go.disabled = true;
         } catch (e) { result.appendChild(ui.errorBox(e)); }
       });
@@ -47,6 +47,7 @@
           h("dl.facts",
             h("dt", t("Format")), h("dd", format),
             h("dt", t("Mode")), h("dd", mode),
+            h("dt", t("Linkage")), h("dd", linkage),
             h("dt", t("Profile")), h("dd", profile),
             h("dt", t("Target")), h("dd", target)),
           h("div.actions", go)),
@@ -55,6 +56,9 @@
         format.appendChild(h("option", { value: "" }, t("the project's default")));
         for (const f of (r && r.formats) || [])
           format.appendChild(h("option", { value: f.name }, f.builtin ? f.name : `${f.name} (${(f.providers || []).join(", ")})`));
+        for (const m of (r && r.modes) || []) mode.appendChild(h("option", { value: m }, m));
+        for (const l of (r && r.linkages) || []) linkage.appendChild(h("option", { value: l }, l));
+        linkage.disabled = !((r && r.linkages) || []).length;
       }, (e) => result.appendChild(ui.errorBox(e)));
       ui.host("settings", {}).then((s) => { if (s && s["mcpp.build.target"]) target.value = s["mcpp.build.target"]; });
       return () => offs.forEach((off) => off());

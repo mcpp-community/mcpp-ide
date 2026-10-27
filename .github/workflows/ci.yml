@@ -175,3 +175,29 @@ jobs:
         with:
           name: mcpp-clion-zip
           path: jetbrains/build/distributions/*.zip
+
+  # Both packages, opened on every system they serve: what each carries of the backend for that
+  # system starts (scripts/check-package.sh -- the ok-image bundle and its okrun once they are built).
+  packages:
+    name: packages on ${{ matrix.os }}
+    needs: [vscode, jetbrains]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-14, windows-2022]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: mcpp-*
+          path: packages
+          merge-multiple: true
+      - name: The VS Code extension
+        run: .github/scripts/check-package.sh packages/mcpp-vscode-*.vsix extension
+      - name: The CLion plugin
+        run: .github/scripts/check-package.sh packages/mcpp-clion-*.zip mcpp-clion

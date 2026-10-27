@@ -72,6 +72,7 @@ public:
         int exitCode = -1;
         Json envelope;              // null when standard output held no JSON
         std::string narration;      // standard error
+        std::string output;         // standard output as it was printed
     };
     std::expected<EnvelopeResult, std::string> envelope(const RunOptions& o) const;
 
@@ -220,6 +221,7 @@ std::expected<Client::EnvelopeResult, std::string> Client::envelope(const RunOpt
     EnvelopeResult out;
     out.exitCode = r->status.shell_code();
     out.narration = std::move(r->err);
+    out.output = r->out;
     // One document, or NDJSON whose last line is the envelope.
     auto doc = Json::parse(r->out, nullptr, false);
     if (doc.is_discarded()) {

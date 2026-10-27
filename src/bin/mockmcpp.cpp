@@ -135,6 +135,7 @@ int main(int argc, char** argv) {
     if (first(0) == "run" && has("--print-launch")) { out(fixture("launch.json")); return 0; }
     if (first(0) == "search") { out(fixture("search.json")); return 0; }
     if (first(0) == "index" && first(1) == "list") { out(fixture("index-list.json")); return 0; }
+    if (first(0) == "pack" && has("--help")) { out(fixture("pack-help.txt")); return 0; }
     if (first(0) == "pack" && has("--list-formats")) { out(fixture("pack-formats.json")); return 0; }
     if (first(0) == "toolchain" && first(1) == "list") { out(fixture("toolchain-list.json")); return 0; }
     if (first(0) == "cache" && first(1) == "list") { out(fixture("cache-list.json")); return 0; }

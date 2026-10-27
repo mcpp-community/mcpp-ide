@@ -39,6 +39,25 @@ class BackendTest {
     }
 
     @Test
+    fun theBundleRunsUnderTheOkrunCarriedForThisSystem() {
+        assertEquals("windows-x86_64", Locate.okrunDir("Windows 11", "amd64"))
+        assertEquals("macos-aarch64", Locate.okrunDir("Mac OS X", "aarch64"))
+        val root = Files.createTempDirectory("mcppclion-okb-").toFile()
+        File(root, "backend/okrun/linux-x86_64").mkdirs()
+        File(root, "backend/mcpp-ide.okb").writeText("")
+        File(root, "backend/okrun/linux-x86_64/okrun").writeText("")
+        File(root, "bin/linux-x64").mkdirs()
+        File(root, "bin/linux-x64/mcpp-ide").writeText("")
+        val linux = Locate.backend("", root, path = "", os = "Linux", arch = "amd64", home = "/nonexistent")!!
+        assertEquals(listOf(File(root, "backend/okrun/linux-x86_64/okrun").path, File(root, "backend/mcpp-ide.okb").path), linux.command)
+        assertEquals("bundle", linux.source)
+        // No okrun for this system and none on PATH: the system's own program, when the package carries one.
+        val arm = Locate.backend("", root, path = "", os = "Linux", arch = "aarch64", home = "/nonexistent")
+        assertEquals(null, arm)
+        root.deleteRecursively()
+    }
+
+    @Test
     fun sessionOverTheMockMcpp() {
         val backend = System.getProperty("mcppide.backend")
         val mock = System.getProperty("mcppide.mockMcpp")

@@ -14,3 +14,7 @@ The first release of mcpp-ide: one backend for mcpp's editor integrations, the V
 - VS Code: tasks, Testing view, debug configurations, Problems from mcpp, mcpp.toml editing help.
 - CLion: run configurations with a PTY console, test tree, CLion's debugger, console links, the mcpp
   tool window; depends on the mcppls CLion plugin.
+- One package per editor for every system: the backend as an ok-image bundle with okrun per system
+  (or a program per system until the bundle is built); CI starts it from both packages on Linux
+  x64/arm64, macOS and Windows.
+- `mcpp pack`'s package format is passed as `--pkg-format` where mcpp offers it (`--format` before).

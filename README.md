@@ -56,7 +56,10 @@ on my mcpp project.
 | CLion 2025.2+ | JetBrains Marketplace (`mcpp-clion`), or `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk; the mcppls CLion plugin first |
 | Agents, other clients | `mcpp-ide-<version>-<platform>.tar.gz`, or `xlings install mcpp-ide` | run `mcpp-ide serve` |
 
-Both editor packages carry the backend for Linux, macOS and Windows.
+Each editor package serves every system: it carries the backend as one ok-image bundle
+(`backend/mcpp-ide.okb`) and okrun for each system and architecture (mcpp's platforms, openkal
+0.17.2); until that bundle is built, it carries a program for each of Linux x64/arm64, macOS arm64
+and Windows x64.
 
 ### From source
 

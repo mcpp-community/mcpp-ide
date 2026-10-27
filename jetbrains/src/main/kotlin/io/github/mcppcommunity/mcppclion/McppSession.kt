@@ -80,8 +80,8 @@ class McppSession(private val project: Project) : Disposable {
             future.completeExceptionally(IllegalStateException("mcpp-ide was not found"))
             return future
         }
-        log.info("mcpp-ide: starting ${located.program} (${located.source})")
-        val b = Backend(listOf(located.program.path, "serve")) { line -> log.info("[backend] $line") }
+        log.info("mcpp-ide: starting ${located.command.joinToString(" ")} (${located.source})")
+        val b = Backend(located.command + "serve") { line -> log.info("[backend] $line") }
         backend = b
         b.on("*") { method, params -> listeners.filter { it.first == method || it.first == "*" }.forEach { (m, fn) ->
             runCatching { fn(if (m == "*") JsonObject().apply { addProperty("method", method); add("params", params) } else params) }

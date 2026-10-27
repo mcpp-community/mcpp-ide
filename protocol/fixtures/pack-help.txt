@@ -1,0 +1,25 @@
+
+Build + package: a program becomes a self-contained bundle, a library an interface + prebuilt binaries
+
+USAGE:
+    mcpp pack [OPTIONS]
+    mcpp pack <target>
+
+OPTIONS:
+    --mode               system | vendored (default) | self-contained | static
+    --target             Triple, e.g. x86_64-linux-musl (repeatable: one leg per triple)
+    --format             tar (default; .zip for a Windows target) | dir | any format the resolved graph provides (e.g. appimage, msi)
+    -o, --output         Override output path; with several members, the directory each archive or tree is written below
+    --profile            Build profile (default: [build] default-profile, else release)
+    --release            Shorthand for --profile release
+    --dev                Shorthand for --profile dev
+    --toolchain <SPEC>   Build with this toolchain for one invocation, e.g. llvm@22.1.8
+    --sysroot <SYSROOT>  The target's base for this invocation (= MCPP_SYSROOT): a package, glibc@system, path:<dir>, none
+    --features <LIST>    Activate root-package features, and a dependency's as <dependency>/<feature>, for every build pass of the pack (comma-separated)
+    --list-formats       Print the formats --format accepts here, the engine's and those the resolved graph provides, as the mcpp.pack.formats envelope
+    --message-format <FMT> Output format: human (default) | json (one mcpp.pack envelope on stdout; narration on stderr)
+    --no-strip           Ship the artifacts as built (default: strip debug info)
+    -p, --package <NAME> Pack the named workspace member (namespace.name or package name, then directory), as if run in its directory; repeat to pack several, planned and built once
+    --workspace          Pack every workspace member that has a program target, planned and built once
+    --exclude <NAME>     With --workspace, leave the named member out; repeatable, refused with -p
+    --debug-symbols <DIR> Write the separated *.debug files here (default: discard)

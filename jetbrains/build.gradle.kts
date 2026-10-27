@@ -88,12 +88,18 @@ sourceSets {
 }
 tasks.processResources { dependsOn(generateDeclarations, copyWebui) }
 
-// The backend programs the plugin carries, one per system (`bin/<platform>/mcpp-ide[.exe]`), from
-// MCPP_IDE_BACKENDS (a directory laid out that way). Without it the plugin finds the backend on PATH
-// or through xlings.
+// What the plugin carries of the backend (mcpp design 2026-10-28 part 2 §15), as the VS Code
+// extension carries it: MCPP_IDE_OKB, the ok-image bundle (backend/mcpp-ide.okb, one for every
+// system); MCPP_IDE_OKRUN, okrun per system and architecture (backend/okrun/<os>-<arch>/); and,
+// until the bundle is built, MCPP_IDE_BACKENDS, a program per system (bin/<platform>/).
+val okb = providers.environmentVariable("MCPP_IDE_OKB")
+val okrun = providers.environmentVariable("MCPP_IDE_OKRUN")
 val backends = providers.environmentVariable("MCPP_IDE_BACKENDS")
 tasks.prepareSandbox {
-    if (backends.isPresent) from(backends.get()) { into("${intellijPlatform.projectName.get()}/bin") }
+    val plugin = intellijPlatform.projectName.get()
+    if (okb.isPresent) from(okb.get()) { into("$plugin/backend"); rename { "mcpp-ide.okb" } }
+    if (okrun.isPresent) from(okrun.get()) { into("$plugin/backend/okrun") }
+    if (backends.isPresent) from(backends.get()) { into("$plugin/bin") }
 }
 
 intellijPlatform {
