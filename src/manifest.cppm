@@ -1,6 +1,6 @@
 // Editing help for mcpp.toml and build.mcpp: completion, hover and an outline,
 // from mcpp's own key registry and build-program directives (the snapshots in
-// spec/, regenerated from an mcpp checkout by tools/generate-schemas.py).
+// spec/, each naming the mcpp release and commit it was taken from).
 //
 // THIS IS TEXT, NOT MEANING. The analysis below finds where the cursor is --
 // which `[table]` it is under, whether it is on a key or after `=` -- in the
@@ -30,7 +30,10 @@ struct Context {
 
 Context context_at(std::string_view text, int line, int character);
 // The schema section a table header reads as: `target.<sel>.build` is `build`,
-// `dependencies.<ns>` is `dependencies`, `targets.<name>` is `targets`.
+// `dependencies.<ns>` is `dependencies`, `targets.<name>` is `targets`; a
+// platform's table is the same section under `[platform]` and under the
+// selector that overrides it (`platform.link` and `target.<sel>.link` are
+// `platform.link`).
 std::string section_of(std::string_view table);
 
 // {text, line, character} -> {items: [{label, kind, detail, documentation, insertText, range}]}
@@ -145,14 +148,40 @@ std::string key_doc(const Json& section, const Json& key) {
     return doc;
 }
 
+// The section of a platform's table, from the segments after `platform` or
+// after a selector (SPEC-013 §1, §2): `layers` is `platform.layers`, a
+// `cfg(...)` table of `build` is `platform.build`, the entries of
+// `link.inputs` are `platform.link.inputs`, the layers a host triple takes are
+// `platform.layers`. Empty for a table that is not one of a platform's.
+std::string platform_table(std::span<const std::string> rest) {
+    static constexpr std::string_view kTables[] = {"build", "carrier", "hosted", "layers",
+                                                   "link",  "runners", "tools",  "versions"};
+    if (rest.empty() || std::ranges::find(kTables, rest[0]) == std::end(kTables)) return {};
+    if (rest.size() >= 2 && rest[0] == "link" && rest[1] == "inputs") return "platform.link.inputs";
+    if (rest.size() >= 2 && rest[0] == "hosted" && rest[1] == "layers") return "platform.layers";
+    return "platform." + rest[0];
+}
+
 }  // namespace
 
 std::string section_of(std::string_view table) {
     auto seg = segments(table);
     if (seg.empty()) return {};
-    // A `target.<selector>` table reads as the table after the selector.
-    if (seg[0] == "target" && seg.size() >= 3) return seg[2];
+    // A `target.<selector>` table reads as the table after the selector, and a
+    // platform's table there as the platform's.
+    if (seg[0] == "target" && seg.size() >= 3) {
+        // The tables a selector overrides a platform with (`build` there is
+        // the project's `[build]`; `hosted` and `versions` are a platform's own).
+        static constexpr std::string_view kOverrides[] = {"carrier", "layers", "link", "runners", "tools"};
+        if (std::ranges::find(kOverrides, seg[2]) != std::end(kOverrides))
+            return platform_table(std::span(seg).subspan(2));
+        return seg[2];
+    }
     if (seg[0] == "target") return "target";
+    if (seg[0] == "platform") {
+        auto p = platform_table(std::span(seg).subspan(1));
+        return p.empty() ? std::string("platform") : p;
+    }
     if (seg[0] == "workspace" && seg.size() >= 2) return seg[1] == "package" ? "package" : seg[1];
     return seg[0];
 }
@@ -348,14 +377,21 @@ Json buildscript_complete(const Json& p) {
         return Json{{"items", Json::array()}};
     Json items = Json::array();
     const auto range = range_json(line, static_cast<int>(scope + 6), col);
+    std::set<std::string> offered;
     for (const auto& d : api()["directives"]) {
-        const auto tag = d.value("tag", d.value("wire", ""));
-        if (!tag.starts_with(typed)) continue;
+        // The typed API's functions that emit the directive (`include-dir` is
+        // `mcpp::include_dir`, `cfg` is `mcpp::define`); `action` is the
+        // snippet below.
+        if (!d.contains("functions") || !d["functions"].is_array()) continue;
         std::string doc = std::format("`mcpp:{}=` · slot `{}` · scope `{}` · since protocol {}", d.value("wire", ""),
                                       d.value("slot", ""), d.value("scope", ""), d.value("since", 0));
         if (d.contains("docsUrl") && d["docsUrl"].is_string()) doc += std::format("\n\n[docs]({})", d["docsUrl"].get<std::string>());
-        items.push_back(Json{{"label", tag}, {"kind", "function"}, {"detail", std::format("mcpp:{}=", d.value("wire", ""))},
-                             {"documentation", doc}, {"insertText", tag + "(\"$1\")"}, {"snippet", true}, {"range", range}});
+        for (const auto& f : d["functions"]) {
+            const auto name = f.get<std::string>();
+            if (!name.starts_with(typed) || !offered.insert(name).second) continue;
+            items.push_back(Json{{"label", name}, {"kind", "function"}, {"detail", std::format("mcpp:{}=", d.value("wire", ""))},
+                                 {"documentation", doc}, {"insertText", name + "(\"$1\")"}, {"snippet", true}, {"range", range}});
+        }
     }
     if (std::string_view("action").starts_with(typed))
         items.push_back(Json{{"label", "action"}, {"kind", "snippet"}, {"detail", "mcpp::action with id, role, inputs, outputs"},

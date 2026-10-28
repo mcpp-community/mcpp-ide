@@ -1,6 +1,6 @@
 {
-  "sourceVersion": "2026.10.26.2",
-  "sourceCommit": "684a306bced037014da08b038412f57c203d0bc9",
+  "sourceVersion": "2026.10.27.1",
+  "sourceCommit": "e0b1133dd2912f539ee68a06724cb524e3531f46",
   "sections": [
     {
       "header": "[build]",
@@ -53,6 +53,12 @@
         {
           "key": "cflags",
           "type": "array"
+        },
+        {
+          "key": "compile_commands",
+          "type": "string",
+          "since": "2026.10.26.1",
+          "note": "where the project's compile database is published, a path relative to the project root"
         },
         {
           "key": "cxx_runtime",
@@ -252,6 +258,21 @@
       "deprecatedBy": null
     },
     {
+      "header": "[host]",
+      "name": "host",
+      "plane": "condition",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#the-host-graphs-platform",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "platform",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the platform of the host graph: build programs and the tools the build runs are built for its targets and started through its runner"
+        }
+      ]
+    },
+    {
       "header": "[indices]",
       "name": "indices",
       "plane": "unclassified",
@@ -343,7 +364,7 @@
       "header": "[pack]",
       "name": "pack",
       "plane": "unclassified",
-      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/10-pack-and-release.md#configuration",
       "deprecatedBy": null,
       "keys": [
         {
@@ -351,6 +372,12 @@
           "type": "string",
           "note": "table of fine-grained overrides",
           "unmodelled": true
+        },
+        {
+          "key": "compress",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the default of --compress: zstd, gzip, xz or none, with an optional :<level>"
         },
         {
           "key": "debug_symbols",
@@ -370,12 +397,40 @@
           "type": "array"
         },
         {
+          "key": "format",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the default of --pkg-format: tar, zip, dir, single-file, or a format a package provides"
+        },
+        {
           "key": "include",
           "type": "array"
         },
         {
+          "key": "linkage",
+          "type": "enum",
+          "values": [
+            "static",
+            "shared"
+          ],
+          "since": "2026.10.27.1",
+          "note": "the default of --linkage"
+        },
+        {
+          "key": "sign",
+          "type": "array",
+          "since": "2026.10.27.1",
+          "note": "an argv run on each program, image, library and loader before the container is written; {} is the file"
+        },
+        {
           "key": "strip",
           "type": "boolean"
+        },
+        {
+          "key": "universal",
+          "type": "boolean",
+          "since": "2026.10.27.1",
+          "note": "false is --no-universal: a pack of a universal platform's target covers that target alone"
         }
       ]
     },
@@ -497,6 +552,332 @@
       ]
     },
     {
+      "header": "[platform]",
+      "name": "platform",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#what-a-platform-states",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "build",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "cflags, cxxflags, asmflags, ldflags, and cfg(...) tables of the same keys; usually [platform.build]"
+        },
+        {
+          "key": "carrier",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "{ package, section, main }: the program mcpp pack builds of a loaded artifact for a system (all three required)"
+        },
+        {
+          "key": "hosted",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "what a host triple takes when it selects the platform: targets, toolchain, layers"
+        },
+        {
+          "key": "layers",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "<layer> = <package> | false for kernel-abi, c-abi, c++-abi, compiler-runtime; usually [platform.layers]"
+        },
+        {
+          "key": "link",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "driver, flags, start, script, inputs, exe, shared, seal; usually [platform.link]"
+        },
+        {
+          "key": "plugin",
+          "type": "enum",
+          "values": [
+            "build.mcpp"
+          ],
+          "since": "2026.10.27.1",
+          "note": "the package's build program, run in the platform phase; no other value is accepted"
+        },
+        {
+          "key": "runner",
+          "type": "array",
+          "since": "2026.10.27.1",
+          "note": "how mcpp run and mcpp test start an artifact: an argv with {} for the artifact, or { cmd, host = \"same-arch\" | \"any\", exclusive }"
+        },
+        {
+          "key": "runners",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "named device actions, <name> = [argv]"
+        },
+        {
+          "key": "sysroot",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "a prebuilt target base, or { path = \"<dir>\", provides = [...] } with path relative to the platform package"
+        },
+        {
+          "key": "targets",
+          "type": "array",
+          "since": "2026.10.27.1",
+          "note": "the target triples the platform serves (required, non-empty)"
+        },
+        {
+          "key": "toolchain",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the toolchain the targets use, e.g. \"llvm@23.1.3\""
+        },
+        {
+          "key": "tools",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "<name> = <package> | { program = \"<name>\" }: programs built for this machine, or found; usually [platform.tools]"
+        },
+        {
+          "key": "universal",
+          "type": "boolean",
+          "since": "2026.10.27.1",
+          "note": "true: a pack of any of the targets covers all of them in one package (SPEC-014)"
+        },
+        {
+          "key": "versions",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "the version group: <package> = \"<version>\", one version of each package of a family"
+        }
+      ]
+    },
+    {
+      "header": "[platform.build]",
+      "name": "platform.build",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#writing-a-platform-package",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "asmflags",
+          "type": "array",
+          "since": "2026.10.27.1"
+        },
+        {
+          "key": "cflags",
+          "type": "array",
+          "since": "2026.10.27.1"
+        },
+        {
+          "key": "cxxflags",
+          "type": "array",
+          "since": "2026.10.27.1"
+        },
+        {
+          "key": "ldflags",
+          "type": "array",
+          "since": "2026.10.27.1"
+        }
+      ]
+    },
+    {
+      "header": "[platform.carrier]",
+      "name": "platform.carrier",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#writing-a-platform-package",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "main",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the program's entry source, relative to the file that states it"
+        },
+        {
+          "key": "package",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the package the program depends on; a package: \"<name>@<version>\", or a table with name and one of version, path, git"
+        },
+        {
+          "key": "section",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the section the carried bytes are placed in, e.g. \".oke\""
+        }
+      ]
+    },
+    {
+      "header": "[platform.hosted]",
+      "name": "platform.hosted",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#the-hosted-arrangement",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "layers",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "the layers a host triple takes, as [platform.layers]"
+        },
+        {
+          "key": "targets",
+          "type": "array",
+          "since": "2026.10.27.1",
+          "note": "the host triples that may select the platform"
+        },
+        {
+          "key": "toolchain",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the toolchain a host triple uses"
+        }
+      ]
+    },
+    {
+      "header": "[platform.layers]",
+      "name": "platform.layers",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#overriding-part-of-a-platform",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "\"c++-abi\"",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "a package: \"<name>@<version>\", or a table with name and one of version, path, git, or false: the layer is left out"
+        },
+        {
+          "key": "c-abi",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "a package: \"<name>@<version>\", or a table with name and one of version, path, git, or false: the layer is left out"
+        },
+        {
+          "key": "compiler-runtime",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "a package: \"<name>@<version>\", or a table with name and one of version, path, git, or false: the layer is left out"
+        },
+        {
+          "key": "kernel-abi",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "a package: \"<name>@<version>\", or a table with name and one of version, path, git, or false: the layer is left out"
+        }
+      ]
+    },
+    {
+      "header": "[platform.link]",
+      "name": "platform.link",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#writing-a-platform-package",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "driver",
+          "type": "enum",
+          "values": [
+            "compiler",
+            "lld"
+          ],
+          "since": "2026.10.27.1",
+          "note": "\"compiler\": the compiler driver links; \"lld\": ld.lld itself links, with flags"
+        },
+        {
+          "key": "exe",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "an executable's name: \"{name}<suffix>\", e.g. \"{name}.oke\""
+        },
+        {
+          "key": "flags",
+          "type": "array",
+          "since": "2026.10.27.1",
+          "note": "appended after the platform's when overridden"
+        },
+        {
+          "key": "inputs",
+          "type": "array",
+          "since": "2026.10.27.1",
+          "note": "files the link takes: { file = \"...\" } or { from = [argv], as = \"<file>\" }; replaced whole when overridden",
+          "unmodelled": true
+        },
+        {
+          "key": "script",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "a linker script, relative to the file that states it"
+        },
+        {
+          "key": "seal",
+          "type": "array",
+          "since": "2026.10.27.1",
+          "note": "steps run on the linked file before it is published, each an argv with {} (and {needed}); replaced whole when overridden",
+          "unmodelled": true
+        },
+        {
+          "key": "shared",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "a shared image's name, with {name} once, e.g. \"lib{name}.okso\""
+        },
+        {
+          "key": "start",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the symbol an image is entered at"
+        }
+      ]
+    },
+    {
+      "header": "[[platform.link.inputs]]",
+      "name": "platform.link.inputs",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#writing-a-platform-package",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "as",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the file name the program's output is saved as (with from)"
+        },
+        {
+          "key": "file",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "a file the link takes, relative to the file that states it"
+        },
+        {
+          "key": "from",
+          "type": "array",
+          "since": "2026.10.27.1",
+          "note": "the argv of a program whose output the link takes (with as)"
+        }
+      ]
+    },
+    {
+      "header": "[platform.runners]",
+      "name": "platform.runners",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#what-a-platform-states",
+      "deprecatedBy": null,
+      "openKeys": true
+    },
+    {
+      "header": "[platform.tools]",
+      "name": "platform.tools",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#overriding-part-of-a-platform",
+      "deprecatedBy": null,
+      "openKeys": true
+    },
+    {
+      "header": "[platform.versions]",
+      "name": "platform.versions",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/35-platforms.md#the-version-group",
+      "deprecatedBy": null,
+      "openKeys": true
+    },
+    {
       "header": "[profile]",
       "name": "profile",
       "plane": "compile",
@@ -597,6 +978,12 @@
       "deprecatedBy": null,
       "keys": [
         {
+          "key": "carrier",
+          "type": "table",
+          "since": "2026.10.27.1",
+          "note": "{ package, section, main }: the program mcpp pack builds of a loaded artifact for a system (docs/35)"
+        },
+        {
           "key": "cxx_runtime",
           "type": "enum",
           "values": [
@@ -618,9 +1005,33 @@
           "type": "number"
         },
         {
+          "key": "platform",
+          "type": "string",
+          "since": "2026.10.27.1",
+          "note": "the platform of the selected targets: \"<name>@<version>\", { path = \"...\" }, { git = ... }, or \"none\"; not accepted under a cfg(platform = ...) selector"
+        },
+        {
+          "key": "requires",
+          "type": "array",
+          "since": "2026.10.26.1",
+          "note": "the target-axis form of [package] requires, unioned in when the selector matches"
+        },
+        {
+          "key": "run_under",
+          "type": "array",
+          "since": "2026.10.24.1",
+          "note": "an argv placed before the runner: what reaches the machine the artifact runs on"
+        },
+        {
           "key": "runner",
           "type": "array",
-          "note": "argv template for mcpp run/test on this target"
+          "note": "argv template for mcpp run/test on this target, or { cmd, host = \"same-arch\" | \"any\", exclusive } (2026.10.27.1+)"
+        },
+        {
+          "key": "runners",
+          "type": "table",
+          "since": "2026.9.4.2",
+          "note": "named runners, <name> = [argv]; also written as [target.<selector>.runners]"
         },
         {
           "key": "sysroot",

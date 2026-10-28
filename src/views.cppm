@@ -10,7 +10,7 @@
 //   module_graph      the same                             modules, who provides, who imports
 //   project_summary   the same and the result record       targets, tests, artifacts, last build
 //   targets           `mcpp toolchain list --format json`  one row per target: its toolchains, its platform
-//   platform_text     a `platform` object of mcpp's        "openkal-platform 0.17.1 (built-in)"
+//   platform_text     a `platform` object of mcpp's        "openkal-platform 0.17.3 (built-in)"
 //   stream_record     one record of a `--message-format json` stream, normalised
 export module mcppide.views;
 
@@ -50,7 +50,7 @@ Json project_summary(const Json& buildDatabaseEnvelope, const Json& lastResult);
 // reports one (design 2026-10-28 §9), the platform that configures it. `selected` is the target the
 // adapter builds for ("" for the host).
 Json targets(const Json& toolchainListEnvelope, std::string_view selected);
-// "openkal-platform 0.17.1 (built-in)", "host conventions (built-in)"; "" for null or a non-object.
+// "openkal-platform 0.17.3 (built-in)", "host conventions (built-in)"; "" for null or a non-object.
 std::string platform_text(const Json& platform);
 
 // One record of a `--message-format json` stream (a build's events, a test's records), as the

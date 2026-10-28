@@ -18,6 +18,16 @@ int main() {
     CHECK(manifest::section_of("target.'cfg(os = \"linux\")'.build") == "build");
     CHECK(manifest::section_of("dependencies.mcpplibs") == "dependencies");
     CHECK(manifest::section_of("targets.app") == "targets");
+    // A platform's tables, under [platform] and under the selector that overrides it.
+    CHECK(manifest::section_of("platform") == "platform");
+    CHECK(manifest::section_of("platform.link") == "platform.link");
+    CHECK(manifest::section_of("platform.link.inputs") == "platform.link.inputs");
+    CHECK(manifest::section_of("platform.build.'cfg(arch = \"aarch64\")'") == "platform.build");
+    CHECK(manifest::section_of("platform.hosted.layers") == "platform.layers");
+    CHECK(manifest::section_of("target.'cfg(platform = \"openkal\")'.layers") == "platform.layers");
+    CHECK(manifest::section_of("target.x86_64-openkal.link") == "platform.link");
+    CHECK(manifest::section_of("target.x86_64-openkal.versions") == "versions");
+    CHECK(manifest::section_of("tools.overrides") == "tools");
 
     const std::string text = "[package]\nname = \"a\"\n\n[build]\nbmi_schedule = \"\"\n\n";
     auto keys = labels(manifest::complete(Json{{"text", text}, {"line", 5}, {"character", 0}}));
@@ -32,5 +42,27 @@ int main() {
     CHECK(syms.size() == 2 && syms[1]["name"] == "build" && syms[1]["children"].size() == 1);
     auto bs = labels(manifest::buildscript_complete(Json{{"text", "int main(){ mcpp::cxx"}, {"line", 0}, {"character", 21}}));
     CHECK(has(bs, "cxxflag"));
+    // The typed API's names, not the wire's (`mcpp:link-driver=` is `mcpp::link_driver`).
+    auto link = labels(manifest::buildscript_complete(Json{{"text", "int main(){ mcpp::link"}, {"line", 0}, {"character", 22}}));
+    CHECK(has(link, "link_driver") && has(link, "link_input_from") && has(link, "link_lib") && !has(link, "link-driver"));
+    auto def = labels(manifest::buildscript_complete(Json{{"text", "int main(){ mcpp::de"}, {"line", 0}, {"character", 20}}));
+    CHECK(has(def, "define") && has(def, "deploy"));
+
+    // The platform keys of mcpp 2026.10.27.1.
+    const std::string plat = "[platform]\ntargets = []\n\n[platform.link]\n\n[target.x86_64-openkal]\n\n[host]\n\n[pack]\n";
+    auto pk = labels(manifest::complete(Json{{"text", plat}, {"line", 2}, {"character", 0}}));
+    CHECK(has(pk, "universal") && has(pk, "plugin") && !has(pk, "targets"));
+    auto lk = labels(manifest::complete(Json{{"text", plat}, {"line", 4}, {"character", 0}}));
+    CHECK(has(lk, "driver") && has(lk, "seal") && has(lk, "exe"));
+    auto drv = labels(manifest::complete(Json{{"text", "[platform.link]\ndriver = \"\"\n"}, {"line", 1}, {"character", 10}}));
+    CHECK(has(drv, "lld") && has(drv, "compiler"));
+    auto tk = labels(manifest::complete(Json{{"text", plat}, {"line", 6}, {"character", 0}}));
+    CHECK(has(tk, "platform") && has(tk, "carrier") && has(tk, "run_under"));
+    auto hk = labels(manifest::complete(Json{{"text", plat}, {"line", 8}, {"character", 0}}));
+    CHECK(has(hk, "platform"));
+    auto pack = labels(manifest::complete(Json{{"text", plat}, {"line", 10}, {"character", 0}}));
+    CHECK(has(pack, "format") && has(pack, "compress") && has(pack, "universal") && has(pack, "sign"));
+    auto ph = labels(manifest::complete(Json{{"text", "[plat"}, {"line", 0}, {"character", 5}}));
+    CHECK(has(ph, "[platform]") && has(ph, "[platform.link]") && has(ph, "[[platform.link.inputs]]") && has(ph, "[host]"));
     std::println("test_manifest: ok");
 }
