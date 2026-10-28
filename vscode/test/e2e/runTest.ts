@@ -39,7 +39,7 @@ async function main(): Promise<void> {
                  "--disable-gpu", "--disable-workspace-trust", "--skip-welcome", "--skip-release-notes",
                  // No display (a container, an agent's shell): Chromium's headless platform.
                  ...(process.env.MCPP_E2E_HEADLESS ? ["--ozone-platform=headless"] : [])],
-    extensionTestsEnv: { MCPPIDE_E2E_WORKSPACE: workspace },
+    extensionTestsEnv: { MCPPIDE_E2E_WORKSPACE: workspace, MCPPIDE_E2E_SOURCE: process.env.MCPP_E2E_BUNDLED ? "bundle" : "setting" },
   });
 }
 

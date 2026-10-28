@@ -24,6 +24,8 @@ const cases: [string, (api: McppApi) => Promise<void>][] = [
     assert.ok(declared.length > 40);
   }],
   ["the backend found the project and mcpp", async (api) => {
+    // As the run asked: the backend the settings name, or the bundle the extension carries.
+    assert.equal(api.session.started?.source, process.env.MCPPIDE_E2E_SOURCE);
     const info = api.session.info!;
     assert.equal(info.projects.length, 1);
     assert.equal(info.projects[0].name, "app");

@@ -45,6 +45,11 @@ export class Session implements vscode.Disposable {
     );
   }
 
+  /** The backend's command and where it was found. */
+  get started(): Located | undefined {
+    return this.located;
+  }
+
   get info(): InitializeResult | undefined {
     return this.initResult;
   }
