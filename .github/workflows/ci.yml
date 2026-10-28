@@ -60,22 +60,24 @@ jobs:
           case "$(uname -m)" in x86_64|amd64|AMD64) arch=x86_64 ;; *) arch=aarch64 ;; esac
           case "$RUNNER_OS" in Linux) system=linux ;; macOS) system=macos ;; *) system=windows ;; esac
           package="mcpp-ide-$version-openkal"
-          mkdir -p out
-          mcpp pack mcpp-ide --target "$arch-openkal" --mode self-contained --pkg-format dir -o "$package"
-          cp -R "target/dist/$package" out/
-          ls -R "out/$package/libexec"
+          mkdir -p out unpacked
+          # An archive keeps the mode bits an artifact does not, and names its one directory.
+          mcpp pack mcpp-ide --target "$arch-openkal" --mode self-contained --pkg-format tar -o "$package.tar.gz"
+          cp "target/dist/$package.tar.gz" out/
+          tar -xzf "out/$package.tar.gz" -C unpacked
+          ls -R "unpacked/$package/libexec"
           if [ "$system" = windows ]; then
-            (cd "out/$package/bin" && cmd //c "mcpp-ide.cmd --version")
+            (cd "unpacked/$package/bin" && cmd //c "mcpp-ide.cmd --version")
           else
-            "out/$package/bin/mcpp-ide" --version
+            "unpacked/$package/bin/mcpp-ide" --version
           fi
           case " ${{ matrix.pack }} " in *" okb "*)
             mcpp pack mcpp-ide --target "$arch-openkal" --pkg-format okb
             cp "target/dist/mcpp-ide-$version.okb" out/mcpp-ide.okb
-            "out/$package/libexec/okrun/$system-$arch/okrun" out/mcpp-ide.okb --version
-            ls -l out/mcpp-ide.okb
+            "unpacked/$package/libexec/okrun/$system-$arch/okrun" out/mcpp-ide.okb --version
             ;;
           esac
+          ls -l out
       - uses: actions/upload-artifact@v5
         if: matrix.pack != ''
         with:
@@ -105,13 +107,11 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
           package="mcpp-ide-$version-openkal"
-          # An artifact does not keep the mode bits.
-          chmod +x backends/*/"$package"/bin/mcpp-ide backends/*/"$package"/libexec/okrun/*/okrun*
           mkdir -p merged backend
           merge=()
-          for p in backends/*/"$package"; do merge+=(--merge "$p"); done
-          mcpp pack "${merge[@]}" --pkg-format dir -o "$PWD/merged/$package"
+          for p in backends/*/"$package.tar.gz"; do merge+=(--merge "$p"); done
           mcpp pack "${merge[@]}" -o "$PWD/backend/$package.tar.gz"
+          tar -xzf "backend/$package.tar.gz" -C merged
           cp backends/backend-linux-x64/mcpp-ide.okb backend/mcpp-ide.okb
           cp -R "merged/$package/libexec/okrun" backend/okrun
           python3 - "merged/$package/mcpp-package.json" <<'PY'
