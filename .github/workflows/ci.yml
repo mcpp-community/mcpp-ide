@@ -19,9 +19,12 @@ jobs:
   # the dev tool), run the tests -- the protocol against its schema and the fixtures against mcpp's
   # contract among them -- and check the translations. A `pack` leg then packs the backend as the
   # editor packages carry it (mcpp design 2026-10-28 part 2 §15): its universal self-contained
-  # package (`<arch>-openkal`: the x86_64 and aarch64 images, okrun for this system's architectures),
-  # and on linux-x64 the ok-image bundle. The `host-platform` row builds and tests with the build
-  # programs (build.mcpp, the spec/ generators) as ok images run by okrun.
+  # package (`<arch>-openkal`: the x86_64 and aarch64 images, okrun for the `systems` it names), and
+  # on linux-x64 the ok-image bundle. Windows' okrun is packed on Linux (x86_64-windows-gnu, static):
+  # an image built on Windows is not yet the same file as one built on Linux or macOS (its __FILE__
+  # strings keep `\`), and `mcpp pack --merge` joins only packages that hold the same images. The
+  # `host-platform` row builds and tests with the build programs (build.mcpp, the spec/ generators)
+  # as ok images run by okrun.
   backend:
     name: backend (${{ matrix.platform }}${{ matrix.host-platform && format(', host platform {0}', matrix.host-platform) || '' }})
     runs-on: ${{ matrix.os }}
@@ -30,10 +33,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: 'package okb' }
+          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: 'package okb', systems: 'linux,windows' }
           - { os: ubuntu-24.04-arm, platform: linux-arm64, llvm: 'false', pack: '' }
-          - { os: macos-14, platform: darwin-arm64, llvm: 'true', pack: 'package' }
-          - { os: windows-2022, platform: win32-x64, llvm: 'true', pack: 'package' }
+          - { os: macos-14, platform: darwin-arm64, llvm: 'true', pack: 'package', systems: 'macos' }
+          - { os: windows-2022, platform: win32-x64, llvm: 'true', pack: '' }
           - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: '', host-platform: 'openkal-platform@0.17.2' }
     defaults:
       run:
@@ -58,19 +61,16 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
           case "$(uname -m)" in x86_64|amd64|AMD64) arch=x86_64 ;; *) arch=aarch64 ;; esac
-          case "$RUNNER_OS" in Linux) system=linux ;; macOS) system=macos ;; *) system=windows ;; esac
+          case "$RUNNER_OS" in Linux) system=linux ;; *) system=macos ;; esac
           package="mcpp-ide-$version-openkal"
           mkdir -p out unpacked
           # An archive keeps the mode bits an artifact does not, and names its one directory.
-          mcpp pack mcpp-ide --target "$arch-openkal" --mode self-contained --pkg-format tar -o "$package.tar.gz"
+          mcpp pack mcpp-ide --target "$arch-openkal" --mode self-contained --systems "${{ matrix.systems }}" \
+            --pkg-format tar -o "$package.tar.gz"
           cp "target/dist/$package.tar.gz" out/
           tar -xzf "out/$package.tar.gz" -C unpacked
           ls -R "unpacked/$package/libexec"
-          if [ "$system" = windows ]; then
-            (cd "unpacked/$package/bin" && cmd //c "mcpp-ide.cmd --version")
-          else
-            "unpacked/$package/bin/mcpp-ide" --version
-          fi
+          "unpacked/$package/bin/mcpp-ide" --version
           case " ${{ matrix.pack }} " in *" okb "*)
             mcpp pack mcpp-ide --target "$arch-openkal" --pkg-format okb
             cp "target/dist/mcpp-ide-$version.okb" out/mcpp-ide.okb
