@@ -5,7 +5,7 @@
         "kind": "bin",
         "launch": {
           "argv": [
-            "@ROOT@/target/x86_64-linux-gnu/b4dbdb186bc3ef30/bin/app"
+            "@ROOT@/target/x86_64-linux-gnu/77ba4e6c37abd416/bin/app"
           ],
           "cwd": "@ROOT@",
           "env": {
@@ -17,28 +17,30 @@
           "via": null
         },
         "name": "app",
-        "path": "@ROOT@/target/x86_64-linux-gnu/b4dbdb186bc3ef30/bin/app"
+        "path": "@ROOT@/target/x86_64-linux-gnu/77ba4e6c37abd416/bin/app"
       }
     ],
     "client": "mcpp-ide-fixtures",
     "command": "mcpp build --message-format json",
-    "compileDatabase": "@ROOT@/target/x86_64-linux-gnu/b4dbdb186bc3ef30/compile_commands.json",
+    "compileDatabase": "@ROOT@/target/x86_64-linux-gnu/77ba4e6c37abd416/compile_commands.json",
     "configuration": {
-      "fingerprint": "b4dbdb186bc3ef30",
-      "outputDir": "@ROOT@/target/x86_64-linux-gnu/b4dbdb186bc3ef30",
+      "fingerprint": "77ba4e6c37abd416",
+      "hostPlatform": null,
+      "outputDir": "@ROOT@/target/x86_64-linux-gnu/77ba4e6c37abd416",
+      "platform": null,
       "profile": "dev",
       "triple": "x86_64-linux-gnu"
     },
     "diagnostics": [],
-    "finishedAt": 1793118343698,
-    "pid": 1767942,
-    "startedAt": 1793118343022,
+    "finishedAt": 1793148650353,
+    "pid": 1203929,
+    "startedAt": 1793148649554,
     "status": "ok"
   },
   "kind": "mcpp.result",
   "kindVersion": 1,
   "mcpp": {
-    "version": "2026.10.26.2"
+    "version": "2026.10.27.1"
   },
   "schemaVersion": 1
 }

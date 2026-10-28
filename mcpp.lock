@@ -5,6 +5,11 @@
 # file must not change depending on which command ran last.
 version = 2
 
+[package."os"]
+version = "os-0.2.1"
+source  = "git+https://github.com/mcpplibs/os.git#branch=os-0.2.1@211e765edbed99ef02526c45af9da988f6e48399"
+hash    = "fnv1a:e9ea51f425a4832f"
+
 [package."openkal"]
 namespace = "mcpplibs"
 version = "0.17.1"
@@ -16,12 +21,6 @@ namespace = "mcpplibs"
 version = "0.18.2"
 source  = "index+mcpplibs@0.18.2"
 hash    = "fnv1a:2947b54ddbcf8813"
-
-[package."os"]
-namespace = "mcpplibs"
-version = "0.2.0"
-source  = "index+mcpplibs@0.2.0"
-hash    = "fnv1a:2fbee4a8617c3781"
 
 [package."nlohmann.json"]
 namespace = "nlohmann"

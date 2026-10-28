@@ -72,20 +72,21 @@ int main() {
         CHECK(r["platform"].is_null() == r["platformText"].get<std::string>().empty());
     }
     CHECK(selected == 1);
-    Json platform{{"name", "openkal-platform"}, {"version", "0.17.1"}, {"source", "built-in"}};
-    platform["fields"]["runner"] = Json{{"value", "okrun"}, {"source", "platform"}};
-    list["data"]["targets"].push_back(Json{{"target", "x86_64-openkal"}, {"toolchain", "llvm 23.1.3"}, {"pin", "llvm@23.1.3"},
-                                           {"status", "installed"}, {"default", false}, {"note", "ok"}, {"platform", platform}});
-    list["data"]["hostPlatform"] = Json{{"name", ""}, {"version", nullptr}, {"source", "built-in"}};
-    auto withPlatform = views::targets(list, "x86_64-openkal");
+    // A row names its platform as the target table does, a package spec (mcpp SPEC-013); the view
+    // renders it as a plan's platform object.
     bool found = false;
-    for (const auto& r : withPlatform["rows"])
+    for (const auto& r : t["rows"])
         if (r["target"] == "x86_64-openkal") {
             found = true;
-            CHECK(r["selected"] == true);
-            CHECK(r["platformText"] == "openkal-platform 0.17.1 (built-in)");
+            CHECK(r["platform"]["name"] == "mcpplibs.openkal-platform");
+            CHECK(r["platformText"].get<std::string>().starts_with("mcpplibs.openkal-platform 0.17"));
+            CHECK(r["platformText"].get<std::string>().ends_with("(target table)"));
         }
     CHECK(found);
+    list["data"]["hostPlatform"] = Json{{"name", ""}, {"version", nullptr}, {"source", "built-in"}};
+    auto withPlatform = views::targets(list, "x86_64-openkal");
+    for (const auto& r : withPlatform["rows"])
+        if (r["target"] == "x86_64-openkal") CHECK(r["selected"] == true);
     CHECK(withPlatform["hostPlatformText"] == "host conventions (built-in)");
 
     // Stream records: each line of a build and of a test, normalised.

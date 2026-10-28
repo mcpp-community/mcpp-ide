@@ -366,6 +366,17 @@ Json project_summary(const Json& envelope, const Json& lastResult) {
     return out;
 }
 
+// A platform as the target table names it (`mcpp toolchain list`: `[ns.]name@version`), as the
+// object a plan names one with: its name, version and where the choice came from.
+Json platform_of_spec(const Json& spec) {
+    if (!spec.is_string()) return spec.is_object() ? spec : Json(nullptr);
+    const auto text = spec.get<std::string>();
+    const auto at = text.rfind('@');
+    return Json{{"name", at == std::string::npos ? text : text.substr(0, at)},
+                {"version", at == std::string::npos ? Json(nullptr) : Json(text.substr(at + 1))},
+                {"source", "target table"}};
+}
+
 std::string platform_text(const Json& p) {
     if (!p.is_object()) return {};
     const auto name = p.value("name", "");
@@ -394,7 +405,7 @@ Json targets(const Json& envelope, std::string_view selected) {
             if (fresh) order.push_back(target);
             auto& row = it->second;
             // mcpp reports the platform per row of the target table; every row of one target names the same.
-            if (row["platform"].is_null() && t.contains("platform") && t["platform"].is_object()) row["platform"] = t["platform"];
+            if (row["platform"].is_null() && t.contains("platform")) row["platform"] = platform_of_spec(t["platform"]);
             auto tc = t.value("toolchain", "");
             const auto sp = tc.find(' ');
             if (sp != std::string::npos) tc[sp] = '@';
@@ -444,9 +455,15 @@ Json stream_record(const Json& r) {
     const auto event = r.value("event", "");
     if (r.value("kind", "") == "mcpp.event") {
         if (event == "plan") {
-            Json out{{"type", "plan"}, {"configuration", r.contains("configuration") ? r["configuration"] : Json(nullptr)},
-                     {"platform", r.contains("platform") ? r["platform"] : Json(nullptr)},
-                     {"hostPlatform", r.contains("hostPlatform") ? r["hostPlatform"] : Json(nullptr)}};
+            // The platforms are the configuration's (mcpp's plan event: `configuration.platform`,
+            // `configuration.hostPlatform`).
+            const Json cfg = r.contains("configuration") ? r["configuration"] : Json(nullptr);
+            auto field = [&](const char* key) {
+                if (cfg.is_object() && cfg.contains(key)) return cfg[key];
+                return r.contains(key) ? r[key] : Json(nullptr);
+            };
+            Json out{{"type", "plan"}, {"configuration", cfg},
+                     {"platform", field("platform")}, {"hostPlatform", field("hostPlatform")}};
             out["platformText"] = platform_text(out["platform"]);
             out["hostPlatformText"] = platform_text(out["hostPlatform"]);
             return out;

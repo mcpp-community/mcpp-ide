@@ -156,7 +156,7 @@ int capture(std::span<const std::string> args) {
         std::string target;
         if (!doc.is_discarded() && doc.contains("data") && doc["data"].contains("targets"))
             for (const auto& t : doc["data"]["targets"])
-                if (t.contains("platform") && t["platform"].is_object() && !t["platform"].value("name", "").empty()) {
+                if (t.contains("platform") && t["platform"].is_string() && !t["platform"].get<std::string>().empty()) {
                     target = t.value("target", "");
                     break;
                 }
