@@ -13,10 +13,13 @@ The first release of mcpp-ide: one backend for mcpp's editor integrations, the V
 - Shared panels: project, targets and platforms, libraries, dependency and module graphs, cache,
   pack, settings.
 - VS Code: tasks, Testing view, debug configurations, Problems from mcpp, mcpp.toml editing help.
-- mcpp.toml and build.mcpp editing help over mcpp 2026.10.27.1's keys and directives: `[platform]`
-  and its tables, `[host]`, a selector's platform overrides (`platform`, `carrier`, `layers`,
-  `tools`, `link`, `runners`, `run_under`), `[pack]`'s `linkage`, `format`, `compress`, `sign` and
-  `universal`; the protocol 17 directives, completed by the typed API's names (`mcpp::link_driver`).
+- mcpp.toml and build.mcpp editing help over every table and key mcpp 2026.10.27.1 reads, each with
+  the release that added it: `[platform]` and its tables, `[host]`, a selector's platform overrides
+  (`platform`, `carrier`, `layers`, `tools`, `link`, `runners`, `run_under`) and its ABI tables
+  (`abi`, `requires_abi`, `feature-requires-abi`), `[pack]` and `[pack.bundle-project]`, `[c-abi]`,
+  `[kernel-abi]`, `[runtime]` and its entry tables, `[hooks]` and each event's table, a feature's
+  table, `[xlings]`, `[workspace]`; the protocol 17 directives, completed by the typed API's names
+  (`mcpp::link_driver`).
 - CLion: run configurations with a PTY console, test tree, CLion's debugger, console links, the mcpp
   tool window; depends on the mcppls CLion plugin.
 - One package per editor for every system: the backend as one ok-image bundle (x86_64 and aarch64

@@ -3,6 +3,28 @@
   "sourceCommit": "e0b1133dd2912f539ee68a06724cb524e3531f46",
   "sections": [
     {
+      "header": "[target.<selector>.abi]",
+      "name": "abi",
+      "plane": "condition",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/22-target-side.md#abi--a-switch-the-whole-artefact-shares-mcpp-20269122",
+      "deprecatedBy": null,
+      "selector": true,
+      "keys": [
+        {
+          "key": "exceptions",
+          "type": "boolean",
+          "since": "2026.9.12.3",
+          "note": "whether the artefact is built with exceptions"
+        },
+        {
+          "key": "threads",
+          "type": "boolean",
+          "since": "2026.9.12.2",
+          "note": "whether the artefact is built with threads"
+        }
+      ]
+    },
+    {
       "header": "[build]",
       "name": "build",
       "plane": "compile",
@@ -190,16 +212,58 @@
     {
       "header": "[c-abi]",
       "name": "c-abi",
-      "plane": "unclassified",
-      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md",
-      "deprecatedBy": null
+      "plane": "identity",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/22-target-side.md#the-c-environment-a-c-abi-package-presents-mcpp-2026918",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "builtins",
+          "type": "enum",
+          "values": [
+            "iso",
+            "platform"
+          ],
+          "since": "2026.9.18.1",
+          "note": "the builtin macros the realisation defines"
+        },
+        {
+          "key": "data-model",
+          "type": "enum",
+          "values": [
+            "arch-default",
+            "lp64",
+            "llp64",
+            "ilp32"
+          ],
+          "since": "2026.9.18.1",
+          "note": "required"
+        },
+        {
+          "key": "presents",
+          "type": "enum",
+          "values": [
+            "posix",
+            "windows",
+            "none"
+          ],
+          "since": "2026.9.18.1",
+          "note": "the environment identity the C library presents (required)"
+        },
+        {
+          "key": "wchar",
+          "type": "number",
+          "since": "2026.9.18.1",
+          "note": "the bits of wchar_t, 16 or 32 (required)"
+        }
+      ]
     },
     {
       "header": "[c-abi-absent]",
       "name": "c-abi-absent",
       "plane": "unclassified",
-      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md",
-      "deprecatedBy": null
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/22-target-side.md#the-c-environment-a-c-abi-package-presents-mcpp-2026918",
+      "deprecatedBy": null,
+      "openKeys": true
     },
     {
       "header": "[capabilities]",
@@ -230,6 +294,15 @@
       "deprecatedBy": null
     },
     {
+      "header": "[target.<selector>.feature-requires-abi]",
+      "name": "feature-requires-abi",
+      "plane": "condition",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/06-features-and-capabilities.md#provides--requires--capabilities-backend-selection",
+      "deprecatedBy": null,
+      "selector": true,
+      "openKeys": true
+    },
+    {
       "header": "[feature-xlings]",
       "name": "feature-xlings",
       "plane": "gate",
@@ -240,8 +313,83 @@
       "header": "[features]",
       "name": "features",
       "plane": "gate",
-      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#28-features--features",
-      "deprecatedBy": null
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/06-features-and-capabilities.md#features--features-cargo-style-additive",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "default",
+          "type": "array",
+          "since": "0.0.47",
+          "note": "the features a consumer gets unless it opts out"
+        },
+        {
+          "key": "defines",
+          "type": "array",
+          "since": "0.0.69",
+          "note": "[features.<name>]: defines the active feature adds to the package's units"
+        },
+        {
+          "key": "device_extensions",
+          "type": "array",
+          "since": "2026.9.7.1",
+          "note": "[features.<name>]: the source extensions of a device language this rule package compiles"
+        },
+        {
+          "key": "flags",
+          "type": "array",
+          "since": "0.0.101",
+          "note": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources",
+          "unmodelled": true
+        },
+        {
+          "key": "forward",
+          "type": "array",
+          "since": "0.0.99",
+          "note": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature"
+        },
+        {
+          "key": "implies",
+          "type": "array",
+          "since": "0.0.69",
+          "note": "[features.<name>]: the features this one activates"
+        },
+        {
+          "key": "provides",
+          "type": "array",
+          "since": "0.0.69",
+          "note": "[features.<name>]: the capabilities the feature provides"
+        },
+        {
+          "key": "requires",
+          "type": "array",
+          "since": "0.0.69",
+          "note": "[features.<name>]: the capabilities the feature requires"
+        },
+        {
+          "key": "requires_abi",
+          "type": "table",
+          "since": "2026.9.12.2",
+          "note": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active"
+        },
+        {
+          "key": "rule_module",
+          "type": "string",
+          "since": "2026.9.7.1",
+          "note": "[features.<name>]: the module of the build rule this feature contributes"
+        },
+        {
+          "key": "sources",
+          "type": "array",
+          "since": "0.0.95",
+          "note": "[features.<name>]: sources compiled only when the feature is active"
+        },
+        {
+          "key": "tools",
+          "type": "array",
+          "since": "2026.9.27.1",
+          "note": "[features.<name>]: the host tools the feature makes available"
+        }
+      ]
     },
     {
       "header": "[generated_files]",
@@ -255,7 +403,134 @@
       "name": "hooks",
       "plane": "lifecycle",
       "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#216-hooks--project-build-lifecycle-commands",
-      "deprecatedBy": null
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "build_failed",
+          "type": "string",
+          "since": "2026.8.30.2",
+          "note": "a command string, or a table with cmd and timeout_seconds"
+        },
+        {
+          "key": "build_finished",
+          "type": "string",
+          "since": "2026.8.30.2",
+          "note": "a command string, or a table with cmd and timeout_seconds"
+        },
+        {
+          "key": "build_start",
+          "type": "string",
+          "since": "2026.8.30.2",
+          "note": "a command string, or a table with cmd and timeout_seconds"
+        },
+        {
+          "key": "during_build",
+          "type": "string",
+          "since": "2026.8.30.2",
+          "note": "a command string, or a table with cmd and loop: runs for as long as the build"
+        },
+        {
+          "key": "enabled",
+          "type": "boolean",
+          "since": "2026.8.30.2"
+        },
+        {
+          "key": "side_effect",
+          "type": "boolean",
+          "since": "2026.8.30.2",
+          "note": "true is not available yet"
+        },
+        {
+          "key": "timeout_seconds",
+          "type": "number",
+          "since": "2026.8.30.2",
+          "note": "the default bound of a self-closing hook, at most 86400"
+        }
+      ]
+    },
+    {
+      "header": "[hooks.build_failed]",
+      "name": "hooks.build_failed",
+      "plane": "lifecycle",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#216-hooks--project-build-lifecycle-commands",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "cmd",
+          "type": "string",
+          "since": "2026.8.30.2",
+          "note": "required"
+        },
+        {
+          "key": "timeout_seconds",
+          "type": "number",
+          "since": "2026.8.30.2",
+          "note": "seconds, at most 86400"
+        }
+      ]
+    },
+    {
+      "header": "[hooks.build_finished]",
+      "name": "hooks.build_finished",
+      "plane": "lifecycle",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#216-hooks--project-build-lifecycle-commands",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "cmd",
+          "type": "string",
+          "since": "2026.8.30.2",
+          "note": "required"
+        },
+        {
+          "key": "timeout_seconds",
+          "type": "number",
+          "since": "2026.8.30.2",
+          "note": "seconds, at most 86400"
+        }
+      ]
+    },
+    {
+      "header": "[hooks.build_start]",
+      "name": "hooks.build_start",
+      "plane": "lifecycle",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#216-hooks--project-build-lifecycle-commands",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "cmd",
+          "type": "string",
+          "since": "2026.8.30.2",
+          "note": "required"
+        },
+        {
+          "key": "timeout_seconds",
+          "type": "number",
+          "since": "2026.8.30.2",
+          "note": "seconds, at most 86400"
+        }
+      ]
+    },
+    {
+      "header": "[hooks.during_build]",
+      "name": "hooks.during_build",
+      "plane": "lifecycle",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#216-hooks--project-build-lifecycle-commands",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "cmd",
+          "type": "string",
+          "since": "2026.8.30.2",
+          "note": "required"
+        },
+        {
+          "key": "loop",
+          "type": "boolean",
+          "since": "2026.8.30.2",
+          "note": "whether the command is restarted when it exits"
+        }
+      ]
     },
     {
       "header": "[host]",
@@ -283,8 +558,22 @@
       "header": "[kernel-abi]",
       "name": "kernel-abi",
       "plane": "unclassified",
-      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md",
-      "deprecatedBy": null
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/22-target-side.md#the-c-environment-a-c-abi-package-presents-mcpp-2026918",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "provides-interfaces",
+          "type": "array",
+          "since": "2026.9.20.1",
+          "note": "the interfaces of the layer this package provides (only its provider)"
+        },
+        {
+          "key": "requires-interfaces",
+          "type": "array",
+          "since": "2026.9.20.1",
+          "note": "the interfaces of the layer this package requires"
+        }
+      ]
     },
     {
       "header": "[language]",
@@ -435,6 +724,27 @@
       ]
     },
     {
+      "header": "[pack.bundle-project]",
+      "name": "pack.bundle-project",
+      "plane": "unclassified",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/10-pack-and-release.md#configuration",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "also_skip",
+          "type": "array",
+          "since": "0.0.1",
+          "note": "libraries assumed to exist on the target system"
+        },
+        {
+          "key": "force_bundle",
+          "type": "array",
+          "since": "0.0.1",
+          "note": "libraries bundled even when the PEP 600 list names them"
+        }
+      ]
+    },
+    {
       "header": "[package]",
       "name": "package",
       "plane": "identity",
@@ -513,7 +823,9 @@
         },
         {
           "key": "requires_abi",
-          "type": "array"
+          "type": "table",
+          "since": "2026.9.12.2",
+          "note": "{ threads, exceptions }: the artefact's ABI switches this package requires"
         },
         {
           "key": "standard",
@@ -915,6 +1227,12 @@
           "note": "-flto"
         },
         {
+          "key": "ndebug",
+          "type": "boolean",
+          "since": "2026.10.24.1",
+          "note": "whether NDEBUG is defined for the profile's units"
+        },
+        {
           "key": "opt",
           "type": "enum",
           "values": [
@@ -928,6 +1246,34 @@
           "key": "strip",
           "type": "boolean",
           "note": "-s at link time"
+        },
+        {
+          "key": "trim_paths",
+          "type": "boolean",
+          "since": "2026.10.24.1",
+          "note": "whether the build's own paths are rewritten out of the artifacts"
+        }
+      ]
+    },
+    {
+      "header": "[target.<selector>.requires_abi]",
+      "name": "requires_abi",
+      "plane": "condition",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/06-features-and-capabilities.md#provides--requires--capabilities-backend-selection",
+      "deprecatedBy": null,
+      "selector": true,
+      "keys": [
+        {
+          "key": "exceptions",
+          "type": "boolean",
+          "since": "2026.9.12.3",
+          "note": "the artefact's exceptions switch this package requires"
+        },
+        {
+          "key": "threads",
+          "type": "boolean",
+          "since": "2026.9.12.2",
+          "note": "the artefact's threads switch this package requires"
         }
       ]
     },
@@ -957,18 +1303,252 @@
       ]
     },
     {
+      "header": "[resources.version-info]",
+      "name": "resources.version-info",
+      "plane": "metadata",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#215-resources--metadata-and-assets-embedded-in-the-artifact-2026871",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "company",
+          "type": "string",
+          "since": "2026.8.7.1"
+        },
+        {
+          "key": "copyright",
+          "type": "string",
+          "since": "2026.8.7.1"
+        },
+        {
+          "key": "description",
+          "type": "string",
+          "since": "2026.8.7.1"
+        },
+        {
+          "key": "internal-name",
+          "type": "string",
+          "since": "2026.8.7.1"
+        },
+        {
+          "key": "original-filename",
+          "type": "string",
+          "since": "2026.8.7.1"
+        },
+        {
+          "key": "product",
+          "type": "string",
+          "since": "2026.8.7.1"
+        }
+      ]
+    },
+    {
       "header": "[runtime]",
       "name": "runtime",
       "plane": "metadata",
       "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#211-runtime--provider-neutral-runtime-contract",
-      "deprecatedBy": null
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "artifacts",
+          "type": "array",
+          "since": "2026.8.10.1",
+          "note": "[[runtime.artifacts]]: prebuilt artifacts the package provides",
+          "unmodelled": true
+        },
+        {
+          "key": "capabilities",
+          "type": "array",
+          "since": "0.0.46"
+        },
+        {
+          "key": "deploy",
+          "type": "array",
+          "since": "2026.9.12.2",
+          "note": "[[runtime.deploy]]: { from, to } files placed beside the artifact",
+          "unmodelled": true
+        },
+        {
+          "key": "deploy_files",
+          "type": "array",
+          "since": "2026.8.10.1",
+          "note": "files placed beside the artifact"
+        },
+        {
+          "key": "dlopen_libs",
+          "type": "array",
+          "since": "0.0.46",
+          "note": "libraries the program opens at run time"
+        },
+        {
+          "key": "frameworks",
+          "type": "array",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "libraries",
+          "type": "array",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "library_dirs",
+          "type": "array",
+          "since": "0.0.46"
+        },
+        {
+          "key": "link_library_dirs",
+          "type": "array",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "provides",
+          "type": "array",
+          "since": "0.0.48"
+        },
+        {
+          "key": "requirements",
+          "type": "array",
+          "since": "2026.8.10.1",
+          "note": "[[runtime.requirements]]: { kind, value, phase, required, discovery }",
+          "unmodelled": true
+        },
+        {
+          "key": "runtime_search_dirs",
+          "type": "array",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "transitive_needed_dirs",
+          "type": "array",
+          "since": "2026.8.10.1"
+        }
+      ]
+    },
+    {
+      "header": "[[runtime.artifacts]]",
+      "name": "runtime.artifacts",
+      "plane": "metadata",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#211-runtime--provider-neutral-runtime-contract",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "abi",
+          "type": "string",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "accel",
+          "type": "string",
+          "since": "2026.9.5.1"
+        },
+        {
+          "key": "digest",
+          "type": "string",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "host_fingerprint",
+          "type": "string",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "path",
+          "type": "string",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "provenance",
+          "type": "string",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "role",
+          "type": "string",
+          "since": "2026.8.10.1"
+        }
+      ]
+    },
+    {
+      "header": "[[runtime.deploy]]",
+      "name": "runtime.deploy",
+      "plane": "metadata",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#211-runtime--provider-neutral-runtime-contract",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "from",
+          "type": "string",
+          "since": "2026.9.12.2",
+          "note": "a file of the package or of the build"
+        },
+        {
+          "key": "to",
+          "type": "string",
+          "since": "2026.9.12.2",
+          "note": "its path relative to the artifact's directory"
+        }
+      ]
+    },
+    {
+      "header": "[[runtime.requirements]]",
+      "name": "runtime.requirements",
+      "plane": "metadata",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#211-runtime--provider-neutral-runtime-contract",
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "discovery",
+          "type": "string",
+          "since": "2026.8.10.3"
+        },
+        {
+          "key": "kind",
+          "type": "string",
+          "since": "2026.8.10.1",
+          "note": "required"
+        },
+        {
+          "key": "phase",
+          "type": "enum",
+          "values": [
+            "link",
+            "run"
+          ],
+          "since": "2026.8.10.1",
+          "note": "required"
+        },
+        {
+          "key": "required",
+          "type": "boolean",
+          "since": "2026.8.10.1"
+        },
+        {
+          "key": "value",
+          "type": "string",
+          "since": "2026.8.10.1",
+          "note": "required"
+        }
+      ]
     },
     {
       "header": "[scan_overrides]",
       "name": "scan_overrides",
       "plane": "unclassified",
       "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#283-scan_overridesglob--author-asserted-scan-results",
-      "deprecatedBy": null
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "imports",
+          "type": "array",
+          "since": "0.0.85",
+          "note": "the modules the unit imports"
+        },
+        {
+          "key": "provides",
+          "type": "array",
+          "since": "0.0.85",
+          "note": "the module the unit provides, at most one"
+        }
+      ]
     },
     {
       "header": "[target]",
@@ -1174,6 +1754,22 @@
           "type": "string",
           "since": "2026.10.26.2",
           "note": "the symbol every test image is entered at, on a freestanding target"
+        },
+        {
+          "key": "windows_code_page",
+          "type": "enum",
+          "values": [
+            "utf-8",
+            "legacy"
+          ],
+          "since": "2026.10.5.2",
+          "note": "the code page of every test program on Windows"
+        },
+        {
+          "key": "windows_long_paths",
+          "type": "boolean",
+          "since": "2026.10.16.1",
+          "note": "whether every test program on Windows opts into long paths"
         }
       ]
     },
@@ -1217,18 +1813,83 @@
       "deprecatedBy": null
     },
     {
+      "header": "[tools.overrides]",
+      "name": "tools.overrides",
+      "plane": "tool",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/30-build-mcpp.md#toolsoverrides--use-an-existing-binary",
+      "deprecatedBy": null,
+      "openKeys": true
+    },
+    {
       "header": "[workspace]",
       "name": "workspace",
       "plane": "unclassified",
       "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#218-workspace--tables-a-workspace-shares-202610101",
-      "deprecatedBy": null
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "exclude",
+          "type": "array",
+          "since": "0.0.11",
+          "note": "member globs left out"
+        },
+        {
+          "key": "members",
+          "type": "array",
+          "since": "0.0.11",
+          "note": "member directories or globs"
+        }
+      ]
     },
     {
       "header": "[xlings]",
       "name": "xlings",
       "plane": "tool",
       "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#213-xlings--the-projects-environment",
-      "deprecatedBy": null
+      "deprecatedBy": null,
+      "keys": [
+        {
+          "key": "deps",
+          "type": "array",
+          "since": "0.0.77",
+          "note": "the project's host build tools: \"<name>@<version>\" or tables",
+          "unmodelled": true
+        },
+        {
+          "key": "overrides",
+          "type": "table",
+          "since": "2026.10.1.3",
+          "note": "<package> = <version or source>: what a dependency's xlings entries resolve to; usually [xlings.overrides]"
+        },
+        {
+          "key": "subos",
+          "type": "string",
+          "since": "0.0.77",
+          "note": "the SubOS the project's environment is materialised in"
+        },
+        {
+          "key": "workspace",
+          "type": "table",
+          "since": "0.0.77",
+          "note": "<tool> = \"<version>\": the project's tool pins; usually [xlings.workspace]"
+        }
+      ]
+    },
+    {
+      "header": "[xlings.overrides]",
+      "name": "xlings.overrides",
+      "plane": "tool",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#213-xlings--the-projects-environment",
+      "deprecatedBy": null,
+      "openKeys": true
+    },
+    {
+      "header": "[xlings.workspace]",
+      "name": "xlings.workspace",
+      "plane": "tool",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#213-xlings--the-projects-environment",
+      "deprecatedBy": null,
+      "openKeys": true
     }
   ],
   "rules": [
