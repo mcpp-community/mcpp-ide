@@ -25,8 +25,9 @@ Checked check(const spec::Setting& s, const Json& given);
 // Every setting: the values to use, the rejections, and the renames an
 // earlier key asks for (`aliases`).
 Json resolve(const Json& given);
-// The registry, for a settings panel: groups, entries, presets.
-Json registry();
+// The registry, for a settings panel: groups, entries, presets, with the titles and descriptions
+// in `locale` ("en" | "zh-cn").
+Json registry(std::string_view locale = "en");
 std::optional<Json> preset(std::string_view id);
 
 }  // namespace mcppide::settings
@@ -102,18 +103,30 @@ Json resolve(const Json& given) {
     return Json{{"values", values}, {"rejected", rejected}, {"renames", renames}, {"deprecated", deprecated}};
 }
 
-Json registry() {
+Json registry(std::string_view locale) {
+    auto text = [&](const std::string& key, const std::string& fallback) {
+        auto v = spec::manifest_string(key, locale);
+        return v == key ? fallback : v;
+    };
     Json entries = Json::array();
     for (const auto& s : spec::settings()) {
         Json e{{"key", s.key}, {"type", s.type}, {"default", default_of(s)}, {"group", s.group},
                {"scope", s.scope}, {"applies", s.applies}, {"tier", s.tier}, {"deprecated", s.deprecated},
-               {"title", s.title}, {"description", s.description}, {"expectation", expectation_of(s)}};
+               {"title", text(s.key + ".title", s.title)}, {"description", text(s.key + ".description", s.description)},
+               {"expectation", expectation_of(s)}};
         if (s.allowed.is_array()) e["enum"] = s.allowed;
         if (s.minimum) e["minimum"] = *s.minimum;
         if (s.maximum) e["maximum"] = *s.maximum;
         entries.push_back(std::move(e));
     }
-    return Json{{"settings", entries}, {"presets", spec::presets()}};
+    Json groups = spec::setting_groups();
+    for (auto& g : groups) g["title"] = text("settings.group." + g.value("id", ""), g.value("title", ""));
+    Json presets = spec::presets();
+    for (auto& p : presets) {
+        p["title"] = text("settings.preset." + p.value("id", "") + ".title", p.value("title", ""));
+        p["description"] = text("settings.preset." + p.value("id", "") + ".description", p.value("description", ""));
+    }
+    return Json{{"groups", groups}, {"settings", entries}, {"presets", presets}};
 }
 
 std::optional<Json> preset(std::string_view id) {

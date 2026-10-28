@@ -1,0 +1,33 @@
+
+Build + package: a program becomes a self-contained bundle, a library an interface + prebuilt binaries
+
+USAGE:
+    mcpp pack [OPTIONS]
+    mcpp pack <target>
+
+OPTIONS:
+    --mode               What the machine that runs it provides: system | vendored (default) | self-contained | static (= --linkage static --mode self-contained)
+    --linkage <static|shared> The program's libraries in it (static) or beside it (shared); rebuilds with [build] dependency_linkage (default: as the project builds)
+    --target             Triple, e.g. x86_64-linux-musl (repeatable: one leg per triple)
+    --no-universal       Pack the selected target alone where its platform packs all its targets into one universal package
+    --systems <LIST>     Self-contained universal package: the systems whose loaders it carries (linux,macos,windows; default: this machine's)
+    --compress <ALG[:LEVEL]> The container's compression: gzip (tar default) | zstd | xz | none; a zip deflates unless none
+    --merge <PACKAGE>    Merge packages this command wrote (universal legs, systems) into one; repeatable, nothing is built
+    --pkg-format <FORMAT> The package format: tar | zip | dir | single-file | any format the resolved graph provides (e.g. appimage, msi, okb); default: zip for a Windows program, tar elsewhere
+    --format             Earlier spelling of --pkg-format
+    -o, --output         Override output path; with several members, the directory each archive or tree is written below
+    --profile            Build profile (default: [build] default-profile, else release)
+    --release            Shorthand for --profile release
+    --dev                Shorthand for --profile dev
+    --toolchain <SPEC>   Build with this toolchain for one invocation, e.g. llvm@22.1.8
+    --sysroot <SYSROOT>  The target's base for this invocation (= MCPP_SYSROOT): a package, glibc@system, path:<dir>, none
+    --platform <SPEC>    The target's platform for this invocation (= MCPP_PLATFORM): <name>@<version>, path:<dir>, none
+    --host-platform <SPEC> The host graph's platform for this invocation (= MCPP_HOST_PLATFORM)
+    --features <LIST>    Activate root-package features, and a dependency's as <dependency>/<feature>, for every build pass of the pack (comma-separated)
+    --list-formats       Print the formats --format accepts here, the engine's and those the resolved graph provides, as the mcpp.pack.formats envelope
+    --message-format <FMT> Output format: human (default) | json (one mcpp.pack envelope on stdout; narration on stderr)
+    --no-strip           Ship the artifacts as built (default: strip debug info)
+    -p, --package <NAME> Pack the named workspace member (namespace.name or package name, then directory), as if run in its directory; repeat to pack several, planned and built once
+    --workspace          Pack every workspace member that has a program target, planned and built once
+    --exclude <NAME>     With --workspace, leave the named member out; repeatable, refused with -p
+    --debug-symbols <DIR> Write the separated *.debug files here (default: discard)

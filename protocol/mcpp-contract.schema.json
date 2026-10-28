@@ -1,0 +1,380 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mcpp-community/mcpp-ide/protocol/mcpp-contract.schema.json",
+  "title": "The part of mcpp's control contract the mcpp-ide backend reads",
+  "description": "mcpp docs/50. Every document under protocol/fixtures is checked against the definition protocol/fixtures.json names for it; a field the backend reads and mcpp stops writing fails that check. Additional fields are allowed: the contract grows.",
+  "$defs": {
+    "mcppStamp": {
+      "type": "object",
+      "required": ["version"],
+      "properties": {
+        "version": { "type": "string" },
+        "protocol": { "type": "object", "properties": { "min": { "type": "integer" }, "max": { "type": "integer" } } }
+      }
+    },
+    "position": {
+      "type": "object",
+      "required": ["line", "column"],
+      "properties": { "line": { "type": "integer", "minimum": 0 }, "column": { "type": "integer", "minimum": 0 } }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "severity": { "enum": ["error", "warning", "note", "info", "help"] },
+        "message": { "type": "string" },
+        "code": { "type": "string" },
+        "path": { "type": "string" },
+        "source": { "type": "string" },
+        "range": {
+          "type": "object",
+          "required": ["start", "end"],
+          "properties": { "start": { "$ref": "#/$defs/position" }, "end": { "$ref": "#/$defs/position" } }
+        }
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "required": ["schemaVersion", "kind"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "type": "string" },
+        "kindVersion": { "type": "integer" },
+        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
+        "effects": { "type": "array", "items": { "type": "string" } },
+        "mcpp": { "$ref": "#/$defs/mcppStamp" }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "required": ["fingerprint", "outputDir", "profile", "triple"],
+      "properties": {
+        "fingerprint": { "type": "string" },
+        "outputDir": { "type": "string" },
+        "profile": { "type": "string" },
+        "triple": { "type": "string" },
+        "platform": { "$ref": "#/$defs/platform" },
+        "hostPlatform": { "$ref": "#/$defs/platform" }
+      }
+    },
+    "platformField": {
+      "type": "object",
+      "properties": { "value": {}, "source": { "type": "string" } }
+    },
+    "platform": {
+      "description": "The platform that configures a target (mcpp design 2026-10-28 §9): its name and version, where the choice came from, and each field with its value and source. Null where mcpp reports none.",
+      "type": ["object", "null"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": ["string", "null"] },
+        "source": { "type": "string" },
+        "fields": { "type": "object", "additionalProperties": { "$ref": "#/$defs/platformField" } }
+      }
+    },
+    "launch": {
+      "type": "object",
+      "required": ["argv", "cwd", "env"],
+      "properties": {
+        "argv": {
+          "description": "The command mcpp run gives the program; empty when `via` names what starts it (a target's runner, `run_under`), which `mcpp run --print-launch` resolves.",
+          "type": "array", "items": { "type": "string" }
+        },
+        "cwd": { "type": "string" },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "program": { "type": "string" },
+        "via": { "type": ["string", "null"] }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["kind", "name", "path"],
+      "properties": {
+        "kind": { "type": "string" },
+        "name": { "type": "string" },
+        "path": { "type": "string" },
+        "launch": { "$ref": "#/$defs/launch" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["kind", "event", "schemaVersion"],
+      "properties": {
+        "kind": { "const": "mcpp.event" },
+        "schemaVersion": { "const": 1 },
+        "event": { "enum": ["plan", "progress", "diagnostic", "artifact", "step", "status"] },
+        "configuration": { "$ref": "#/$defs/configuration" },
+        "platform": { "$ref": "#/$defs/platform" },
+        "hostPlatform": { "$ref": "#/$defs/platform" },
+        "finished": { "type": "integer" },
+        "total": { "type": "integer" },
+        "diagnostic": { "$ref": "#/$defs/diagnostic" },
+        "artifact": { "$ref": "#/$defs/artifact" }
+      }
+    },
+    "resultData": {
+      "type": "object",
+      "required": ["status", "command", "configuration"],
+      "properties": {
+        "status": { "enum": ["ok", "failed", "cancelled", "denied", "running"] },
+        "command": { "type": "string" },
+        "client": { "type": "string" },
+        "configuration": { "$ref": "#/$defs/configuration" },
+        "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+        "compileDatabase": { "type": ["string", "null"] },
+        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
+        "startedAt": { "type": "integer" },
+        "finishedAt": { "type": ["integer", "null"] }
+      }
+    },
+    "buildEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "properties": { "kind": { "const": "mcpp.build" }, "data": { "$ref": "#/$defs/resultData" } } }
+      ]
+    },
+    "buildStreamLine": {
+      "anyOf": [ { "$ref": "#/$defs/event" }, { "$ref": "#/$defs/buildEnvelope" } ]
+    },
+    "resultRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "required": ["data"], "properties": { "data": { "$ref": "#/$defs/resultData" } } }
+      ]
+    },
+    "launchEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "required": ["data"], "properties": { "kind": { "const": "mcpp.launch" }, "data": { "$ref": "#/$defs/launch" } } }
+      ]
+    },
+    "testRecord": {
+      "type": "object",
+      "required": ["test", "status"],
+      "properties": {
+        "member": { "type": "string" },
+        "test": { "type": "string" },
+        "status": { "enum": ["pass", "fail", "skip", "not_run", "error"] },
+        "exit_code": { "type": ["integer", "null"] },
+        "duration_ms": { "type": "integer" },
+        "timed_out": { "type": "boolean" },
+        "compile_output": { "type": "string" },
+        "run_output": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "testSummary": {
+      "type": "object",
+      "required": ["summary"],
+      "properties": {
+        "summary": {
+          "type": "object",
+          "properties": {
+            "passed": { "type": "integer" },
+            "failed": { "type": "integer" },
+            "not_run": { "type": "integer" },
+            "total": { "type": "integer" },
+            "elapsed_ms": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "testStreamLine": { "anyOf": [ { "$ref": "#/$defs/testRecord" }, { "$ref": "#/$defs/testSummary" } ] },
+    "testListLine": {
+      "anyOf": [
+        { "type": "object", "required": ["test"], "properties": { "test": { "type": "string" }, "member": { "type": "string" }, "main": { "type": "string" } } },
+        { "$ref": "#/$defs/testSummary" }
+      ]
+    },
+    "buildDatabaseEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "required": ["data"],
+          "properties": {
+            "kind": { "const": "mcpp.build-database" },
+            "data": {
+              "type": "object",
+              "required": ["database"],
+              "properties": {
+                "database": {
+                  "type": "object",
+                  "required": ["sets"],
+                  "properties": {
+                    "sets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["name"],
+                        "properties": {
+                          "name": { "type": "string" },
+                          "visible-sets": { "type": "array", "items": { "type": "string" } },
+                          "ide": { "type": "object", "properties": { "kind": { "type": "string" }, "configuration": { "type": "string" } } },
+                          "translation-units": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": ["source"],
+                              "properties": {
+                                "source": { "type": "string" },
+                                "provides": { "type": "object" },
+                                "requires": { "type": "array", "items": { "type": "string" } }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "toolchainRow": {
+      "type": "object",
+      "required": ["target", "toolchain", "status"],
+      "properties": {
+        "target": { "type": "string" },
+        "toolchain": { "type": "string" },
+        "pin": { "type": "string" },
+        "status": { "type": "string" },
+        "default": { "type": "boolean" },
+        "note": { "type": "string" },
+        "platform": {
+          "description": "The platform the target table selects for the row, as a package spec (`mcpplibs.openkal-platform@0.17.3`); null for a row with none (mcpp SPEC-013).",
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "toolchainListEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "required": ["data"],
+          "properties": {
+            "kind": { "const": "mcpp.toolchain.list" },
+            "data": {
+              "type": "object",
+              "required": ["host", "targets"],
+              "properties": {
+                "host": { "type": "string" },
+                "targets": { "type": "array", "items": { "$ref": "#/$defs/toolchainRow" } },
+                "hostPlatform": { "$ref": "#/$defs/platform" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "searchEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "required": ["data"],
+          "properties": {
+            "kind": { "const": "mcpp.search" },
+            "data": {
+              "type": "object",
+              "required": ["packages"],
+              "properties": {
+                "packages": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "name", "index", "versions"],
+                    "properties": {
+                      "id": { "type": "string" },
+                      "name": { "type": "string" },
+                      "namespace": { "type": "string" },
+                      "index": { "type": "string" },
+                      "description": { "type": "string" },
+                      "versions": { "type": "array", "items": { "type": "string" } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "cacheListEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "required": ["data"],
+          "properties": {
+            "kind": { "const": "mcpp.cache" },
+            "data": {
+              "type": "object",
+              "required": ["entries"],
+              "properties": {
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["kind", "label", "bytes"],
+                    "properties": {
+                      "kind": { "type": "string" },
+                      "label": { "type": "string" },
+                      "bytes": { "type": "integer" },
+                      "accessed": { "type": "integer" },
+                      "complete": { "type": "boolean" },
+                      "dir": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "indexListEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "required": ["data"], "properties": { "kind": { "const": "mcpp.index" }, "data": { "type": "object", "required": ["registries"] } } }
+      ]
+    },
+    "packFormatsEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "required": ["data"],
+          "properties": {
+            "kind": { "const": "mcpp.pack.formats" },
+            "data": {
+              "type": "object",
+              "required": ["formats"],
+              "properties": {
+                "formats": {
+                  "type": "array",
+                  "items": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "builtin": { "type": "boolean" } } }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "selfEnvEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "required": ["data"], "properties": { "kind": { "const": "mcpp.env" }, "data": { "type": "object", "required": ["mcppVersion", "mcppHome"] } } }
+      ]
+    },
+    "protocolVersion": {
+      "type": "object",
+      "required": ["kind", "kinds", "mcpp", "envelope"],
+      "properties": {
+        "kind": { "const": "mcpp.protocol" },
+        "kinds": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "commands": { "type": "object" },
+        "envelope": { "type": "object", "required": ["min", "max"] },
+        "mcpp": { "$ref": "#/$defs/mcppStamp" }
+      }
+    }
+  }
+}

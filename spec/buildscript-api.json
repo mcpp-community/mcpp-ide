@@ -1,7 +1,7 @@
 {
-  "sourceVersion": "2026.10.17.1",
-  "sourceCommit": "684a306bced037014da08b038412f57c203d0bc9",
-  "protocolVersion": 15,
+  "sourceVersion": "2026.10.27.1",
+  "sourceCommit": "e0b1133dd2912f539ee68a06724cb524e3531f46",
+  "protocolVersion": 17,
   "cacheEpoch": 3,
   "roles": [
     "source",
@@ -28,6 +28,9 @@
     {
       "wire": "cxxflag",
       "tag": "cxxflag",
+      "functions": [
+        "cxxflag"
+      ],
       "slot": "CxxFlags",
       "scope": "PackagePrivate",
       "transform": "Verbatim",
@@ -41,6 +44,9 @@
     {
       "wire": "cflag",
       "tag": "cflag",
+      "functions": [
+        "cflag"
+      ],
       "slot": "CFlags",
       "scope": "PackagePrivate",
       "transform": "Verbatim",
@@ -54,6 +60,9 @@
     {
       "wire": "link-lib",
       "tag": "ldflag",
+      "functions": [
+        "link_lib"
+      ],
       "slot": "LdFlags",
       "scope": "LinkGlobal",
       "transform": "LibFlag",
@@ -67,6 +76,9 @@
     {
       "wire": "link-search",
       "tag": "ldflag",
+      "functions": [
+        "link_search"
+      ],
       "slot": "LdFlags",
       "scope": "LinkGlobal",
       "transform": "LibSearchPath",
@@ -80,6 +92,9 @@
     {
       "wire": "cfg",
       "tag": "define",
+      "functions": [
+        "define"
+      ],
       "slot": "Defines",
       "scope": "PackagePrivate",
       "transform": "DefinePrefix",
@@ -93,6 +108,9 @@
     {
       "wire": "generated",
       "tag": "generated",
+      "functions": [
+        "generated"
+      ],
       "slot": "Generated",
       "scope": "SourceSet",
       "transform": "Verbatim",
@@ -108,6 +126,9 @@
     {
       "wire": "source",
       "tag": "source",
+      "functions": [
+        "source"
+      ],
       "slot": "Sources",
       "scope": "SourceSet",
       "transform": "Verbatim",
@@ -126,6 +147,9 @@
     {
       "wire": "runner",
       "tag": "runner",
+      "functions": [
+        "runner"
+      ],
       "slot": "Runner",
       "scope": "RunGlobal",
       "transform": "Verbatim",
@@ -137,6 +161,9 @@
     {
       "wire": "runner-named",
       "tag": "runner-named",
+      "functions": [
+        "runner"
+      ],
       "slot": "NamedRunner",
       "scope": "RunGlobal",
       "transform": "Verbatim",
@@ -148,6 +175,9 @@
     {
       "wire": "runner-longlived",
       "tag": "runner-longlived",
+      "functions": [
+        "runner_longlived"
+      ],
       "slot": "RunnerLongLived",
       "scope": "RunGlobal",
       "transform": "Verbatim",
@@ -159,6 +189,9 @@
     {
       "wire": "run-exclusive",
       "tag": "run-exclusive",
+      "functions": [
+        "run_exclusive"
+      ],
       "slot": "RunExclusive",
       "scope": "RunGlobal",
       "transform": "Verbatim",
@@ -170,6 +203,9 @@
     {
       "wire": "link-script",
       "tag": "ldflag",
+      "functions": [
+        "link_script"
+      ],
       "slot": "LdFlags",
       "scope": "LinkGlobal",
       "transform": "LinkerScript",
@@ -181,6 +217,9 @@
     {
       "wire": "link-flag",
       "tag": "ldflag",
+      "functions": [
+        "link_flag"
+      ],
       "slot": "LdFlags",
       "scope": "LinkGlobal",
       "transform": "Verbatim",
@@ -194,6 +233,9 @@
     {
       "wire": "include-dir",
       "tag": "include-dir",
+      "functions": [
+        "include_dir"
+      ],
       "slot": "IncludeDirs",
       "scope": "PackagePrivate",
       "transform": "AbsPath",
@@ -207,6 +249,9 @@
     {
       "wire": "include-dir-after",
       "tag": "include-dir-after",
+      "functions": [
+        "include_dir_after"
+      ],
       "slot": "IncludeDirsAfter",
       "scope": "PackagePrivate",
       "transform": "AbsPath",
@@ -220,6 +265,9 @@
     {
       "wire": "rerun-if-changed",
       "tag": "",
+      "functions": [
+        "rerun_if_changed"
+      ],
       "slot": "RerunFiles",
       "scope": "RerunKey",
       "transform": "Verbatim",
@@ -231,6 +279,9 @@
     {
       "wire": "rerun-if-env-changed",
       "tag": "",
+      "functions": [
+        "rerun_if_env_changed"
+      ],
       "slot": "RerunEnv",
       "scope": "RerunKey",
       "transform": "Verbatim",
@@ -242,6 +293,9 @@
     {
       "wire": "rerun-if-changed-glob",
       "tag": "",
+      "functions": [
+        "rerun_if_changed_glob"
+      ],
       "slot": "RerunGlobs",
       "scope": "RerunKey",
       "transform": "Verbatim",
@@ -253,6 +307,9 @@
     {
       "wire": "warning",
       "tag": "warning",
+      "functions": [
+        "warning"
+      ],
       "slot": "Warnings",
       "scope": "Advisory",
       "transform": "Verbatim",
@@ -268,6 +325,9 @@
     {
       "wire": "diagnostic",
       "tag": "diagnostic",
+      "functions": [
+        "report"
+      ],
       "slot": "Diagnostics",
       "scope": "Advisory",
       "transform": "Verbatim",
@@ -279,6 +339,7 @@
     {
       "wire": "action",
       "tag": "action",
+      "functions": [],
       "slot": "Actions",
       "scope": "GraphNode",
       "transform": "Verbatim",
@@ -306,6 +367,9 @@
     {
       "wire": "fact",
       "tag": "fact",
+      "functions": [
+        "fact"
+      ],
       "slot": "Facts",
       "scope": "Claim",
       "transform": "Verbatim",
@@ -319,6 +383,9 @@
     {
       "wire": "floor",
       "tag": "floor",
+      "functions": [
+        "floor"
+      ],
       "slot": "Floors",
       "scope": "Claim",
       "transform": "Verbatim",
@@ -332,6 +399,9 @@
     {
       "wire": "pack-format",
       "tag": "pack-format",
+      "functions": [
+        "provides_pack_format"
+      ],
       "slot": "PackFormats",
       "scope": "Claim",
       "transform": "Verbatim",
@@ -343,6 +413,9 @@
     {
       "wire": "windows-subsystem",
       "tag": "windows-subsystem",
+      "functions": [
+        "windows_subsystem"
+      ],
       "slot": "WindowsSubsystem",
       "scope": "TargetLink",
       "transform": "Verbatim",
@@ -354,6 +427,9 @@
     {
       "wire": "windows-entry",
       "tag": "windows-entry",
+      "functions": [
+        "windows_entry"
+      ],
       "slot": "WindowsEntry",
       "scope": "TargetLink",
       "transform": "Verbatim",
@@ -365,6 +441,9 @@
     {
       "wire": "deploy",
       "tag": "deploy",
+      "functions": [
+        "deploy"
+      ],
       "slot": "Deploy",
       "scope": "LinkGlobal",
       "transform": "Deploy",
@@ -381,6 +460,9 @@
     {
       "wire": "runtime-search-dir",
       "tag": "runtime-search-dir",
+      "functions": [
+        "runtime_search_dir"
+      ],
       "slot": "RuntimeSearchDir",
       "scope": "LinkGlobal",
       "transform": "AbsPath",
@@ -394,6 +476,9 @@
     {
       "wire": "decision",
       "tag": "decision",
+      "functions": [
+        "decision"
+      ],
       "slot": "ToolDecisions",
       "scope": "Advisory",
       "transform": "Verbatim",
@@ -408,6 +493,9 @@
     {
       "wire": "xpkg-request",
       "tag": "xpkg-request",
+      "functions": [
+        "xpkg_request"
+      ],
       "slot": "XpkgRequests",
       "scope": "Claim",
       "transform": "Verbatim",
@@ -419,6 +507,9 @@
     {
       "wire": "toolchain",
       "tag": "toolchain",
+      "functions": [
+        "toolchain"
+      ],
       "slot": "ToolchainStatement",
       "scope": "Claim",
       "transform": "Verbatim",
@@ -429,6 +520,91 @@
         "R9.9"
       ],
       "docsUrl": null
+    },
+    {
+      "wire": "link-start",
+      "tag": "link-start",
+      "functions": [
+        "link_start"
+      ],
+      "slot": "LinkStart",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 16,
+      "rules": [],
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/e0b1133dd2912f539ee68a06724cb524e3531f46/docs/30-build-mcpp.md#typed-api-import-mcpp-recommended"
+    },
+    {
+      "wire": "link-driver",
+      "tag": "link-driver",
+      "functions": [
+        "link_driver"
+      ],
+      "slot": "LinkDriver",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/e0b1133dd2912f539ee68a06724cb524e3531f46/docs/30-build-mcpp.md#typed-api-import-mcpp-recommended"
+    },
+    {
+      "wire": "link-input",
+      "tag": "link-input",
+      "functions": [
+        "link_input",
+        "link_input_from"
+      ],
+      "slot": "LinkInputs",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/e0b1133dd2912f539ee68a06724cb524e3531f46/docs/30-build-mcpp.md#typed-api-import-mcpp-recommended"
+    },
+    {
+      "wire": "artifact-name",
+      "tag": "artifact-name",
+      "functions": [
+        "artifact_name"
+      ],
+      "slot": "ArtifactNames",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/e0b1133dd2912f539ee68a06724cb524e3531f46/docs/30-build-mcpp.md#typed-api-import-mcpp-recommended"
+    },
+    {
+      "wire": "seal",
+      "tag": "seal",
+      "functions": [
+        "seal"
+      ],
+      "slot": "Seal",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/e0b1133dd2912f539ee68a06724cb524e3531f46/docs/30-build-mcpp.md#typed-api-import-mcpp-recommended"
+    },
+    {
+      "wire": "run-host",
+      "tag": "run-host",
+      "functions": [
+        "run_host"
+      ],
+      "slot": "RunHost",
+      "scope": "RunGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/e0b1133dd2912f539ee68a06724cb524e3531f46/docs/30-build-mcpp.md#typed-api-import-mcpp-recommended"
     }
   ]
 }

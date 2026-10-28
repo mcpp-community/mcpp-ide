@@ -2,404 +2,404 @@
   "data": {
     "entries": [
       {
-        "accessed": 1791677267,
-        "bytes": 2776,
+        "accessed": 1793152617,
+        "bytes": 2808,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/52308de74c39d7c3",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/26916f34b8cd3aed",
         "files": 3,
-        "key": "52308de74c39d7c3",
+        "key": "26916f34b8cd3aed",
         "kind": "pkg",
         "label": "local-dev/local-dev.gfx-runtime@1.0.0"
       },
       {
-        "accessed": 1791677267,
+        "accessed": 1793152616,
+        "bytes": 4688,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/27e4d0283d6e95aa",
+        "files": 3,
+        "key": "27e4d0283d6e95aa",
+        "kind": "pkg",
+        "label": "local-dev/local-dev.gfx-runtime@1.0.0"
+      },
+      {
+        "accessed": 1793152617,
         "bytes": 2792,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/1fbe65e5d3605e2d",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/07829ab3ec4688f8",
         "files": 3,
-        "key": "1fbe65e5d3605e2d",
+        "key": "07829ab3ec4688f8",
         "kind": "pkg",
         "label": "local-dev/local-dev.gfx-runtime@1.0.0"
       },
       {
-        "accessed": 1792709160,
-        "bytes": 4680,
+        "accessed": 1793132038,
+        "bytes": 4165240,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/d48887d890ed2e56",
-        "files": 3,
-        "key": "d48887d890ed2e56",
-        "kind": "pkg",
-        "label": "local-dev/local-dev.gfx-runtime@1.0.0"
-      },
-      {
-        "accessed": 1791677267,
-        "bytes": 4680,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/06f9fca16eaa839c",
-        "files": 3,
-        "key": "06f9fca16eaa839c",
-        "kind": "pkg",
-        "label": "local-dev/local-dev.gfx-runtime@1.0.0"
-      },
-      {
-        "accessed": 1792709162,
-        "bytes": 2776,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/a32b8d4598f8ebf4",
-        "files": 3,
-        "key": "a32b8d4598f8ebf4",
-        "kind": "pkg",
-        "label": "local-dev/local-dev.gfx-runtime@1.0.0"
-      },
-      {
-        "accessed": 1792709161,
-        "bytes": 2792,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/local-dev/local-dev.gfx-runtime@1.0.0/d24791002658750b",
-        "files": 3,
-        "key": "d24791002658750b",
-        "kind": "pkg",
-        "label": "local-dev/local-dev.gfx-runtime@1.0.0"
-      },
-      {
-        "accessed": 1792967289,
-        "bytes": 176728,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/mcpplibs.capi/mcpplibs.capi.lua@0.0.3/0f183c5b84a9b8ac",
-        "files": 4,
-        "key": "0f183c5b84a9b8ac",
-        "kind": "pkg",
-        "label": "mcpplibs.capi/mcpplibs.capi.lua@0.0.3"
-      },
-      {
-        "accessed": 1792203602,
-        "bytes": 176480,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/mcpplibs.capi/mcpplibs.capi.lua@0.0.3/6016ba4d29bffdeb",
-        "files": 4,
-        "key": "6016ba4d29bffdeb",
-        "kind": "pkg",
-        "label": "mcpplibs.capi/mcpplibs.capi.lua@0.0.3"
-      },
-      {
-        "accessed": 1792370874,
-        "bytes": 176248,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/mcpplibs.capi/mcpplibs.capi.lua@0.0.3/b378cca6a6d45341",
-        "files": 4,
-        "key": "b378cca6a6d45341",
-        "kind": "pkg",
-        "label": "mcpplibs.capi/mcpplibs.capi.lua@0.0.3"
-      },
-      {
-        "accessed": 1792206406,
-        "bytes": 176552,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/mcpplibs.capi/mcpplibs.capi.lua@0.0.3/2cd4f2f2a0be0c0e",
-        "files": 4,
-        "key": "2cd4f2f2a0be0c0e",
-        "kind": "pkg",
-        "label": "mcpplibs.capi/mcpplibs.capi.lua@0.0.3"
-      },
-      {
-        "accessed": 1792364093,
-        "bytes": 176480,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/mcpplibs.capi/mcpplibs.capi.lua@0.0.3/344bd49a9bf94516",
-        "files": 4,
-        "key": "344bd49a9bf94516",
-        "kind": "pkg",
-        "label": "mcpplibs.capi/mcpplibs.capi.lua@0.0.3"
-      },
-      {
-        "accessed": 1792952901,
-        "bytes": 134736,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/mcpplibs.capi/mcpplibs.capi.lua@0.0.3/95ffb586015a07a1",
-        "files": 4,
-        "key": "95ffb586015a07a1",
-        "kind": "pkg",
-        "label": "mcpplibs.capi/mcpplibs.capi.lua@0.0.3"
-      },
-      {
-        "accessed": 1792713472,
-        "bytes": 176552,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/mcpplibs.capi/mcpplibs.capi.lua@0.0.3/6f7b89c6cd9fb6e8",
-        "files": 4,
-        "key": "6f7b89c6cd9fb6e8",
-        "kind": "pkg",
-        "label": "mcpplibs.capi/mcpplibs.capi.lua@0.0.3"
-      },
-      {
-        "accessed": 1792823210,
-        "bytes": 134560,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/mcpplibs.capi/mcpplibs.capi.lua@0.0.3/54495e738950708b",
-        "files": 4,
-        "key": "54495e738950708b",
-        "kind": "pkg",
-        "label": "mcpplibs.capi/mcpplibs.capi.lua@0.0.3"
-      },
-      {
-        "accessed": 1791652822,
-        "bytes": 941448,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.libserial@1.0.0/c092aaf40bc0d0f3",
-        "files": 4,
-        "key": "c092aaf40bc0d0f3",
-        "kind": "pkg",
-        "label": "compat/compat.libserial@1.0.0"
-      },
-      {
-        "accessed": 1791652810,
-        "bytes": 871648,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.libserial@1.0.0/8e4a357574f780cc",
-        "files": 4,
-        "key": "8e4a357574f780cc",
-        "kind": "pkg",
-        "label": "compat/compat.libserial@1.0.0"
-      },
-      {
-        "accessed": 1791652813,
-        "bytes": 968808,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.libserial@1.0.0/4c916f37baee7b57",
-        "files": 4,
-        "key": "4c916f37baee7b57",
-        "kind": "pkg",
-        "label": "compat/compat.libserial@1.0.0"
-      },
-      {
-        "accessed": 1791529337,
-        "bytes": 4166648,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/b992eedd40df7235",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/2dbdd2932bb35cc8",
         "files": 109,
-        "key": "b992eedd40df7235",
+        "key": "2dbdd2932bb35cc8",
         "kind": "pkg",
         "label": "compat/compat.mbedtls@3.6.1"
       },
       {
-        "accessed": 1792825872,
-        "bytes": 1701064,
+        "accessed": 1793152071,
+        "bytes": 4165240,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/7a499588c05602ff",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/40557c641c314332",
         "files": 109,
-        "key": "7a499588c05602ff",
+        "key": "40557c641c314332",
         "kind": "pkg",
         "label": "compat/compat.mbedtls@3.6.1"
       },
       {
-        "accessed": 1792797319,
-        "bytes": 4166648,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/ec8f0c0c818c1877",
-        "files": 109,
-        "key": "ec8f0c0c818c1877",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1792203602,
-        "bytes": 3334696,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/af348fad86c20ca0",
-        "files": 109,
-        "key": "af348fad86c20ca0",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1792955949,
-        "bytes": 1700280,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/c2145145e3312941",
-        "files": 109,
-        "key": "c2145145e3312941",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1791713236,
-        "bytes": 4164464,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/e2db66a4d6645126",
-        "files": 109,
-        "key": "e2db66a4d6645126",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1792206407,
-        "bytes": 3354600,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/e7829f88da66a5e5",
-        "files": 109,
-        "key": "e7829f88da66a5e5",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1792713472,
-        "bytes": 3354592,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/0d85eed6711d4b3e",
-        "files": 109,
-        "key": "0d85eed6711d4b3e",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1792507440,
-        "bytes": 3328144,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/70d296ba1fe47eb8",
-        "files": 109,
-        "key": "70d296ba1fe47eb8",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1792952901,
-        "bytes": 1620224,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/243be0c582e9398d",
-        "files": 109,
-        "key": "243be0c582e9398d",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1792967289,
-        "bytes": 3360312,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.mbedtls@3.6.1/7c3fc89236ba2d26",
-        "files": 109,
-        "key": "7c3fc89236ba2d26",
-        "kind": "pkg",
-        "label": "compat/compat.mbedtls@3.6.1"
-      },
-      {
-        "accessed": 1792961878,
-        "bytes": 237368,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.libdrm@2.4.134/b13fec4e2f736869",
-        "files": 6,
-        "key": "b13fec4e2f736869",
-        "kind": "pkg",
-        "label": "compat/compat.libdrm@2.4.134"
-      },
-      {
-        "accessed": 1792650269,
-        "bytes": 125968,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.libdrm@2.4.134/e9484e08dab97ea6",
-        "files": 6,
-        "key": "e9484e08dab97ea6",
-        "kind": "pkg",
-        "label": "compat/compat.libdrm@2.4.134"
-      },
-      {
-        "accessed": 1792204194,
-        "bytes": 2960,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xorgproto@2025.1/e8737726367c2ff6",
-        "files": 2,
-        "key": "e8737726367c2ff6",
-        "kind": "pkg",
-        "label": "compat/compat.xorgproto@2025.1"
-      },
-      {
-        "accessed": 1792274406,
+        "accessed": 1793140254,
         "bytes": 1248,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xorgproto@2025.1/f7bee736510e746c",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xorgproto@2025.1/4bd055d3e639f838",
         "files": 2,
-        "key": "f7bee736510e746c",
+        "key": "4bd055d3e639f838",
         "kind": "pkg",
         "label": "compat/compat.xorgproto@2025.1"
       },
       {
-        "accessed": 1792955949,
-        "bytes": 1248,
+        "accessed": 1793153192,
+        "bytes": 2952,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xorgproto@2025.1/00e2ed4d09944868",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xorgproto@2025.1/57a40b9605feaaee",
         "files": 2,
-        "key": "00e2ed4d09944868",
+        "key": "57a40b9605feaaee",
         "kind": "pkg",
         "label": "compat/compat.xorgproto@2025.1"
       },
       {
-        "accessed": 1792967289,
-        "bytes": 2960,
+        "accessed": 1793153192,
+        "bytes": 558088,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xorgproto@2025.1/403a28faa71cca77",
-        "files": 2,
-        "key": "403a28faa71cca77",
-        "kind": "pkg",
-        "label": "compat/compat.xorgproto@2025.1"
-      },
-      {
-        "accessed": 1792955949,
-        "bytes": 211056,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xcb@1.17.0/799a680d2be2dd22",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xcb@1.17.0/c1bb7e4064dba71b",
         "files": 12,
-        "key": "799a680d2be2dd22",
+        "key": "c1bb7e4064dba71b",
         "kind": "pkg",
         "label": "compat/compat.xcb@1.17.0"
       },
       {
-        "accessed": 1792204194,
-        "bytes": 558136,
+        "accessed": 1793140254,
+        "bytes": 200600,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xcb@1.17.0/850739edc68b26c9",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xcb@1.17.0/6b051e0a97b8b911",
         "files": 12,
-        "key": "850739edc68b26c9",
+        "key": "6b051e0a97b8b911",
         "kind": "pkg",
         "label": "compat/compat.xcb@1.17.0"
       },
       {
-        "accessed": 1792967289,
-        "bytes": 558120,
+        "accessed": 1793140254,
+        "bytes": 124248,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xcb@1.17.0/e50868c6827dcec0",
-        "files": 12,
-        "key": "e50868c6827dcec0",
-        "kind": "pkg",
-        "label": "compat/compat.xcb@1.17.0"
-      },
-      {
-        "accessed": 1792274406,
-        "bytes": 208104,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xcb@1.17.0/80285723e6498f56",
-        "files": 12,
-        "key": "80285723e6498f56",
-        "kind": "pkg",
-        "label": "compat/compat.xcb@1.17.0"
-      },
-      {
-        "accessed": 1792204194,
-        "bytes": 935944,
-        "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xext@1.3.7/e8d0e90488045dfd",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xext@1.3.7/5d5012bbf64f13e6",
         "files": 18,
-        "key": "e8d0e90488045dfd",
+        "key": "5d5012bbf64f13e6",
         "kind": "pkg",
         "label": "compat/compat.xext@1.3.7"
       },
       {
-        "accessed": 1792967289,
-        "bytes": 935920,
+        "accessed": 1793153192,
+        "bytes": 935896,
         "complete": true,
-        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xext@1.3.7/79cf64f40d7c88d0",
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xext@1.3.7/86e10bc0a9eb4db6",
         "files": 18,
-        "key": "79cf64f40d7c88d0",
+        "key": "86e10bc0a9eb4db6",
         "kind": "pkg",
         "label": "compat/compat.xext@1.3.7"
+      },
+      {
+        "accessed": 1793166108,
+        "bytes": 736888,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.zstd@1.5.7/b3371f11886433a0",
+        "files": 27,
+        "key": "b3371f11886433a0",
+        "kind": "pkg",
+        "label": "compat/compat.zstd@1.5.7"
+      },
+      {
+        "accessed": 1793163908,
+        "bytes": 737456,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.zstd@1.5.7/1bc50801f90769da",
+        "files": 27,
+        "key": "1bc50801f90769da",
+        "kind": "pkg",
+        "label": "compat/compat.zstd@1.5.7"
+      },
+      {
+        "accessed": 1793152071,
+        "bytes": 4267480,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.zstd@1.5.7/3e322a18ff50d93f",
+        "files": 27,
+        "key": "3e322a18ff50d93f",
+        "kind": "pkg",
+        "label": "compat/compat.zstd@1.5.7"
+      },
+      {
+        "accessed": 1793166326,
+        "bytes": 737456,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.zstd@1.5.7/446eea6f62eb7a6f",
+        "files": 27,
+        "key": "446eea6f62eb7a6f",
+        "kind": "pkg",
+        "label": "compat/compat.zstd@1.5.7"
+      },
+      {
+        "accessed": 1793132038,
+        "bytes": 4267480,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.zstd@1.5.7/71d42574ae2a40fd",
+        "files": 27,
+        "key": "71d42574ae2a40fd",
+        "kind": "pkg",
+        "label": "compat/compat.zstd@1.5.7"
+      },
+      {
+        "accessed": 1793155305,
+        "bytes": 3458384,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.freetype@2.13.3/32588b37a58c1fdf",
+        "files": 43,
+        "key": "32588b37a58c1fdf",
+        "kind": "pkg",
+        "label": "compat/compat.freetype@2.13.3"
+      },
+      {
+        "accessed": 1793140254,
+        "bytes": 1047992,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.freetype@2.13.3/9504b2c99e125a56",
+        "files": 43,
+        "key": "9504b2c99e125a56",
+        "kind": "pkg",
+        "label": "compat/compat.freetype@2.13.3"
+      },
+      {
+        "accessed": 1793126757,
+        "bytes": 4475680,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.freetype@2.13.3/45c016730cbedaad",
+        "files": 43,
+        "key": "45c016730cbedaad",
+        "kind": "pkg",
+        "label": "compat/compat.freetype@2.13.3"
+      },
+      {
+        "accessed": 1793158637,
+        "bytes": 925584,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.gtest@1.15.2/2acd640e7d91e5bd",
+        "files": 3,
+        "key": "2acd640e7d91e5bd",
+        "kind": "pkg",
+        "label": "compat/compat.gtest@1.15.2"
+      },
+      {
+        "accessed": 1793140254,
+        "bytes": 2197648,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.x11@1.8.13/770b5190ca6bd2d9",
+        "files": 411,
+        "key": "770b5190ca6bd2d9",
+        "kind": "pkg",
+        "label": "compat/compat.x11@1.8.13"
+      },
+      {
+        "accessed": 1793153192,
+        "bytes": 21818960,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.x11@1.8.13/cb343939501cb4ce",
+        "files": 411,
+        "key": "cb343939501cb4ce",
+        "kind": "pkg",
+        "label": "compat/compat.x11@1.8.13"
+      },
+      {
+        "accessed": 1793132038,
+        "bytes": 188464,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.bzip2@1.0.8/bdee22498cbb42be",
+        "files": 8,
+        "key": "bdee22498cbb42be",
+        "kind": "pkg",
+        "label": "compat/compat.bzip2@1.0.8"
+      },
+      {
+        "accessed": 1793152071,
+        "bytes": 188464,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.bzip2@1.0.8/bb26e20da52e1540",
+        "files": 8,
+        "key": "bb26e20da52e1540",
+        "kind": "pkg",
+        "label": "compat/compat.bzip2@1.0.8"
+      },
+      {
+        "accessed": 1793140254,
+        "bytes": 1248,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xtrans@1.6.0/b666a53f5aedaff3",
+        "files": 2,
+        "key": "b666a53f5aedaff3",
+        "kind": "pkg",
+        "label": "compat/compat.xtrans@1.6.0"
+      },
+      {
+        "accessed": 1793153192,
+        "bytes": 2944,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xtrans@1.6.0/cc8eefe29166f0d1",
+        "files": 2,
+        "key": "cc8eefe29166f0d1",
+        "kind": "pkg",
+        "label": "compat/compat.xtrans@1.6.0"
+      },
+      {
+        "accessed": 1793153192,
+        "bytes": 2911064,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xi@1.8.3/44574f0fb23f9cb7",
+        "files": 58,
+        "key": "44574f0fb23f9cb7",
+        "kind": "pkg",
+        "label": "compat/compat.xi@1.8.3"
+      },
+      {
+        "accessed": 1793140254,
+        "bytes": 172032,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xi@1.8.3/360c0aaa41a615c5",
+        "files": 58,
+        "key": "360c0aaa41a615c5",
+        "kind": "pkg",
+        "label": "compat/compat.xi@1.8.3"
+      },
+      {
+        "accessed": 1793155305,
+        "bytes": 2960,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.concurrentqueue@1.0.5/34eab8a84521d53d",
+        "files": 2,
+        "key": "34eab8a84521d53d",
+        "kind": "pkg",
+        "label": "compat/compat.concurrentqueue@1.0.5"
+      },
+      {
+        "accessed": 1793126635,
+        "bytes": 3272,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.concurrentqueue@1.0.5/09177842e8f38d34",
+        "files": 2,
+        "key": "09177842e8f38d34",
+        "kind": "pkg",
+        "label": "compat/compat.concurrentqueue@1.0.5"
+      },
+      {
+        "accessed": 1793140254,
+        "bytes": 1256,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.concurrentqueue@1.0.5/2130b22bd8a430af",
+        "files": 2,
+        "key": "2130b22bd8a430af",
+        "kind": "pkg",
+        "label": "compat/compat.concurrentqueue@1.0.5"
+      },
+      {
+        "accessed": 1793126757,
+        "bytes": 3272,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.concurrentqueue@1.0.5/c7de98ad3de4ab2b",
+        "files": 2,
+        "key": "c7de98ad3de4ab2b",
+        "kind": "pkg",
+        "label": "compat/compat.concurrentqueue@1.0.5"
+      },
+      {
+        "accessed": 1793126634,
+        "bytes": 2960,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.concurrentqueue@1.0.5/42615a65074f0572",
+        "files": 2,
+        "key": "42615a65074f0572",
+        "kind": "pkg",
+        "label": "compat/compat.concurrentqueue@1.0.5"
+      },
+      {
+        "accessed": 1793153192,
+        "bytes": 600504,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xrandr@1.5.5/380ade378dbdd108",
+        "files": 11,
+        "key": "380ade378dbdd108",
+        "kind": "pkg",
+        "label": "compat/compat.xrandr@1.5.5"
+      },
+      {
+        "accessed": 1793140254,
+        "bytes": 69240,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xrandr@1.5.5/f10ce4331e8af46e",
+        "files": 11,
+        "key": "f10ce4331e8af46e",
+        "kind": "pkg",
+        "label": "compat/compat.xrandr@1.5.5"
+      },
+      {
+        "accessed": 1793140254,
+        "bytes": 1240,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xcb-proto@1.17.0/c44783365d0c5293",
+        "files": 2,
+        "key": "c44783365d0c5293",
+        "kind": "pkg",
+        "label": "compat/compat.xcb-proto@1.17.0"
+      },
+      {
+        "accessed": 1793153193,
+        "bytes": 2944,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.xcb-proto@1.17.0/d8f80c93fb43d75d",
+        "files": 2,
+        "key": "d8f80c93fb43d75d",
+        "kind": "pkg",
+        "label": "compat/compat.xcb-proto@1.17.0"
+      },
+      {
+        "accessed": 1793126757,
+        "bytes": 1015872,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.libpng@1.6.43/06a18e1c02086029",
+        "files": 16,
+        "key": "06a18e1c02086029",
+        "kind": "pkg",
+        "label": "compat/compat.libpng@1.6.43"
+      },
+      {
+        "accessed": 1793155305,
+        "bytes": 800112,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.libpng@1.6.43/9d5fda8f3e1cf7e9",
+        "files": 16,
+        "key": "9d5fda8f3e1cf7e9",
+        "kind": "pkg",
+        "label": "compat/compat.libpng@1.6.43"
+      },
+      {
+        "accessed": 1793140254,
+        "bytes": 346240,
+        "complete": true,
+        "dir": "@HOME@/.mcpp/build-cache/v1/pkg/compat/compat.libpng@1.6.43/8b37498564545e91",
+        "files": 16,
+        "key": "8b37498564545e91",
+        "kind": "pkg",
+        "label": "compat/compat.libpng@1.6.43"
       }
     ],
     "root": "@HOME@/.mcpp/build-cache/v1"
@@ -413,7 +413,7 @@
       "max": 1,
       "min": 1
     },
-    "version": "2026.10.26.1"
+    "version": "2026.10.27.1"
   },
   "schemaVersion": 1
 }

@@ -58,5 +58,49 @@ int main() {
     CHECK(summary["targets"].size() == 1 && summary["tests"].size() == 1);
     CHECK(summary["lastBuild"]["status"] == "ok" && !summary["artifacts"].empty());
     CHECK(views::format_bytes(1536) == "1.5 KiB");
+
+    // Targets: one row per target, the selected one marked, and the platform a row names (the shape
+    // of mcpp's platform object, design 2026-10-28 §9) carried and rendered.
+    auto list = fixture("toolchain-list.json");
+    auto t = views::targets(list, "");
+    CHECK(!t["rows"].empty());
+    std::set<std::string> seen;
+    int selected = 0;
+    for (const auto& r : t["rows"]) {
+        CHECK(seen.insert(r["target"].get<std::string>()).second);
+        if (r["selected"].get<bool>()) { ++selected; CHECK(r["target"] == t["host"]); }
+        CHECK(r["platform"].is_null() == r["platformText"].get<std::string>().empty());
+    }
+    CHECK(selected == 1);
+    // A row names its platform as the target table does, a package spec (mcpp SPEC-013); the view
+    // renders it as a plan's platform object.
+    bool found = false;
+    for (const auto& r : t["rows"])
+        if (r["target"] == "x86_64-openkal") {
+            found = true;
+            CHECK(r["platform"]["name"] == "mcpplibs.openkal-platform");
+            CHECK(r["platformText"].get<std::string>().starts_with("mcpplibs.openkal-platform 0.17"));
+            CHECK(r["platformText"].get<std::string>().ends_with("(target table)"));
+        }
+    CHECK(found);
+    list["data"]["hostPlatform"] = Json{{"name", ""}, {"version", nullptr}, {"source", "built-in"}};
+    auto withPlatform = views::targets(list, "x86_64-openkal");
+    for (const auto& r : withPlatform["rows"])
+        if (r["target"] == "x86_64-openkal") CHECK(r["selected"] == true);
+    CHECK(withPlatform["hostPlatformText"] == "host conventions (built-in)");
+
+    // Stream records: each line of a build and of a test, normalised.
+    std::istringstream build(testsupport::read(testsupport::fixtures() / "build-failed.ndjson"));
+    std::set<std::string> types;
+    for (std::string line; std::getline(build, line);)
+        if (!line.empty()) types.insert(views::stream_record(Json::parse(line))["type"].get<std::string>());
+    CHECK(types.contains("plan") && types.contains("progress") && types.contains("diagnostic"));
+    std::istringstream test(testsupport::read(testsupport::fixtures() / "test.ndjson"));
+    std::string first;
+    std::getline(test, first);
+    auto r = views::stream_record(Json::parse(first));
+    CHECK(r["type"] == "test" && r["status"] == "passed" && r["test"] == "test_smoke");
+    auto failed = views::stream_record(Json{{"test", "t"}, {"status", "fail"}, {"timed_out", true}});
+    CHECK(failed["status"] == "timedOut");
     std::println("test_views: ok");
 }

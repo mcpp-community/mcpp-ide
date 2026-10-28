@@ -3,7 +3,7 @@
     "keyword": "",
     "packages": [
       {
-        "description": "Boost as C++23 named modules \u2014 import boost.<lib>; or the umbrella import boost;",
+        "description": "Boost as C++23 named modules — import boost.<lib>; or the umbrella import boost;",
         "id": "ZheFeng7110:boost",
         "index": "mcpplibs",
         "licenses": [
@@ -32,7 +32,7 @@
         ]
       },
       {
-        "description": "                \u53bb\u4e2d\u5fc3\u5316\u7684 [ XIM\u5305\u7d22\u5f15\u4ed3\u5e93\u5217\u8868 ] \u7d22\u5f15\u4ed3\u5e93    Decentralized [XIM Package Index Repository List] index repository    ",
+        "description": "                去中心化的 [ XIM包索引仓库列表 ] 索引仓库    Decentralized [XIM Package Index Repository List] index repository    ",
         "id": "awesome:awesome",
         "index": "mcpplibs",
         "licenses": [],
@@ -118,7 +118,7 @@
         "versions": []
       },
       {
-        "description": "[Boost::ext].UT \u2014 C++20 single-header unit testing framework, exposed as the C++23 module boost.ut",
+        "description": "[Boost::ext].UT — C++20 single-header unit testing framework, exposed as the C++23 module boost.ut",
         "id": "boost-ext:ut",
         "index": "mcpplibs",
         "licenses": [
@@ -160,7 +160,7 @@
         ]
       },
       {
-        "description": "Abseil \u2014 Google's C++ common libraries (LTS 20250512.1, static)",
+        "description": "Abseil — Google's C++ common libraries (LTS 20250512.1, static)",
         "id": "compat:abseil",
         "index": "mcpplibs",
         "licenses": [
@@ -189,7 +189,7 @@
         ]
       },
       {
-        "description": "argparse \u2014 header-only argument parser for modern C++",
+        "description": "argparse — header-only argument parser for modern C++",
         "id": "compat:argparse",
         "index": "mcpplibs",
         "licenses": [
@@ -203,7 +203,7 @@
         ]
       },
       {
-        "description": "Boost.Align 1.92.0 \u2014 aligned allocation functions, allocators and traits",
+        "description": "Boost.Align 1.92.0 — aligned allocation functions, allocators and traits",
         "id": "compat:boost-align",
         "index": "mcpplibs",
         "licenses": [
@@ -217,7 +217,7 @@
         ]
       },
       {
-        "description": "Boost.Any 1.92.0 \u2014 a type-safe container for single values of different types",
+        "description": "Boost.Any 1.92.0 — a type-safe container for single values of different types",
         "id": "compat:boost-any",
         "index": "mcpplibs",
         "licenses": [
@@ -231,7 +231,7 @@
         ]
       },
       {
-        "description": "Boost.Asio 1.92.0 \u2014 networking/async I/O; the boostorg tree consumed by Boost.Beast",
+        "description": "Boost.Asio 1.92.0 — networking/async I/O; the boostorg tree consumed by Boost.Beast",
         "id": "compat:boost-asio",
         "index": "mcpplibs",
         "licenses": [
@@ -245,7 +245,7 @@
         ]
       },
       {
-        "description": "Boost.Assert 1.92.0 \u2014 configurable assert macros with source-location support",
+        "description": "Boost.Assert 1.92.0 — configurable assert macros with source-location support",
         "id": "compat:boost-assert",
         "index": "mcpplibs",
         "licenses": [
@@ -259,7 +259,7 @@
         ]
       },
       {
-        "description": "Boost.Beast 1.92.0 \u2014 HTTP and WebSocket networking on Boost.Asio (header-only)",
+        "description": "Boost.Beast 1.92.0 — HTTP and WebSocket networking on Boost.Asio (header-only)",
         "id": "compat:boost-beast",
         "index": "mcpplibs",
         "licenses": [
@@ -273,7 +273,7 @@
         ]
       },
       {
-        "description": "Boost.Bind 1.92.0 \u2014 bind.hpp expression binders and mem_fn",
+        "description": "Boost.Bind 1.92.0 — bind.hpp expression binders and mem_fn",
         "id": "compat:boost-bind",
         "index": "mcpplibs",
         "licenses": [
@@ -287,7 +287,7 @@
         ]
       },
       {
-        "description": "Boost.CircularBuffer 1.92.0 \u2014 a STL-compatible ring buffer container",
+        "description": "Boost.CircularBuffer 1.92.0 — a STL-compatible ring buffer container",
         "id": "compat:boost-circular-buffer",
         "index": "mcpplibs",
         "licenses": [
@@ -301,7 +301,7 @@
         ]
       },
       {
-        "description": "Boost.Compat 1.92.0 \u2014 C++11-17 backports of newer standard facilities (invoke, to_chars)",
+        "description": "Boost.Compat 1.92.0 — C++11-17 backports of newer standard facilities (invoke, to_chars)",
         "id": "compat:boost-compat",
         "index": "mcpplibs",
         "licenses": [
@@ -315,7 +315,7 @@
         ]
       },
       {
-        "description": "Boost.ConceptCheck 1.92.0 \u2014 compile-time checks for C++ concepts and requirements",
+        "description": "Boost.ConceptCheck 1.92.0 — compile-time checks for C++ concepts and requirements",
         "id": "compat:boost-concept-check",
         "index": "mcpplibs",
         "licenses": [
@@ -329,7 +329,7 @@
         ]
       },
       {
-        "description": "Boost.Config 1.92.0 \u2014 platform/compiler/stdlib detection macros; root of the modular-boost header family",
+        "description": "Boost.Config 1.92.0 — platform/compiler/stdlib detection macros; root of the modular-boost header family",
         "id": "compat:boost-config",
         "index": "mcpplibs",
         "licenses": [
@@ -343,7 +343,7 @@
         ]
       },
       {
-        "description": "Boost.Container 1.92.0 \u2014 STL-compatible containers; Beast consumes allocator_traits",
+        "description": "Boost.Container 1.92.0 — STL-compatible containers; Beast consumes allocator_traits",
         "id": "compat:boost-container",
         "index": "mcpplibs",
         "licenses": [
@@ -357,7 +357,7 @@
         ]
       },
       {
-        "description": "Boost.ContainerHash 1.92.0 \u2014 hash_value and hash range combinators",
+        "description": "Boost.ContainerHash 1.92.0 — hash_value and hash range combinators",
         "id": "compat:boost-container-hash",
         "index": "mcpplibs",
         "licenses": [
@@ -371,7 +371,7 @@
         ]
       },
       {
-        "description": "Boost.Core 1.92.0 \u2014 core utilities: addressof, empty_value, ref, type.hpp shims",
+        "description": "Boost.Core 1.92.0 — core utilities: addressof, empty_value, ref, type.hpp shims",
         "id": "compat:boost-core",
         "index": "mcpplibs",
         "licenses": [
@@ -385,7 +385,7 @@
         ]
       },
       {
-        "description": "Boost.Describe 1.92.0 \u2014 macro-based enum/class descriptions (feeds ContainerHash)",
+        "description": "Boost.Describe 1.92.0 — macro-based enum/class descriptions (feeds ContainerHash)",
         "id": "compat:boost-describe",
         "index": "mcpplibs",
         "licenses": [
@@ -399,7 +399,7 @@
         ]
       },
       {
-        "description": "Boost.Endian 1.92.0 \u2014 byte-order conversion (WebSocket framing)",
+        "description": "Boost.Endian 1.92.0 — byte-order conversion (WebSocket framing)",
         "id": "compat:boost-endian",
         "index": "mcpplibs",
         "licenses": [
@@ -413,7 +413,7 @@
         ]
       },
       {
-        "description": "Boost.Intrusive 1.92.0 \u2014 intrusive list/set hooks (Beast buffers and http::fields)",
+        "description": "Boost.Intrusive 1.92.0 — intrusive list/set hooks (Beast buffers and http::fields)",
         "id": "compat:boost-intrusive",
         "index": "mcpplibs",
         "licenses": [
@@ -427,7 +427,7 @@
         ]
       },
       {
-        "description": "Boost.IO 1.92.0 \u2014 stream flag helpers (ios_state, ostream_put) and boost/io_fwd.hpp",
+        "description": "Boost.IO 1.92.0 — stream flag helpers (ios_state, ostream_put) and boost/io_fwd.hpp",
         "id": "compat:boost-io",
         "index": "mcpplibs",
         "licenses": [
@@ -441,7 +441,7 @@
         ]
       },
       {
-        "description": "Boost.Logic 1.92.0 \u2014 tribool three-state boolean (Beast detect_ssl)",
+        "description": "Boost.Logic 1.92.0 — tribool three-state boolean (Beast detect_ssl)",
         "id": "compat:boost-logic",
         "index": "mcpplibs",
         "licenses": [
@@ -455,7 +455,7 @@
         ]
       },
       {
-        "description": "Boost.Move 1.92.0 \u2014 move-emulation traits and move-aware utilities",
+        "description": "Boost.Move 1.92.0 — move-emulation traits and move-aware utilities",
         "id": "compat:boost-move",
         "index": "mcpplibs",
         "licenses": [
@@ -469,7 +469,7 @@
         ]
       },
       {
-        "description": "Boost.Mp11 1.92.0 \u2014 C++11 metaprogramming list/combinator library",
+        "description": "Boost.Mp11 1.92.0 — C++11 metaprogramming list/combinator library",
         "id": "compat:boost-mp11",
         "index": "mcpplibs",
         "licenses": [
@@ -483,7 +483,7 @@
         ]
       },
       {
-        "description": "Boost.Optional 1.92.0 \u2014 optional values (Beast buffers_prefix uses in_place_init)",
+        "description": "Boost.Optional 1.92.0 — optional values (Beast buffers_prefix uses in_place_init)",
         "id": "compat:boost-optional",
         "index": "mcpplibs",
         "licenses": [
@@ -497,7 +497,7 @@
         ]
       },
       {
-        "description": "Boost.Predef 1.92.0 \u2014 compiler/architecture/OS detection macros (feeds WinAPI)",
+        "description": "Boost.Predef 1.92.0 — compiler/architecture/OS detection macros (feeds WinAPI)",
         "id": "compat:boost-predef",
         "index": "mcpplibs",
         "licenses": [
@@ -511,7 +511,7 @@
         ]
       },
       {
-        "description": "Boost.Preprocessor 1.92.0 \u2014 preprocessor metaprogramming (feeds Utility/TypeTraits)",
+        "description": "Boost.Preprocessor 1.92.0 — preprocessor metaprogramming (feeds Utility/TypeTraits)",
         "id": "compat:boost-preprocessor",
         "index": "mcpplibs",
         "licenses": [
@@ -525,7 +525,7 @@
         ]
       },
       {
-        "description": "Boost.SmartPtr 1.92.0 \u2014 shared/weak/scoped pointers plus boost/shared_ptr.hpp shims",
+        "description": "Boost.SmartPtr 1.92.0 — shared/weak/scoped pointers plus boost/shared_ptr.hpp shims",
         "id": "compat:boost-smart-ptr",
         "index": "mcpplibs",
         "licenses": [
@@ -539,7 +539,7 @@
         ]
       },
       {
-        "description": "Boost.StaticString 1.92.0 \u2014 fixed-capacity string behind beast::static_string",
+        "description": "Boost.StaticString 1.92.0 — fixed-capacity string behind beast::static_string",
         "id": "compat:boost-static-string",
         "index": "mcpplibs",
         "licenses": [
@@ -553,7 +553,7 @@
         ]
       },
       {
-        "description": "Boost.System 1.92.0 \u2014 error_code/system_error and the boost/cerrno.hpp shim",
+        "description": "Boost.System 1.92.0 — error_code/system_error and the boost/cerrno.hpp shim",
         "id": "compat:boost-system",
         "index": "mcpplibs",
         "licenses": [
@@ -567,7 +567,7 @@
         ]
       },
       {
-        "description": "Boost.ThrowException 1.92.0 \u2014 common exception-raising infrastructure for Boost libraries",
+        "description": "Boost.ThrowException 1.92.0 — common exception-raising infrastructure for Boost libraries",
         "id": "compat:boost-throw-exception",
         "index": "mcpplibs",
         "licenses": [
@@ -581,7 +581,7 @@
         ]
       },
       {
-        "description": "Boost.TypeIndex 1.92.0 \u2014 runtime type information with RTTI-free fallback",
+        "description": "Boost.TypeIndex 1.92.0 — runtime type information with RTTI-free fallback",
         "id": "compat:boost-type-index",
         "index": "mcpplibs",
         "licenses": [
@@ -595,7 +595,7 @@
         ]
       },
       {
-        "description": "Boost.TypeTraits 1.92.0 \u2014 compile-time type introspection traits",
+        "description": "Boost.TypeTraits 1.92.0 — compile-time type introspection traits",
         "id": "compat:boost-type-traits",
         "index": "mcpplibs",
         "licenses": [
@@ -609,7 +609,7 @@
         ]
       },
       {
-        "description": "Boost.Utility 1.92.0 \u2014 result_of, compressed_pair, call_traits, in_place factories",
+        "description": "Boost.Utility 1.92.0 — result_of, compressed_pair, call_traits, in_place factories",
         "id": "compat:boost-utility",
         "index": "mcpplibs",
         "licenses": [
@@ -623,7 +623,7 @@
         ]
       },
       {
-        "description": "Boost.UUID 1.92.0 \u2014 RFC 4122/9562 UUID generation and parsing",
+        "description": "Boost.UUID 1.92.0 — RFC 4122/9562 UUID generation and parsing",
         "id": "compat:boost-uuid",
         "index": "mcpplibs",
         "licenses": [
@@ -637,7 +637,7 @@
         ]
       },
       {
-        "description": "Boost.Variant2 1.92.0 \u2014 never-empty variant (feeds Boost.System's result)",
+        "description": "Boost.Variant2 1.92.0 — never-empty variant (feeds Boost.System's result)",
         "id": "compat:boost-variant2",
         "index": "mcpplibs",
         "licenses": [
@@ -651,7 +651,7 @@
         ]
       },
       {
-        "description": "Boost.WinAPI 1.92.0 \u2014 WinAPI wrappers; owns boost/detail/winapi/* shims too",
+        "description": "Boost.WinAPI 1.92.0 — WinAPI wrappers; owns boost/detail/winapi/* shims too",
         "id": "compat:boost-winapi",
         "index": "mcpplibs",
         "licenses": [
@@ -693,7 +693,7 @@
         ]
       },
       {
-        "description": "c-ares \u2014 asynchronous DNS resolver library (static)",
+        "description": "c-ares — asynchronous DNS resolver library (static)",
         "id": "compat:c-ares",
         "index": "mcpplibs",
         "licenses": [
@@ -736,7 +736,7 @@
         ]
       },
       {
-        "description": "moodycamel::ConcurrentQueue \u2014 lock-free MPMC queue (header-only)",
+        "description": "moodycamel::ConcurrentQueue — lock-free MPMC queue (header-only)",
         "id": "compat:concurrentqueue",
         "index": "mcpplibs",
         "licenses": [
@@ -751,7 +751,7 @@
         ]
       },
       {
-        "description": "cpptrace \u2014 simple, portable stack traces for C++",
+        "description": "cpptrace — simple, portable stack traces for C++",
         "id": "compat:cpptrace",
         "index": "mcpplibs",
         "licenses": [
@@ -853,7 +853,7 @@
       "max": 1,
       "min": 1
     },
-    "version": "2026.10.26.1"
+    "version": "2026.10.27.1"
   },
   "schemaVersion": 1
 }

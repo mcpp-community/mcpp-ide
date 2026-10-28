@@ -11,3 +11,6 @@ jetbrains/.intellijPlatform/
 webui/dist/
 *.log
 compile_commands.json
+dist-upload/
+jetbrains/.kotlin/
+.xlings/

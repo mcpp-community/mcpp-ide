@@ -1,0 +1,4 @@
+# Text is LF everywhere; the golden fixtures are mcpp's bytes, compared and replayed exactly.
+* text=auto eol=lf
+protocol/fixtures/** -text
+*.png binary

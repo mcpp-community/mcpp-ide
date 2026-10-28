@@ -44,6 +44,10 @@ int main() {
         CHECK(seen.finished.contains(ok));
         CHECK(seen.finished[ok]["status"] == "ok");
         CHECK(!seen.records.empty());
+        if (!seen.finished[ok].contains("envelope")) {
+            std::println(std::cerr, "no envelope; the summary: {}", seen.finished[ok].dump());
+            for (const auto& r : seen.records) std::println(std::cerr, "record: {}", r.dump().substr(0, 200));
+        }
         CHECK(seen.finished[ok].contains("envelope"));
     }
 
@@ -67,8 +71,12 @@ int main() {
         std::lock_guard g(seen.lock);
         CHECK(seen.finished[slow]["status"] == "cancelled");
     }
+    // mcpp leaves its record `cancelled` when the system delivers the request to end (SIGTERM). On
+    // Windows the program is ended outright (openkal-windows: TerminateProcess), so the record is
+    // the last one mcpp wrote, never `ok`.
     const auto record = testsupport::read(root / "target" / ".last-result.json");
-    CHECK(record.find("\"cancelled\"") != std::string::npos);
+    if (mcpplibs::os::host() == mcpplibs::os::platform::windows) CHECK(record.find("\"ok\"") == std::string::npos);
+    else CHECK(record.find("\"cancelled\"") != std::string::npos);
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);

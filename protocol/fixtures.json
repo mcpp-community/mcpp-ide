@@ -1,0 +1,22 @@
+{
+  "description": "Which definition of mcpp-contract.schema.json each golden fixture is checked against. `lines`: every line of an NDJSON file against `each`; otherwise the whole document against `schema`. `version.txt` is mcpp's own `--version` line.",
+  "fixtures": [
+    { "file": "protocol-version.json", "schema": "protocolVersion" },
+    { "file": "build-ok.ndjson", "each": "buildStreamLine" },
+    { "file": "build-failed.ndjson", "each": "buildStreamLine" },
+    { "file": "build-manifest-error.ndjson", "each": "buildStreamLine" },
+    { "file": "result-ok.json", "schema": "resultRecord" },
+    { "file": "launch.json", "schema": "launchEnvelope" },
+    { "file": "test.ndjson", "each": "testStreamLine" },
+    { "file": "test-list.ndjson", "each": "testListLine" },
+    { "file": "build-database.json", "schema": "buildDatabaseEnvelope" },
+    { "file": "toolchain-list.json", "schema": "toolchainListEnvelope" },
+    { "file": "search.json", "schema": "searchEnvelope" },
+    { "file": "cache-list.json", "schema": "cacheListEnvelope" },
+    { "file": "index-list.json", "schema": "indexListEnvelope" },
+    { "file": "pack-formats.json", "schema": "packFormatsEnvelope" },
+    { "file": "self-env.json", "schema": "selfEnvEnvelope" },
+    { "file": "build-platform.ndjson", "each": "buildStreamLine", "optional": true },
+    { "file": "toolchain-list-platform.json", "schema": "toolchainListEnvelope", "optional": true }
+  ]
+}

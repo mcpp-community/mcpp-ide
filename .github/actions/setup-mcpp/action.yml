@@ -1,0 +1,117 @@
+name: Set up mcpp
+description: Install xlings, the pinned mcpp (built from MCPP_SOURCE_REF when it is set) and (for macOS and Windows targets) the pinned LLVM, with the package store cached.
+inputs:
+  llvm:
+    description: Install LLVM and make it mcpp's default toolchain.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Version pins
+      shell: bash
+      run: |
+        set -euo pipefail
+        while IFS='=' read -r name value; do
+          case "$name" in ''|\#*) continue ;; esac
+          if [ -z "${!name:-}" ]; then echo "$name=$value" >> "$GITHUB_ENV"; fi
+        done < .github/versions.env
+    - name: Install xlings (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 \
+          https://raw.githubusercontent.com/openxlings/xlings/main/tools/other/quick_install.sh \
+          | bash -s "$XLINGS_VERSION"
+        echo "$HOME/.xlings/subos/current/bin" >> "$GITHUB_PATH"
+    - name: Install xlings (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        irm https://d2learn.org/xlings-install.ps1.txt | iex
+        "$env:USERPROFILE\.xlings\subos\current\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    - name: Cache the mcpp package store
+      uses: actions/cache@v5
+      with:
+        path: ~/.mcpp/registry/data/xpkgs
+        key: mcpp-xpkgs-${{ runner.os }}-${{ runner.arch }}-${{ env.MCPP_VERSION }}-${{ hashFiles('mcpp.toml', 'mcpp.lock') }}
+        restore-keys: mcpp-xpkgs-${{ runner.os }}-${{ runner.arch }}-${{ env.MCPP_VERSION }}-
+    - name: Install mcpp
+      shell: bash
+      run: |
+        set -euo pipefail
+        for attempt in 1 2 3 4 5; do
+          xlings update > /dev/null 2>&1 || true
+          if xlings install "mcpp@$MCPP_VERSION" -y -g; then break; fi
+          [ "$attempt" = 5 ] && { echo "::error::mcpp@$MCPP_VERSION could not be installed"; exit 1; }
+          sleep 30
+        done
+        mcpp --version
+        mcpp self config --mirror GLOBAL
+    - name: Install LLVM
+      if: inputs.llvm == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        for attempt in 1 2 3; do
+          if mcpp toolchain install llvm "$LLVM_VERSION"; then break; fi
+          [ "$attempt" = 3 ] && exit 1
+          sleep 30
+        done
+        mcpp toolchain default "llvm@$LLVM_VERSION"
+    # MCPP_SOURCE_REF: mcpp built from that ref, before the ref is released; the program is kept per
+    # commit and system, and put first on PATH.
+    - name: Resolve MCPP_SOURCE_REF
+      id: source
+      if: env.MCPP_SOURCE_REF != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        sha="$(git ls-remote https://github.com/mcpp-community/mcpp.git "refs/heads/$MCPP_SOURCE_REF" "refs/tags/$MCPP_SOURCE_REF" | head -1 | cut -f1)"
+        [ -n "$sha" ] || { echo "::error::mcpp-community/mcpp has no branch or tag $MCPP_SOURCE_REF"; exit 1; }
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+    - name: Restore mcpp built from ${{ env.MCPP_SOURCE_REF }}
+      id: kept
+      if: env.MCPP_SOURCE_REF != ''
+      uses: actions/cache/restore@v5
+      with:
+        path: ~/.mcpp-source/bin
+        key: mcpp-source-${{ runner.os }}-${{ runner.arch }}-${{ steps.source.outputs.sha }}
+    - name: mcpp from ${{ env.MCPP_SOURCE_REF }}
+      id: built
+      if: env.MCPP_SOURCE_REF != ''
+      shell: bash
+      env:
+        SHA: ${{ steps.source.outputs.sha }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS" in Windows) exe=mcpp.exe ;; *) exe=mcpp ;; esac
+        bin="$HOME/.mcpp-source/bin"
+        # A kept program that does not start (its toolchain's run-time is not in this store) is built again.
+        if ! "$bin/$exe" --version > /dev/null 2>&1; then
+          src="$RUNNER_TEMP/mcpp-source"
+          rm -rf "$src"
+          git init -q "$src"
+          git -C "$src" fetch -q --depth 1 https://github.com/mcpp-community/mcpp.git "$SHA"
+          git -C "$src" checkout -q FETCH_HEAD
+          # mcpp builds itself with the release its .xlings.json pins (xlings sets the project up).
+          for attempt in 1 2 3; do
+            if (cd "$src" && xlings install -y); then break; fi
+            [ "$attempt" = 3 ] && { echo "::error::the mcpp $MCPP_SOURCE_REF pins could not be installed"; exit 1; }
+            sleep 30
+          done
+          (cd "$src" && mcpp --version && mcpp build)
+          built="$(find "$src/target" -type f -name "$exe" -path '*/bin/*' ! -path '*/dist/*' | head -1)"
+          [ -n "$built" ] || { echo "::error::building mcpp at $MCPP_SOURCE_REF left no $exe"; exit 1; }
+          mkdir -p "$bin"
+          cp "$built" "$bin/$exe"
+          echo "fresh=true" >> "$GITHUB_OUTPUT"
+        fi
+        "$bin/$exe" --version
+        case "$RUNNER_OS" in Windows) cygpath -w "$bin" ;; *) echo "$bin" ;; esac >> "$GITHUB_PATH"
+    # Kept as soon as it is built, so a job that fails later does not build it again.
+    - name: Keep mcpp built from ${{ env.MCPP_SOURCE_REF }}
+      if: env.MCPP_SOURCE_REF != '' && steps.built.outputs.fresh == 'true' && steps.kept.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ~/.mcpp-source/bin
+        key: ${{ steps.kept.outputs.cache-primary-key }}

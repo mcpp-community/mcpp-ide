@@ -4,7 +4,7 @@
       "ide": {
         "generator": {
           "name": "mcpp",
-          "version": "2026.10.26.1"
+          "version": "2026.10.27.1"
         },
         "profile-version": "0.3.0",
         "toolchains": {
@@ -60,20 +60,20 @@
                 "-c",
                 "@ROOT@/src/main.cpp",
                 "-o",
-                "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d/obj/main.o"
+                "@HOME@/.mcpp/cache/build-database/9b4f7fd6a357f81e/target/x86_64-linux-gnu/77ba4e6c37abd416/obj/main.o"
               ],
               "ide": {
                 "role": "non-module"
               },
               "local-arguments": [],
-              "object": "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d/obj/main.o",
+              "object": "@HOME@/.mcpp/cache/build-database/9b4f7fd6a357f81e/target/x86_64-linux-gnu/77ba4e6c37abd416/obj/main.o",
               "private": false,
               "provides": {},
               "requires": [
                 "std"
               ],
               "source": "@ROOT@/src/main.cpp",
-              "work-directory": "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d"
+              "work-directory": "@HOME@/.mcpp/cache/build-database/9b4f7fd6a357f81e/target/x86_64-linux-gnu/77ba4e6c37abd416"
             }
           ],
           "visible-sets": [
@@ -114,20 +114,20 @@
                 "-c",
                 "@ROOT@/tests/test_smoke.cpp",
                 "-o",
-                "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d/obj/test_smoke.o"
+                "@HOME@/.mcpp/cache/build-database/9b4f7fd6a357f81e/target/x86_64-linux-gnu/77ba4e6c37abd416/obj/test_smoke.o"
               ],
               "ide": {
                 "role": "non-module"
               },
               "local-arguments": [],
-              "object": "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d/obj/test_smoke.o",
+              "object": "@HOME@/.mcpp/cache/build-database/9b4f7fd6a357f81e/target/x86_64-linux-gnu/77ba4e6c37abd416/obj/test_smoke.o",
               "private": false,
               "provides": {},
               "requires": [
                 "std"
               ],
               "source": "@ROOT@/tests/test_smoke.cpp",
-              "work-directory": "@HOME@/.mcpp/cache/build-database/d0ed76fa8386e035/target/x86_64-linux-gnu/b95fa85150d74e3d"
+              "work-directory": "@HOME@/.mcpp/cache/build-database/9b4f7fd6a357f81e/target/x86_64-linux-gnu/77ba4e6c37abd416"
             }
           ],
           "visible-sets": [
@@ -186,7 +186,7 @@
       ],
       "version": 1
     },
-    "inputs-fingerprint": "fnv1a:a7fbe48a39924203",
+    "inputs-fingerprint": "fnv1a:044b186c2cfb5ae7",
     "spec": {
       "name": "s1",
       "version": "0.3.0"
@@ -217,7 +217,7 @@
       "max": 1,
       "min": 1
     },
-    "version": "2026.10.26.1"
+    "version": "2026.10.27.1"
   },
   "schemaVersion": 1
 }

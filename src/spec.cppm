@@ -24,10 +24,19 @@ struct Setting {
 };
 
 const std::vector<Setting>& settings();
+// spec/settings.json's groups: [{id, order, title}].
+const Json& setting_groups();
 const Json& presets();                  // spec/presets.json's "presets"
 const std::map<std::string, std::string, std::less<>>& runtime_zh_cn();
 const Json& toml_schema();
 const Json& buildscript_api();
+// spec/commands.json: the command table both adapters declare (groups, commands).
+const Json& commands();
+// The editors' strings (command titles, setting titles, view names): spec/i18n/manifest.<locale>.json.
+// "zh-cn" falls back to English key by key.
+const Json& manifest_strings(std::string_view locale);
+// One editor string; the key itself when no bundle has it.
+std::string manifest_string(std::string_view key, std::string_view locale);
 
 }  // namespace mcppide::spec
 
@@ -61,6 +70,11 @@ const std::vector<Setting>& settings() {
     return all;
 }
 
+const Json& setting_groups() {
+    static const Json g = Json::parse(generated::kSettingsJson).value("groups", Json::array());
+    return g;
+}
+
 const Json& presets() {
     static const Json p = Json::parse(generated::kPresetsJson).value("presets", Json::array());
     return p;
@@ -85,6 +99,28 @@ const Json& toml_schema() {
 const Json& buildscript_api() {
     static const Json a = Json::parse(generated::kBuildScriptApiJson);
     return a;
+}
+
+const Json& commands() {
+    static const Json c = Json::parse(generated::kCommandsJson);
+    return c;
+}
+
+const Json& manifest_strings(std::string_view locale) {
+    static const Json en = Json::parse(generated::kManifestEnJson);
+    static const Json zh = [] {
+        Json z = en;
+        const auto zhStrings = Json::parse(generated::kManifestZhCnJson);
+        for (auto it = zhStrings.begin(); it != zhStrings.end(); ++it) z[it.key()] = it.value();
+        return z;
+    }();
+    return locale == "zh-cn" ? zh : en;
+}
+
+std::string manifest_string(std::string_view key, std::string_view locale) {
+    const auto& m = manifest_strings(locale);
+    if (auto it = m.find(std::string(key)); it != m.end() && it->is_string()) return it->get<std::string>();
+    return std::string(key);
 }
 
 }  // namespace mcppide::spec

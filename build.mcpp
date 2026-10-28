@@ -1,11 +1,12 @@
 // mcpp-ide's build program: the backend's view of spec/, generated where the build writes.
 //
 // spec/ is the one source of every editor-facing declaration (settings, presets, runtime strings,
-// mcpp's manifest keys and build-program directives). The backend reads it as JSON at startup, so
+// mcpp's manifest keys and build-program directives, the command table and the editors' strings).
+// The backend reads it as JSON at startup, so
 // this program only carries the files into a module, `mcppide.generated.spec`, as string literals:
 // nothing is generated into the repository and nothing parses JSON here. The editors' declarations
 // (package.json's contributes, plugin.xml's actions, the message bundles) are written by
-// `mcpp-ide-gen`, a program of this package, when an adapter is built.
+// `mcpp-ide-dev gen`, a program of this package, when an adapter is built.
 import std;
 import mcpp;
 
@@ -44,10 +45,13 @@ int main() {
     const std::filesystem::path root = env_or_empty("MCPP_MANIFEST_DIR");
     const std::filesystem::path out = env_or_empty("MCPP_OUT_DIR");
     const std::filesystem::path spec = root / "spec";
-    const std::array<std::pair<const char*, const char*>, 5> files{{
+    const std::array<std::pair<const char*, const char*>, 8> files{{
         {"kSettingsJson", "settings.json"},
         {"kPresetsJson", "presets.json"},
+        {"kCommandsJson", "commands.json"},
         {"kRuntimeZhCnJson", "i18n/runtime.zh-cn.json"},
+        {"kManifestEnJson", "i18n/manifest.en.json"},
+        {"kManifestZhCnJson", "i18n/manifest.zh-cn.json"},
         {"kTomlSchemaJson", "toml-schema.json"},
         {"kBuildScriptApiJson", "buildscript-api.json"},
     }};
