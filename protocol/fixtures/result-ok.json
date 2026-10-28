@@ -32,9 +32,9 @@
       "triple": "x86_64-linux-gnu"
     },
     "diagnostics": [],
-    "finishedAt": 1793148650353,
-    "pid": 1203929,
-    "startedAt": 1793148649554,
+    "finishedAt": 1793166350218,
+    "pid": 3248166,
+    "startedAt": 1793166349536,
     "status": "ok"
   },
   "kind": "mcpp.result",

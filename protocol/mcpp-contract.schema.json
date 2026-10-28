@@ -243,7 +243,7 @@
         "default": { "type": "boolean" },
         "note": { "type": "string" },
         "platform": {
-          "description": "The platform the target table selects for the row, as a package spec (`mcpplibs.openkal-platform@0.17.2`); null for a row with none (mcpp SPEC-013).",
+          "description": "The platform the target table selects for the row, as a package spec (`mcpplibs.openkal-platform@0.17.3`); null for a row with none (mcpp SPEC-013).",
           "type": ["string", "null"]
         }
       }

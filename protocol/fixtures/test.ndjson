@@ -1,2 +1,2 @@
-{"member":"","test":"test_smoke","status":"pass","exit_code":0,"signal":null,"duration_ms":3,"timed_out":false,"compile_output":"","run_output":"test_smoke: ok\n","reason":"","build_ms":680}
-{"summary":{"member":"","passed":1,"failed":0,"not_run":0,"not_run_reason":"","built":0,"elapsed_ms":943,"build_ms":741,"run_ms":3}}
+{"member":"","test":"test_smoke","status":"pass","exit_code":0,"signal":null,"duration_ms":2,"timed_out":false,"compile_output":"","run_output":"test_smoke: ok\n","reason":"","build_ms":587}
+{"summary":{"member":"","passed":1,"failed":0,"not_run":0,"not_run_reason":"","built":0,"elapsed_ms":792,"build_ms":614,"run_ms":2}}

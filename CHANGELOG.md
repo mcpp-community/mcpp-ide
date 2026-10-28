@@ -16,6 +16,6 @@ The first release of mcpp-ide: one backend for mcpp's editor integrations, the V
 - CLion: run configurations with a PTY console, test tree, CLion's debugger, console links, the mcpp
   tool window; depends on the mcppls CLion plugin.
 - One package per editor for every system: the backend as one ok-image bundle (x86_64 and aarch64
-  images on openkal-platform 0.17.2) with okrun for Linux x86_64/aarch64, macOS arm64 and Windows
+  images on openkal-platform 0.17.3) with okrun for Linux x86_64/aarch64, macOS arm64 and Windows
   x64; CI starts it from both packages on each of those systems.
 - `mcpp pack`'s package format is passed as `--pkg-format` where mcpp offers it (`--format` before).
