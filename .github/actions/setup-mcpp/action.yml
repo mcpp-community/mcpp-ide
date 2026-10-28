@@ -58,8 +58,8 @@ runs:
           sleep 30
         done
         mcpp toolchain default "llvm@$LLVM_VERSION"
-    # MCPP_SOURCE_REF: mcpp built from that ref by the release installed above, before the ref is
-    # released; the program is kept per commit and system, and put first on PATH.
+    # MCPP_SOURCE_REF: mcpp built from that ref, before the ref is released; the program is kept per
+    # commit and system, and put first on PATH.
     - name: Resolve MCPP_SOURCE_REF
       id: source
       if: env.MCPP_SOURCE_REF != ''
@@ -93,7 +93,13 @@ runs:
           git init -q "$src"
           git -C "$src" fetch -q --depth 1 https://github.com/mcpp-community/mcpp.git "$SHA"
           git -C "$src" checkout -q FETCH_HEAD
-          (cd "$src" && mcpp build)
+          # mcpp builds itself with the release its .xlings.json pins (xlings sets the project up).
+          for attempt in 1 2 3; do
+            if (cd "$src" && xlings install -y); then break; fi
+            [ "$attempt" = 3 ] && { echo "::error::the mcpp $MCPP_SOURCE_REF pins could not be installed"; exit 1; }
+            sleep 30
+          done
+          (cd "$src" && mcpp --version && mcpp build)
           built="$(find "$src/target" -type f -name "$exe" -path '*/bin/*' ! -path '*/dist/*' | head -1)"
           [ -n "$built" ] || { echo "::error::building mcpp at $MCPP_SOURCE_REF left no $exe"; exit 1; }
           mkdir -p "$bin"
