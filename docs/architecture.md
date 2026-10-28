@@ -41,12 +41,12 @@ editor package carries that bundle and the runner that starts it on each system:
 | Layout in the package | Holds | Started as |
 |---|---|---|
 | `backend/mcpp-ide.okb` | the x86_64 and aarch64 images | |
-| `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`: the universal self-contained packages (`mcpp pack --mode self-contained`) packed on Linux (`--systems linux,windows`) and on macOS, joined by `mcpp pack --merge` | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
+| `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`mcpp pack --mode self-contained --systems linux,macos,windows`: each okrun built over the platform's hosted arrangement) | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
 
 Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after it, an
-installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. CI builds the
-bundle once, joins the self-contained packages (`mcpp-ide-<version>-openkal.tar.gz`, a release asset),
-takes okrun from the joined package, opens both editor packages and the joined package on every
+installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. CI packs the
+bundle and the universal package (`mcpp-ide-<version>-openkal.tar.gz`, a release asset) once, on
+Linux, takes okrun from that package, opens both editor packages and the universal package on every
 system and starts what they carry for it (`.github/scripts/check-package.sh`).
 
 ## Generated declarations

@@ -17,14 +17,12 @@ env:
 jobs:
   # The backend on each system the editors run on: build every program (the backend, the mock mcpp,
   # the dev tool), run the tests -- the protocol against its schema and the fixtures against mcpp's
-  # contract among them -- and check the translations. A `pack` leg then packs the backend as the
-  # editor packages carry it (mcpp design 2026-10-28 part 2 §15): its universal self-contained
-  # package (`<arch>-openkal`: the x86_64 and aarch64 images, okrun for the `systems` it names), and
-  # on linux-x64 the ok-image bundle. Windows' okrun is packed on Linux (x86_64-windows-gnu, static):
-  # an image built on Windows is not yet the same file as one built on Linux or macOS (its __FILE__
-  # strings keep `\`), and `mcpp pack --merge` joins only packages that hold the same images. The
-  # `host-platform` row builds and tests with the build programs (build.mcpp, the spec/ generators)
-  # as ok images run by okrun.
+  # contract among them -- and check the translations. The `pack` leg then packs the backend as the
+  # editor packages carry it (mcpp design 2026-10-28 part 2 §15): the ok-image bundle, and the
+  # universal self-contained package (both images; okrun for Linux, macOS and Windows, each built
+  # over the platform's hosted arrangement) whose okrun the packages take. The `host-platform` row
+  # builds and tests with the build programs (build.mcpp, the spec/ generators) as ok images run by
+  # okrun.
   backend:
     name: backend (${{ matrix.platform }}${{ matrix.host-platform && format(', host platform {0}', matrix.host-platform) || '' }})
     runs-on: ${{ matrix.os }}
@@ -33,11 +31,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: 'package okb', systems: 'linux,windows' }
-          - { os: ubuntu-24.04-arm, platform: linux-arm64, llvm: 'false', pack: '' }
-          - { os: macos-14, platform: darwin-arm64, llvm: 'true', pack: 'package', systems: 'macos' }
-          - { os: windows-2022, platform: win32-x64, llvm: 'true', pack: '' }
-          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: '', host-platform: 'openkal-platform@0.17.3' }
+          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: true }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64, llvm: 'false' }
+          - { os: macos-14, platform: darwin-arm64, llvm: 'true' }
+          - { os: windows-2022, platform: win32-x64, llvm: 'true' }
+          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', host-platform: 'openkal-platform@0.17.3' }
     defaults:
       run:
         shell: bash
@@ -55,75 +53,32 @@ jobs:
         run: mcpp test
       - name: Every string has its translation
         run: mcpp run mcpp-ide-dev -- check-i18n
-      - name: The backend's packages
-        if: matrix.pack != ''
+      - name: The backend as the editor packages carry it
+        if: matrix.pack
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
-          case "$(uname -m)" in x86_64|amd64|AMD64) arch=x86_64 ;; *) arch=aarch64 ;; esac
-          case "$RUNNER_OS" in Linux) system=linux ;; *) system=macos ;; esac
           package="mcpp-ide-$version-openkal"
-          mkdir -p out unpacked
-          # An archive keeps the mode bits an artifact does not, and names its one directory.
-          mcpp pack mcpp-ide --target "$arch-openkal" --mode self-contained --systems "${{ matrix.systems }}" \
+          mcpp pack mcpp-ide --target x86_64-openkal --mode self-contained --systems linux,macos,windows \
             --pkg-format tar -o "$package.tar.gz"
-          cp "target/dist/$package.tar.gz" out/
-          tar -xzf "out/$package.tar.gz" -C unpacked
-          ls -R "unpacked/$package/libexec"
-          "unpacked/$package/bin/mcpp-ide" --version
-          case " ${{ matrix.pack }} " in *" okb "*)
-            mcpp pack mcpp-ide --target "$arch-openkal" --pkg-format okb
-            cp "target/dist/mcpp-ide-$version.okb" out/mcpp-ide.okb
-            "unpacked/$package/libexec/okrun/$system-$arch/okrun" out/mcpp-ide.okb --version
-            ;;
-          esac
-          ls -l out
-      - uses: actions/upload-artifact@v5
-        if: matrix.pack != ''
-        with:
-          name: backend-${{ matrix.platform }}
-          path: out
-
-  # The packages of every system made one (`mcpp pack --merge`): the universal self-contained package
-  # (both images, okrun for every system a leg packed), and what the editor packages carry of it --
-  # the bundle and the okrun of each system and architecture.
-  backend-package:
-    name: backend package
-    needs: backend
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-mcpp
-      - uses: actions/download-artifact@v5
-        with:
-          pattern: backend-*
-          path: backends
-      - name: One package for every system
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
-          package="mcpp-ide-$version-openkal"
-          mkdir -p merged backend
-          merge=()
-          for p in backends/*/"$package.tar.gz"; do merge+=(--merge "$p"); done
-          mcpp pack "${merge[@]}" -o "$PWD/backend/$package.tar.gz"
-          tar -xzf "backend/$package.tar.gz" -C merged
-          cp backends/backend-linux-x64/mcpp-ide.okb backend/mcpp-ide.okb
-          cp -R "merged/$package/libexec/okrun" backend/okrun
-          python3 - "merged/$package/mcpp-package.json" <<'PY'
+          mcpp pack mcpp-ide --target x86_64-openkal --pkg-format okb
+          mkdir -p backend unpacked
+          cp "target/dist/$package.tar.gz" backend/
+          cp "target/dist/mcpp-ide-$version.okb" backend/mcpp-ide.okb
+          tar -xzf "backend/$package.tar.gz" -C unpacked
+          cp -R "unpacked/$package/libexec/okrun" backend/okrun
+          python3 - "unpacked/$package/mcpp-package.json" <<'PY'
           import json, sys
           d = json.load(open(sys.argv[1]))
           print("legs", d["legs"], "systems", d["systems"])
           want = {"linux-x86_64", "linux-aarch64", "macos-aarch64", "windows-x86_64"}
           assert want <= set(d["systems"]), d["systems"]
           PY
+          "unpacked/$package/bin/mcpp-ide" --version
           backend/okrun/linux-x86_64/okrun backend/mcpp-ide.okb --version
           ls -lR backend
       - uses: actions/upload-artifact@v5
+        if: matrix.pack
         with:
           name: backend
           path: backend
@@ -133,7 +88,7 @@ jobs:
   # mock mcpp, with that backend and with the bundle it carries; then the package, and its file list.
   vscode:
     name: VS Code extension
-    needs: backend-package
+    needs: backend
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -190,7 +145,7 @@ jobs:
   # (2025.2) and the one it is built on.
   jetbrains:
     name: CLion plugin
-    needs: backend-package
+    needs: backend
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     defaults:
