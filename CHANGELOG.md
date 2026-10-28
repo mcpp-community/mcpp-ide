@@ -26,3 +26,5 @@ The first release of mcpp-ide: one backend for mcpp's editor integrations, the V
   images on openkal-platform 0.17.3) with okrun for Linux x86_64/aarch64, macOS arm64 and Windows
   x64; CI starts it from both packages on each of those systems.
 - `mcpp pack`'s package format is passed as `--pkg-format` where mcpp offers it (`--format` before).
+- The operating system through mcpplibs.os 0.2.1 (an index version), whose ok-image targets take
+  their C library, C++ run-time and loader from openkal-platform.

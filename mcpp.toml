@@ -62,11 +62,10 @@ main = "src/bin/mockmcpp.cpp"
 kind = "bin"
 main = "src/bin/dev.cpp"
 
-[dependencies]
-# os 0.2.1 (mcpplibs/os#7): an ok image's C library, C++ run-time and loader are its platform's,
-# so the package declares no openkal-tools of its own beside the platform's. By its branch until
-# it is published.
-os = { git = "https://github.com/mcpplibs/os.git", branch = "os-0.2.1" }
+[dependencies.mcpplibs]
+# os 0.2.1: an ok image's C library, C++ run-time and loader are its platform's, so the package
+# declares no openkal-tools of its own beside the platform's.
+os = "0.2.1"
 
 [dependencies.nlohmann]
 json = "3.12.0"
