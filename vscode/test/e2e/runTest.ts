@@ -21,7 +21,8 @@ async function main(): Promise<void> {
   fs.writeFileSync(path.join(workspace, "tests", "test_smoke.cpp"), "int main() { return 0; }\n");
   const user = path.join(temp, "user-data", "User");
   fs.mkdirSync(user, { recursive: true });
-  // MCPP_E2E_BUNDLED: the backend the staged extension carries (bin/<platform>/), as a user gets it.
+  // MCPP_E2E_BUNDLED: the backend the staged extension carries (backend/mcpp-ide.okb, run by the
+  // okrun it carries for this system), as a user gets it.
   fs.writeFileSync(path.join(user, "settings.json"), JSON.stringify({
     ...(process.env.MCPP_E2E_BUNDLED ? {} : { "mcpp.ide.backendPath": backend }),
     "mcpp.path": mock,

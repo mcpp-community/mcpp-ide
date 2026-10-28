@@ -4,9 +4,7 @@
 //   2. the bundle the extension carries, `backend/mcpp-ide.okb`, run by the okrun it carries for
 //      this system (`backend/okrun/<os>-<arch>/okrun[.exe]`), else by okrun on PATH -- one package
 //      for every system and architecture;
-//   3. a program the extension carries for this system (`bin/<platform>/mcpp-ide[.exe]`), the form
-//      packages take until the bundle is built;
-//   4. the mcpp-ide xlings installed (its command runs okrun on its bundle), then PATH.
+//   3. the mcpp-ide xlings installed (its command runs okrun on its bundle), then PATH.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -15,12 +13,7 @@ export interface Located {
   program: string;
   /** Arguments before the backend's own (`serve`): the bundle, when okrun runs one. */
   args: string[];
-  source: "setting" | "bundle" | "bundled" | "xlings" | "PATH";
-}
-
-/** "linux-x64", "darwin-arm64", "win32-x64": the directory under bin/ for this system. */
-export function platformDir(platform: NodeJS.Platform = process.platform, arch: string = process.arch): string {
-  return `${platform}-${arch}`;
+  source: "setting" | "bundle" | "xlings" | "PATH";
 }
 
 /** mcpp's names for a system and an architecture: "linux-x86_64", "macos-aarch64", "windows-x86_64". */
@@ -86,8 +79,6 @@ export function locateBackend(options: {
     const runner = okrun();
     if (runner) return { program: runner, args: [bundle], source: "bundle" };
   }
-  const bundled = path.join(options.extensionRoot, "bin", platformDir(platform, arch), executable("mcpp-ide", platform));
-  if (isFile(bundled)) return { program: runnable(bundled, platform), args: [], source: "bundled" };
   const exe = executable("mcpp-ide", platform);
   const home = options.home ?? os.homedir();
   for (const candidate of [

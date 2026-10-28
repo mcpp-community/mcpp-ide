@@ -17,26 +17,24 @@ env:
 jobs:
   # The backend on each system the editors run on: build every program (the backend, the mock mcpp,
   # the dev tool), run the tests -- the protocol against its schema and the fixtures against mcpp's
-  # contract among them -- check the translations, then build the release program the editor
-  # packages carry, laid out bin/<platform>/.
-  #
-  # When mcpp's platforms ship (mcpp design 2026-10-28), the release program becomes one ok image per
-  # architecture (`--target <arch>-openkal`) made into a program of each system by
-  # `mcpp pack --mode self-contained`; only the last two steps change, not the layout they upload.
+  # contract among them -- and check the translations. A `pack` leg then packs the backend as the
+  # editor packages carry it (mcpp design 2026-10-28 part 2 §15): its universal self-contained
+  # package (`<arch>-openkal`: the x86_64 and aarch64 images, okrun for this system's architectures),
+  # and on linux-x64 the ok-image bundle. The `host-platform` row builds and tests with the build
+  # programs (build.mcpp, the spec/ generators) as ok images run by okrun.
   backend:
-    name: backend (${{ matrix.platform }})
+    name: backend (${{ matrix.platform }}${{ matrix.host-platform && format(', host platform {0}', matrix.host-platform) || '' }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        # `releases`: the release programs a leg builds, as `<platform>=<target>` (empty target: this
-        # system). The arm64 Linux program is cross-built on x86_64, where musl-gcc's cross payload is.
         include:
-          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', releases: 'linux-x64=x86_64-linux-musl linux-arm64=aarch64-linux-musl' }
-          - { os: ubuntu-24.04-arm, platform: linux-arm64, llvm: 'false', releases: '' }
-          - { os: macos-14, platform: darwin-arm64, llvm: 'true', releases: 'darwin-arm64=' }
-          - { os: windows-2022, platform: win32-x64, llvm: 'true', releases: 'win32-x64=' }
+          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: 'package okb' }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64, llvm: 'false', pack: '' }
+          - { os: macos-14, platform: darwin-arm64, llvm: 'true', pack: 'package' }
+          - { os: windows-2022, platform: win32-x64, llvm: 'true', pack: 'package' }
+          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: '', host-platform: 'openkal-platform@0.17.2' }
     defaults:
       run:
         shell: bash
@@ -45,43 +43,97 @@ jobs:
       - uses: ./.github/actions/setup-mcpp
         with:
           llvm: ${{ matrix.llvm }}
+      - name: The host graph's platform
+        if: matrix.host-platform
+        run: echo "MCPP_HOST_PLATFORM=${{ matrix.host-platform }}" >> "$GITHUB_ENV"
       - name: Build
         run: mcpp build
       - name: Test
         run: mcpp test
       - name: Every string has its translation
         run: mcpp run mcpp-ide-dev -- check-i18n
-      - name: Release programs
-        if: matrix.releases != ''
+      - name: The backend's packages
+        if: matrix.pack != ''
         run: |
           set -euo pipefail
-          for entry in ${{ matrix.releases }}; do
-            platform="${entry%%=*}" target="${entry#*=}"
-            case "$platform" in win32-*) exe=mcpp-ide.exe ;; *) exe=mcpp-ide ;; esac
-            if [ -n "$target" ]; then
-              mcpp build --release --target "$target"
-              built="$(ls -t target/"$target"/*/bin/$exe | head -1)"
-            else
-              mcpp build --release
-              built="$(ls -t target/*/*/bin/$exe | head -1)"
-            fi
-            mkdir -p "out/$platform"
-            cp "$built" "out/$platform/"
-            file "out/$platform/$exe" 2>/dev/null || true
-          done
-          case "${{ matrix.platform }}" in win32-*) out/win32-x64/mcpp-ide.exe --version ;; *) "out/${{ matrix.platform }}/mcpp-ide" --version ;; esac
+          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
+          case "$(uname -m)" in x86_64|amd64|AMD64) arch=x86_64 ;; *) arch=aarch64 ;; esac
+          case "$RUNNER_OS" in Linux) system=linux ;; macOS) system=macos ;; *) system=windows ;; esac
+          package="mcpp-ide-$version-openkal"
+          mkdir -p out
+          mcpp pack mcpp-ide --target "$arch-openkal" --mode self-contained --pkg-format dir
+          cp -R "target/dist/$package" out/
+          ls -R "out/$package/libexec"
+          if [ "$system" = windows ]; then
+            (cd "out/$package/bin" && cmd //c "mcpp-ide.cmd --version")
+          else
+            "out/$package/bin/mcpp-ide" --version
+          fi
+          case " ${{ matrix.pack }} " in *" okb "*)
+            mcpp pack mcpp-ide --target "$arch-openkal" --pkg-format okb
+            cp "target/dist/mcpp-ide-$version.okb" out/mcpp-ide.okb
+            "out/$package/libexec/okrun/$system-$arch/okrun" out/mcpp-ide.okb --version
+            ls -l out/mcpp-ide.okb
+            ;;
+          esac
       - uses: actions/upload-artifact@v5
-        if: matrix.releases != ''
+        if: matrix.pack != ''
         with:
           name: backend-${{ matrix.platform }}
           path: out
 
+  # The packages of every system made one (`mcpp pack --merge`): the universal self-contained package
+  # (both images, okrun for every system a leg packed), and what the editor packages carry of it --
+  # the bundle and the okrun of each system and architecture.
+  backend-package:
+    name: backend package
+    needs: backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: backend-*
+          path: backends
+      - name: One package for every system
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
+          package="mcpp-ide-$version-openkal"
+          # An artifact does not keep the mode bits.
+          chmod +x backends/*/"$package"/bin/mcpp-ide backends/*/"$package"/libexec/okrun/*/okrun*
+          mkdir -p merged backend
+          merge=()
+          for p in backends/*/"$package"; do merge+=(--merge "$p"); done
+          mcpp pack "${merge[@]}" --pkg-format dir -o "$PWD/merged/$package"
+          mcpp pack "${merge[@]}" -o "$PWD/backend/$package.tar.gz"
+          cp backends/backend-linux-x64/mcpp-ide.okb backend/mcpp-ide.okb
+          cp -R "merged/$package/libexec/okrun" backend/okrun
+          python3 - "merged/$package/mcpp-package.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          print("legs", d["legs"], "systems", d["systems"])
+          want = {"linux-x86_64", "linux-aarch64", "macos-aarch64", "windows-x86_64"}
+          assert want <= set(d["systems"]), d["systems"]
+          PY
+          backend/okrun/linux-x86_64/okrun backend/mcpp-ide.okb --version
+          ls -lR backend
+      - uses: actions/upload-artifact@v5
+        with:
+          name: backend
+          path: backend
+
   # The VS Code extension: unit tests (the wire, the mappings) and the shared panels in a DOM, both
   # against the backend built here; the extension in a real VS Code (the oldest it supports) over the
-  # mock mcpp; then the package carrying every system's backend, and its file list.
+  # mock mcpp, with that backend and with the bundle it carries; then the package, and its file list.
   vscode:
     name: VS Code extension
-    needs: backend
+    needs: backend-package
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -97,13 +149,16 @@ jobs:
           cache-dependency-path: vscode/package-lock.json
       - uses: actions/download-artifact@v5
         with:
-          pattern: backend-*
-          path: backends
-          merge-multiple: true
+          name: backend
+          path: backend
       - name: Build the backend and its test programs
         run: |
-          chmod +x backends/*/mcpp-ide*
+          chmod +x backend/okrun/*/okrun*
           mcpp build
+          {
+            echo "MCPP_IDE_OKB=$GITHUB_WORKSPACE/backend/mcpp-ide.okb"
+            echo "MCPP_IDE_OKRUN=$GITHUB_WORKSPACE/backend/okrun"
+          } >> "$GITHUB_ENV"
       - name: Install
         working-directory: vscode
         run: npm ci
@@ -115,25 +170,27 @@ jobs:
         run: npm run check:webui
       - name: The extension in VS Code ${{ env.VSCODE_VERSION }}
         working-directory: vscode
-        run: MCPP_IDE_BACKENDS="$GITHUB_WORKSPACE/backends" xvfb-run -a npm run test:e2e
+        run: xvfb-run -a npm run test:e2e
       - name: Package
         working-directory: vscode
         run: |
-          MCPP_IDE_BACKENDS="$GITHUB_WORKSPACE/backends" npm run package
+          npm run package
           (cd dist/extension && npx vsce ls --no-dependencies) | tee files.txt
-          for p in linux-x64 linux-arm64 darwin-arm64; do grep -qx "bin/$p/mcpp-ide" files.txt; done
-          grep -qx "bin/win32-x64/mcpp-ide.exe" files.txt
+          grep -qx "backend/mcpp-ide.okb" files.txt
+          for p in linux-x86_64/okrun linux-aarch64/okrun macos-aarch64/okrun windows-x86_64/okrun.exe; do grep -qx "backend/okrun/$p" files.txt; done
+          [ "$(grep -c '\.okb$' files.txt)" = 1 ]
+          ls -l dist/*.vsix
       - uses: actions/upload-artifact@v5
         with:
           name: mcpp-vscode-vsix
           path: vscode/dist/*.vsix
 
-  # The CLion plugin: its tests (the wire and a session over the mock mcpp), the archive carrying
-  # every system's backend, and the Plugin Verifier against the oldest CLion it claims (2025.2) and
-  # the one it is built on.
+  # The CLion plugin: its tests (the wire and a session over the mock mcpp), the archive carrying the
+  # bundle and every system's okrun, and the Plugin Verifier against the oldest CLion it claims
+  # (2025.2) and the one it is built on.
   jetbrains:
     name: CLion plugin
-    needs: backend
+    needs: backend-package
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     defaults:
@@ -150,12 +207,11 @@ jobs:
           key: gradle-clion-${{ hashFiles('jetbrains/gradle.properties', 'jetbrains/build.gradle.kts', 'jetbrains/settings.gradle.kts') }}
       - uses: actions/download-artifact@v5
         with:
-          pattern: backend-*
-          path: backends
-          merge-multiple: true
+          name: backend
+          path: backend
       - name: Build the backend and its test programs
         run: |
-          chmod +x backends/*/mcpp-ide*
+          chmod +x backend/okrun/*/okrun*
           mcpp build
           # Every Gradle run of this job packages the same plugin: the variables hold for all of them.
           bin="$(cd "$(dirname "$(ls -t target/*/*/bin/mcpp-ide | head -1)")" && pwd)"
@@ -163,7 +219,8 @@ jobs:
             echo "MCPP_IDE_DEV=$bin/mcpp-ide-dev"
             echo "MCPP_IDE_BACKEND=$bin/mcpp-ide"
             echo "MCPP_IDE_MOCK_MCPP=$bin/mcpp-ide-mock-mcpp"
-            echo "MCPP_IDE_BACKENDS=$GITHUB_WORKSPACE/backends"
+            echo "MCPP_IDE_OKB=$GITHUB_WORKSPACE/backend/mcpp-ide.okb"
+            echo "MCPP_IDE_OKRUN=$GITHUB_WORKSPACE/backend/okrun"
           } >> "$GITHUB_ENV"
       - name: Test and package
         working-directory: jetbrains
@@ -171,18 +228,22 @@ jobs:
       - name: Plugin Verifier
         working-directory: jetbrains
         run: gradle --no-daemon verifyPlugin
-      - name: The archive carries every system's backend
+      - name: The archive carries the bundle and every system's okrun
         working-directory: jetbrains
         run: |
           unzip -l build/distributions/mcpp-clion-*.zip | tee files.txt
-          for p in linux-x64/mcpp-ide linux-arm64/mcpp-ide darwin-arm64/mcpp-ide win32-x64/mcpp-ide.exe; do grep -q "mcpp-clion/bin/$p" files.txt; done
+          grep -q "mcpp-clion/backend/mcpp-ide.okb" files.txt
+          for p in linux-x86_64/okrun linux-aarch64/okrun macos-aarch64/okrun windows-x86_64/okrun.exe; do grep -q "mcpp-clion/backend/okrun/$p" files.txt; done
+          [ "$(grep -c '\.okb$' files.txt)" = 1 ]
+          ls -l build/distributions/*.zip
       - uses: actions/upload-artifact@v5
         with:
           name: mcpp-clion-zip
           path: jetbrains/build/distributions/*.zip
 
-  # Both packages, opened on every system they serve: what each carries of the backend for that
-  # system starts (scripts/check-package.sh -- the ok-image bundle and its okrun once they are built).
+  # The packages, opened on every system they serve: the one bundle each editor package carries,
+  # started by the okrun it carries for that system (scripts/check-package.sh), and the backend's own
+  # universal package started by its launcher.
   packages:
     name: packages on ${{ matrix.os }}
     needs: [vscode, jetbrains]
@@ -202,7 +263,23 @@ jobs:
           pattern: mcpp-*
           path: packages
           merge-multiple: true
+      - uses: actions/download-artifact@v5
+        with:
+          name: backend
+          path: backend
       - name: The VS Code extension
         run: .github/scripts/check-package.sh packages/mcpp-vscode-*.vsix extension
       - name: The CLion plugin
         run: .github/scripts/check-package.sh packages/mcpp-clion-*.zip mcpp-clion
+      - name: The backend's universal package
+        run: |
+          set -euo pipefail
+          dir="$(mktemp -d)"
+          tar -xzf backend/mcpp-ide-*-openkal.tar.gz -C "$dir"
+          root="$(echo "$dir"/mcpp-ide-*-openkal)"
+          if [ "$RUNNER_OS" = Windows ]; then
+            (cd "$root/bin" && cmd //c "mcpp-ide.cmd --version") | tee said.txt
+          else
+            "$root/bin/mcpp-ide" --version | tee said.txt
+          fi
+          grep -q '^mcpp-ide ' said.txt

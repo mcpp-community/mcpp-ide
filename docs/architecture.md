@@ -33,16 +33,20 @@ build through mcpp's result record, and an older or missing mcppls is reported w
 
 ## Distribution
 
-The backend is one program for every editor; each editor package carries it for every system:
+The backend is one program for every editor, and one file for every system: an ok image per
+architecture (`mcpp build --target <arch>-openkal`, openkal-platform's toolchain and C library),
+packed as one ok-image bundle (`mcpp pack mcpp-ide --target x86_64-openkal --pkg-format okb`). Each
+editor package carries that bundle and the runner that starts it on each system:
 
-| Form | Layout in the package | Started as |
+| Layout in the package | Holds | Started as |
 |---|---|---|
-| ok-image bundle (mcpp design 2026-10-28 part 2 §15) | `backend/mcpp-ide.okb`, `backend/okrun/<os>-<arch>/okrun[.exe]` | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
-| a program per system, until the bundle is built | `bin/<platform>/mcpp-ide[.exe]` | `mcpp-ide serve` |
+| `backend/mcpp-ide.okb` | the x86_64 and aarch64 images | |
+| `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from `mcpp pack --mode self-contained` on each system | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
 
-Before either, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after them, an
-installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. CI opens both
-packages on every system and starts what they carry for it (`.github/scripts/check-package.sh`).
+Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after it, an
+installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. CI builds the
+bundle once, takes okrun from each system's self-contained package, opens both editor packages on
+every system and starts what they carry for it (`.github/scripts/check-package.sh`).
 
 ## Generated declarations
 

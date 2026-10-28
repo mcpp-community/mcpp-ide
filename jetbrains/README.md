@@ -25,10 +25,9 @@ gradle verifyPlugin              # CLion 2025.2 and the version in gradle.proper
 ```
 
 What the archive carries of the backend: `MCPP_IDE_OKB` (the ok-image bundle, as
-`backend/mcpp-ide.okb`) with `MCPP_IDE_OKRUN` (okrun laid out `<os>-<arch>/okrun[.exe]`), or, until
-the bundle is built, `MCPP_IDE_BACKENDS` (a program per system laid out `<platform>/mcpp-ide[.exe]`:
-`linux-x64`, `linux-arm64`, `darwin-arm64`, `win32-x64`). Without them the plugin finds the backend
-through `mcpp.ide.backendPath`, xlings or PATH.
+`backend/mcpp-ide.okb`) with `MCPP_IDE_OKRUN` (okrun laid out `<os>-<arch>/okrun[.exe]`); see
+docs/architecture.md, Distribution. Without them the plugin finds the backend through
+`mcpp.ide.backendPath`, xlings or PATH.
 
 ## Tests
 

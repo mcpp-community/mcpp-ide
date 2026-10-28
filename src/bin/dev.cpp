@@ -271,9 +271,6 @@ void copy_tree(const fs::path& from, const fs::path& to, std::span<const std::st
 //   --okb FILE (MCPP_IDE_OKB)      the ok-image bundle, as backend/mcpp-ide.okb: one for every system
 //   --okrun DIR (MCPP_IDE_OKRUN)   okrun for each system and architecture, laid out
 //                                  <os>-<arch>/okrun[.exe], as backend/okrun/
-//   --backends DIR (MCPP_IDE_BACKENDS)
-//                                  programs laid out <platform>/mcpp-ide[.exe], as bin/: the form
-//                                  packages take until the bundle is built
 void stage_backend(std::span<const std::string> args, const fs::path& out) {
     auto from = [&](std::string_view flag, const char* variable) {
         auto v = option(args, flag);
@@ -285,7 +282,6 @@ void stage_backend(std::span<const std::string> args, const fs::path& out) {
         fs::copy_file(*okb, out / "backend" / "mcpp-ide.okb", fs::copy_options::overwrite_existing);
     }
     if (auto okrun = from("--okrun", "MCPP_IDE_OKRUN")) copy_tree(*okrun, out / "backend" / "okrun");
-    if (auto backends = from("--backends", "MCPP_IDE_BACKENDS")) copy_tree(*backends, out / "bin");
 }
 
 int gen_vscode(std::span<const std::string> args) {

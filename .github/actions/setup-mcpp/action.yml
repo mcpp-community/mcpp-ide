@@ -1,5 +1,5 @@
 name: Set up mcpp
-description: Install xlings, the pinned mcpp and (for macOS and Windows targets) the pinned LLVM, with the package store cached.
+description: Install xlings, the pinned mcpp (built from MCPP_SOURCE_REF when it is set) and (for macOS and Windows targets) the pinned LLVM, with the package store cached.
 inputs:
   llvm:
     description: Install LLVM and make it mcpp's default toolchain.
@@ -58,3 +58,54 @@ runs:
           sleep 30
         done
         mcpp toolchain default "llvm@$LLVM_VERSION"
+    # MCPP_SOURCE_REF: mcpp built from that ref by the release installed above, before the ref is
+    # released; the program is kept per commit and system, and put first on PATH.
+    - name: Resolve MCPP_SOURCE_REF
+      id: source
+      if: env.MCPP_SOURCE_REF != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        sha="$(git ls-remote https://github.com/mcpp-community/mcpp.git "refs/heads/$MCPP_SOURCE_REF" "refs/tags/$MCPP_SOURCE_REF" | head -1 | cut -f1)"
+        [ -n "$sha" ] || { echo "::error::mcpp-community/mcpp has no branch or tag $MCPP_SOURCE_REF"; exit 1; }
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+    - name: Restore mcpp built from ${{ env.MCPP_SOURCE_REF }}
+      id: kept
+      if: env.MCPP_SOURCE_REF != ''
+      uses: actions/cache/restore@v5
+      with:
+        path: ~/.mcpp-source/bin
+        key: mcpp-source-${{ runner.os }}-${{ runner.arch }}-${{ steps.source.outputs.sha }}
+    - name: mcpp from ${{ env.MCPP_SOURCE_REF }}
+      id: built
+      if: env.MCPP_SOURCE_REF != ''
+      shell: bash
+      env:
+        SHA: ${{ steps.source.outputs.sha }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS" in Windows) exe=mcpp.exe ;; *) exe=mcpp ;; esac
+        bin="$HOME/.mcpp-source/bin"
+        # A kept program that does not start (its toolchain's run-time is not in this store) is built again.
+        if ! "$bin/$exe" --version > /dev/null 2>&1; then
+          src="$RUNNER_TEMP/mcpp-source"
+          rm -rf "$src"
+          git init -q "$src"
+          git -C "$src" fetch -q --depth 1 https://github.com/mcpp-community/mcpp.git "$SHA"
+          git -C "$src" checkout -q FETCH_HEAD
+          (cd "$src" && mcpp build)
+          built="$(find "$src/target" -type f -name "$exe" -path '*/bin/*' ! -path '*/dist/*' | head -1)"
+          [ -n "$built" ] || { echo "::error::building mcpp at $MCPP_SOURCE_REF left no $exe"; exit 1; }
+          mkdir -p "$bin"
+          cp "$built" "$bin/$exe"
+          echo "fresh=true" >> "$GITHUB_OUTPUT"
+        fi
+        "$bin/$exe" --version
+        case "$RUNNER_OS" in Windows) cygpath -w "$bin" ;; *) echo "$bin" ;; esac >> "$GITHUB_PATH"
+    # Kept as soon as it is built, so a job that fails later does not build it again.
+    - name: Keep mcpp built from ${{ env.MCPP_SOURCE_REF }}
+      if: env.MCPP_SOURCE_REF != '' && steps.built.outputs.fresh == 'true' && steps.kept.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ~/.mcpp-source/bin
+        key: ${{ steps.kept.outputs.cache-primary-key }}

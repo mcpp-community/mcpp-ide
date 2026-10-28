@@ -1,8 +1,9 @@
 name: Release
 
-# A release: CI on the commit (which builds every system's backend and both editor packages carrying
-# them), then a GitHub release with the packages, the backends and their checksums. The two
-# Marketplaces are uploaded to by the maintainer, from those assets.
+# A release: CI on the commit (which builds the backend's ok-image bundle, its universal package with
+# every system's okrun, and both editor packages carrying the bundle), then a GitHub release with the
+# editor packages, the bundle, the universal package and their checksums. The two Marketplaces are
+# uploaded to by the maintainer, from those assets.
 
 on:
   workflow_dispatch:
@@ -34,10 +35,7 @@ jobs:
           version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
           mkdir -p dist
           cp artifacts/mcpp-vscode-vsix/*.vsix artifacts/mcpp-clion-zip/*.zip dist/
-          for d in artifacts/backend-*; do
-            platform="${d#artifacts/backend-}"
-            chmod +x "$d/$platform"/* || true
-            tar -czf "dist/mcpp-ide-${version}-${platform}.tar.gz" -C "$d/$platform" .
-          done
+          cp artifacts/backend/mcpp-ide.okb "dist/mcpp-ide-${version}.okb"
+          cp "artifacts/backend/mcpp-ide-${version}-openkal.tar.gz" dist/
           (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
           gh release create "v${version}" dist/* --target "$GITHUB_SHA" --title "mcpp-ide ${version}" --notes-file CHANGELOG.md

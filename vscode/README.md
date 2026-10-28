@@ -38,8 +38,9 @@ every build, whoever runs it; the project view says when the installed mcppls is
 
 - mcpp 2026.10.26.1 or later (`xlings install mcpp`).
 - The mcpp-ide backend: shipped inside the extension for every system (one ok-image bundle run by
-  okrun, or a program per system); otherwise `xlings install mcpp-ide`, or set
-  `mcpp.ide.backendPath` (a program or an `.okb`).
+  the okrun the extension carries for Linux x64/arm64, macOS arm64 and Windows x64, or by okrun on
+  PATH elsewhere); otherwise `xlings install mcpp-ide`, or set `mcpp.ide.backendPath` (a program or
+  an `.okb`).
 
 ## Upgrading from 0.9
 

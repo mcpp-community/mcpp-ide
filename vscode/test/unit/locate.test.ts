@@ -5,27 +5,23 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { locateBackend, okrunDir, onPath, platformDir } from "../../src/backend/locate";
+import { locateBackend, okrunDir, onPath } from "../../src/backend/locate";
 import { mcpplsCandidates } from "../../src/backend/mcppls";
 
-test("the configured path wins, then the bundled program", () => {
+test("the configured path wins: a program, or a bundle run by okrun", () => {
   const ext = fs.mkdtempSync(path.join(os.tmpdir(), "mcppide-ext-"));
   assert.deepEqual(locateBackend({ configured: "/x/mcpp-ide", extensionRoot: ext }), { program: "/x/mcpp-ide", args: [], source: "setting" });
-  const dir = path.join(ext, "bin", platformDir("linux", "x64"));
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "mcpp-ide"), "");
-  const found = locateBackend({ extensionRoot: ext, platform: "linux", arch: "x64", env: { PATH: "" }, home: "/nonexistent" });
-  assert.equal(found?.source, "bundled");
-  assert.equal(platformDir("win32", "x64"), "win32-x64");
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "mcppide-okrun-"));
+  fs.writeFileSync(path.join(bin, "okrun"), "");
+  assert.deepEqual(locateBackend({ configured: "/x/mcpp-ide.okb", extensionRoot: ext, platform: "linux", arch: "x64", env: { PATH: bin } }),
+                   { program: path.join(bin, "okrun"), args: ["/x/mcpp-ide.okb"], source: "setting" });
 });
 
-test("the bundle runs under the okrun carried for this system, else okrun on PATH, before a native program", () => {
+test("the bundle runs under the okrun carried for this system, else okrun on PATH", () => {
   const ext = fs.mkdtempSync(path.join(os.tmpdir(), "mcppide-okb-"));
   fs.mkdirSync(path.join(ext, "backend", "okrun", "linux-x86_64"), { recursive: true });
   fs.writeFileSync(path.join(ext, "backend", "mcpp-ide.okb"), "");
   fs.writeFileSync(path.join(ext, "backend", "okrun", "linux-x86_64", "okrun"), "");
-  fs.mkdirSync(path.join(ext, "bin", "linux-x64"), { recursive: true });
-  fs.writeFileSync(path.join(ext, "bin", "linux-x64", "mcpp-ide"), "");
   const linux = locateBackend({ extensionRoot: ext, platform: "linux", arch: "x64", env: { PATH: "" }, home: "/nonexistent" });
   assert.deepEqual(linux, { program: path.join(ext, "backend", "okrun", "linux-x86_64", "okrun"), args: [path.join(ext, "backend", "mcpp-ide.okb")], source: "bundle" });
   // No okrun carried for macOS: okrun on PATH runs the bundle.
@@ -34,7 +30,7 @@ test("the bundle runs under the okrun carried for this system, else okrun on PAT
   const mac = locateBackend({ extensionRoot: ext, platform: "darwin", arch: "arm64", env: { PATH: bin }, home: "/nonexistent" });
   assert.deepEqual(mac?.args, [path.join(ext, "backend", "mcpp-ide.okb")]);
   assert.equal(mac?.program, path.join(bin, "okrun"));
-  // No okrun at all: the native program for the system, if the package carries one.
+  // No okrun at all: nothing in the package starts.
   const native = locateBackend({ extensionRoot: ext, platform: "linux", arch: "arm64", env: { PATH: "" }, home: "/nonexistent" });
   assert.equal(native, undefined);
   assert.equal(okrunDir("win32", "x64"), "windows-x86_64");
