@@ -61,7 +61,7 @@ jobs:
           case "$RUNNER_OS" in Linux) system=linux ;; macOS) system=macos ;; *) system=windows ;; esac
           package="mcpp-ide-$version-openkal"
           mkdir -p out
-          mcpp pack mcpp-ide --target "$arch-openkal" --mode self-contained --pkg-format dir
+          mcpp pack mcpp-ide --target "$arch-openkal" --mode self-contained --pkg-format dir -o "$package"
           cp -R "target/dist/$package" out/
           ls -R "out/$package/libexec"
           if [ "$system" = windows ]; then
