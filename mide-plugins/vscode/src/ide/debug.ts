@@ -32,9 +32,10 @@ export class Debugging implements vscode.DebugConfigurationProvider, vscode.Disp
     const available = availableDebuggers((id) => vscode.extensions.getExtension(id) !== undefined);
     if (available.length === 0) {
       const install = t("Install CodeLLDB");
-      const choice = await vscode.window.showErrorMessage(
-        t("No debugger extension is installed: install CodeLLDB, the C/C++ extension or lldb-dap."), install);
-      if (choice === install) await vscode.commands.executeCommand("workbench.extensions.search", "@id:vadimcn.vscode-lldb");
+      // The session is refused now; the message's action is the user's, whenever they take it.
+      void vscode.window.showErrorMessage(
+        t("No debugger extension is installed: install CodeLLDB, the C/C++ extension or lldb-dap."), install)
+        .then((choice) => choice === install ? vscode.commands.executeCommand("workbench.extensions.search", "@id:vadimcn.vscode-lldb") : undefined);
       return undefined;
     }
     try {
