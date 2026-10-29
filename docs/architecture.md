@@ -81,13 +81,13 @@ build through mcpp's result record, and an older or missing mcppls is reported w
 
 The backend is one program for every editor, and one file for every system: an ok image per
 architecture (`mcpp build --target <arch>-openkal`, openkal-platform's toolchain and C library),
-packed as one ok-image bundle (`mcpp pack mcpp-ide --target x86_64-openkal --pkg-format okb`). Each
+packed as one ok-image bundle (`--pkg-format okb`). Each
 editor package carries that bundle and the runner that starts it on each system:
 
 | Layout in the package | Holds | Started as |
 |---|---|---|
 | `backend/mcpp-ide.okb` | the x86_64 and aarch64 images | |
-| `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`mcpp pack --mode self-contained --systems linux,macos,windows`: each okrun built over the platform's hosted arrangement) | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
+| `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`--mode self-contained --systems all`: each okrun built over the platform's hosted arrangement); one command packs both, `mcpp pack mcpp-ide --target openkal --mode self-contained --systems all --pkg-format tar,okb`, and the package's `runs_on.self` names the systems it runs on | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
 
 Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after it, an
 installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. The Neovim

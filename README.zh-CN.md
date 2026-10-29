@@ -52,7 +52,7 @@ C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-lan
 | 兼容 VS Code 的编辑器 | Open VSX，或 `.vsix` | 在扩展视图中安装 `.vsix` |
 | CLion 2026.1+ | JetBrains Marketplace（`mcpp-clion`），或 `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk；先安装 mcppls CLion 插件（本系统的包自带服务端） |
 | Neovim 0.10+ | release 源码树中的 `mide-plugins/nvim` | `xlings install mcpp-ide-nvim` 与 `xlings install mcpp-ide`，再 `require('mcpp').setup()`；或把该目录加入 runtimepath（[其 README](mide-plugins/nvim/README.md)） |
-| Agent、其他客户端 | `mcpp-ide-<version>-openkal.tar.gz`（两个架构的映像；Linux x64/arm64、macOS arm64、Windows x64 的 okrun），携带 okrun 的 `mcpp-ide-<version>.okb`，或 `xlings install mcpp-ide` | 运行 `bin/mcpp-ide serve`（Windows 上为 `bin\mcpp-ide.cmd`），或 `okrun mcpp-ide-<version>.okb serve` |
+| Agent、其他客户端 | `mcpp-ide-<version>-openkal.tar.gz`（两个架构的映像；Linux x64/arm64、macOS arm64、Windows x64 的 okrun），携带 okrun 的 `mcpp-ide-<version>.okb`，或 `xlings install mcpp-ide` | 运行 `bin/mcpp-ide serve`（Windows 上为 `bin\mcpp-ide.exe`），或 `okrun mcpp-ide-<version>.okb serve` |
 
 每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.17.3 上的
 x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 的 okrun 携带。Neovim 插件不携带后端：

@@ -58,7 +58,7 @@ the editor I use (VS Code, CLion or Neovim) from its latest release, and check i
 | VS Code-compatible editors | Open VSX, or the `.vsix` | install the `.vsix` from the extensions view |
 | CLion 2026.1+ | JetBrains Marketplace (`mcpp-clion`), or `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk; the mcppls CLion plugin (its package for this system carries the server) first |
 | Neovim 0.10+ | `mide-plugins/nvim` of the release's source tree | `xlings install mcpp-ide-nvim` (the backend with it, set up at start); or the directory on the runtimepath and `require('mcpp').setup()` ([its README](mide-plugins/nvim/README.md)) |
-| Agents, other clients | `mcpp-ide-<version>-openkal.tar.gz` (both images; okrun for Linux x64/arm64, macOS arm64, Windows x64), `mcpp-ide-<version>.okb` with okrun, or `xlings install mcpp-ide` | run `bin/mcpp-ide serve` (`bin\mcpp-ide.cmd` on Windows), or `okrun mcpp-ide-<version>.okb serve` |
+| Agents, other clients | `mcpp-ide-<version>-openkal.tar.gz` (both images; okrun for Linux x64/arm64, macOS arm64, Windows x64), `mcpp-ide-<version>.okb` with okrun, or `xlings install mcpp-ide` | run `bin/mcpp-ide serve` (`bin\mcpp-ide.exe` on Windows), or `okrun mcpp-ide-<version>.okb serve` |
 
 Each editor package serves every system: it carries the backend as one ok-image bundle
 (`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.17.3) and okrun for
