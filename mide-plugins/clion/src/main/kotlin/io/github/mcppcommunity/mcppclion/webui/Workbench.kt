@@ -276,9 +276,13 @@ class Workbench(private val project: Project, private val mode: String, parent: 
         }
         "pick" -> onEdt { f -> pick(p, f) }
         "saveDialog" -> onEdt { f ->
-            val filters = p["filters"]?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()?.flatMap { e -> e.value.asJsonArray.map { it.asString } }?.toTypedArray() ?: emptyArray()
+            val filters = p["filters"]?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet().orEmpty()
             val start = p["path"]?.asString?.let { File(it) }
-            val dialog = FileChooserFactory.getInstance().createSaveFileDialog(FileSaverDescriptor(p["title"]?.asString ?: "mcpp", "", *filters), project)
+            val descriptor = FileSaverDescriptor(p["title"]?.asString ?: "mcpp", "")
+            // VS Code's filters (label -> extensions) as the chooser's one filter: the first label, every extension.
+            if (filters.isNotEmpty())
+                descriptor.withExtensionFilter(filters.first().key, *filters.flatMap { e -> e.value.asJsonArray.map { it.asString } }.toTypedArray())
+            val dialog = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
             val chosen = dialog.save(start?.parentFile?.toPath(), start?.name)
             f.complete(chosen?.file?.path?.let { JsonPrimitive(it) } ?: JsonNull.INSTANCE)
         }
