@@ -450,6 +450,18 @@ jobs:
           unzip -l plugin.jar | tee jar.txt | grep -q "webui/files.txt"
           for f in $(unzip -p plugin.jar webui/files.txt); do grep -q " webui/$f$" jar.txt; done
           ls -l build/distributions/*.zip
+      # The plugin's icon and its tool window's are the mcpp logo, an embedded image (design 2026-10-29
+      # §10.4), not text; the VS Code extension's logo is mcpp-vscode 0.9.0's, byte for byte.
+      - name: The icons are the mcpp logo
+        run: |
+          [ "$(md5sum < mide-plugins/vscode/media/logo.png | cut -d' ' -f1)" = f94579030616a45ca26694120daba050 ] \
+            || { echo "::error::media/logo.png is not the mcpp logo"; exit 1; }
+          cd mide-plugins/clion
+          for f in META-INF/pluginIcon.svg icons/mcpp.svg; do
+            svg="$(unzip -p plugin.jar "$f")"
+            grep -q 'data:image/png;base64,' <<< "$svg" || { echo "::error::$f embeds no image of the logo"; exit 1; }
+            ! grep -q '<text' <<< "$svg" || { echo "::error::$f is text, not the logo"; exit 1; }
+          done
       - uses: actions/upload-artifact@v5
         with:
           name: mcpp-clion-zip

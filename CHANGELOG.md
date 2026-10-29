@@ -23,6 +23,9 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
   `languageService/exec` (the located mcppls with arguments), `project/files` (manifest, lock and
   the source count 0.9.0 shows); `targets` rows for target sets (`set`, `members`, `label`) when mcpp
   is 2026.10.30.1 or later.
+- **The mcpp logo in CLion.** mcpp-clion's plugin icon and its tool window's icon are the mcpp
+  logo, as mcpp-vscode's and mcppls's are; the text icons (`m++`, `m+`) are removed. CI checks that
+  both embed the logo and that the VS Code logo is 0.9.0's.
 - **mcpp-clion on 2026.1 through 2026.3.** Trust through `TrustedProjects.isProjectTrusted`, debug
   sessions through `XDebuggerManager.newSessionBuilder`, the debugger driver through
   `createDriverConfiguration(project, CPPEnvironment(toolchain))`; packing is a job over the
