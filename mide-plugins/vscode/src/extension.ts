@@ -1,11 +1,12 @@
 import * as vscode from "vscode";
 
-import { McppCliController, discoveryBoundaryFromSettings } from "./cli/controller";
+import { McppCliController } from "./cli/controller";
+import { findCurrentProject } from "./projects/current";
 import { runMcpp, useMcppExecutor, useMcpplsExecutor } from "./cli/process";
 import { parseProtocolInfo } from "./cli/protocol";
 import { buildSelfCheckText } from "./cli/selfCheck";
-import { CLI_COMMANDS, LEGACY_LANGUAGE_SERVER_COMMANDS, LIBRARY_COMMANDS, TOOL_COMMANDS } from "./commands/ids";
-import { findNearestMcppProject, type McppProjectDiscovery } from "./projects/discovery";
+import { CLI_COMMANDS, LEGACY_LANGUAGE_SERVER_COMMANDS, TOOL_COMMANDS } from "./commands/ids";
+import type { McppProjectDiscovery } from "./projects/discovery";
 import { MCPP_MANIFEST_GLOB, registerInProjectContext } from "./projects/context";
 import {
   createLanguageServerBridge,
@@ -41,16 +42,11 @@ import { Session } from "./ide/session";
 import { Testing } from "./ide/testing";
 import { changedSettings, onDidChange as onConfigurationChanged, read } from "./config/access";
 import { applyRenames, pendingRenames, renamePrompt } from "./config/migrate";
-import { registerSettingsPanel } from "./config/panel";
 import { languagePreference, setLanguagePreference, t, type LanguagePreference } from "./i18n/t";
 import { CACHE_VIEW_FOCUS_COMMAND } from "./cache/cachePanel";
-import { readCacheSnapshot, registerCacheView } from "./cache/cacheView";
+import { readCacheSnapshot } from "./cache/cacheView";
+import { registerPages } from "./pages";
 import { registerLanguageServerCommands } from "./views/languageServerView";
-import { createLibraryDetailOpener } from "./library/detailPanel";
-import { loadSnapshot, invalidateIndexCache } from "./library/indexLocator";
-import { watchProjectFiles } from "./library/projectWatcher";
-import { registerLibraryView } from "./library/libraryView";
-import { registerProjectView } from "./views/projectView";
 
 /**
  * The commands an extension declares in its own `package.json`, read without
@@ -77,37 +73,6 @@ function applyLanguagePreference(): void {
   setLanguagePreference(read<LanguagePreference>("mcpp.ui.language"));
 }
 
-
-function findCurrentProject(): McppProjectDiscovery | undefined {
-  const activeEditor = vscode.window.activeTextEditor;
-  if (activeEditor !== undefined) {
-    const activeUri = activeEditor.document.uri;
-    if (activeUri.scheme !== "file") {
-      return undefined;
-    }
-    const workspaceFolder = vscode.workspace.getWorkspaceFolder(activeUri);
-    if (workspaceFolder === undefined) {
-      return undefined;
-    }
-    return findNearestMcppProject(
-      activeUri.fsPath,
-      workspaceFolder.uri.fsPath,
-      discoveryBoundaryFromSettings(workspaceFolder.uri),
-    );
-  }
-
-  for (const workspaceFolder of vscode.workspace.workspaceFolders ?? []) {
-    const project = findNearestMcppProject(
-      workspaceFolder.uri.fsPath,
-      workspaceFolder.uri.fsPath,
-      discoveryBoundaryFromSettings(workspaceFolder.uri),
-    );
-    if (project !== undefined) {
-      return project;
-    }
-  }
-  return undefined;
-}
 
 function outputText(output: vscode.OutputChannel, line: string): void {
   try {
@@ -392,156 +357,15 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   void session.start();
 
   // ── views ────────────────────────────────────────────────────────────────
-  // Each view owns its own tree provider and its own commands; the project view
-  // reads the manifest, the cache view runs mcpp's read-only queries, and the
-  // C++ Modules view only forwards to mcppls.
-  const applyViewVisibility = (): void => {
-    // Literal keys, so the wiring gate can see them.
-    // `mcpp.views.enabled` is the master switch: with it off every view is hidden.
-    // Whether VS Code also drops the container's icon from the activity bar is
-    // up to VS Code itself — an extension cannot mark its own container
-    // hidden-when-empty (the setting's description says the same). The `when`
-    // clauses in package.json are negated (`!mcpp.sidebarHidden`) so the default
-    // state is visible — otherwise activation would never run to set the key back.
-    void vscode.commands.executeCommand("setContext", "mcpp.sidebarHidden", !read<boolean>("mcpp.views.enabled"));
-    void vscode.commands.executeCommand("setContext", "mcpp.views.project", read<boolean>("mcpp.views.project.show"));
-    void vscode.commands.executeCommand("setContext", "mcpp.views.library", read<boolean>("mcpp.views.library.show"));
-    void vscode.commands.executeCommand("setContext", "mcpp.views.cache", read<boolean>("mcpp.views.cache.show"));
-  };
-  applyViewVisibility();
-  extensionContext.subscriptions.push(onConfigurationChanged(applyViewVisibility));
-
-  // The language service is a block inside the project view, so its state source has
-  // to exist before the view is registered.
+  // The C++ Modules block of the project view reads mcppls through the bridge; the views themselves
+  // (the project tree, the libraries, the cache, the settings) are src/pages.ts's, which the
+  // workbench mcpp-clion runs registers in the same way.
   const languageService = registerLanguageServerCommands(extensionContext, { bridge, output });
-  registerProjectView(extensionContext, { currentProject: findCurrentProject, languageService });
-  // The library ecosystem: a sidebar view plus an editor-area package page. The
-  // detail page writes `mcpp.toml` through `mcpp add`, so it tells the view to
-  // refresh — no save event fires for a file written outside the editor.
-  // Keep the selected library project when an editor-area webview takes focus.
-  let libraryProjectRoot: string | undefined = vscode.window.activeTextEditor?.document.uri.scheme === "file"
-    || vscode.workspace.workspaceFolders?.length === 1 ? findCurrentProject()?.root : undefined;
-  const libraryProject = (): string | undefined => libraryProjectRoot;
-  const chooseLibraryProject = async (): Promise<string | undefined> => {
-    const manifests = await vscode.workspace.findFiles(MCPP_MANIFEST_GLOB, "**/{node_modules,target,.git}/**", 200);
-    const roots = [...new Set(manifests.map((uri) => uri.fsPath.slice(0, -"/mcpp.toml".length)))];
-    const active = libraryProject();
-    if (active && !roots.includes(active)) { roots.unshift(active); }
-    const selected = await vscode.window.showQuickPick(roots.map((root) => ({ label: vscode.workspace.asRelativePath(root), description: root, root })), {
-      title: t("Choose the target mcpp project"), placeHolder: t("Dependencies will be added to this project's mcpp.toml"),
-    });
-    if (selected) { libraryProjectRoot = selected.root; watchSelectedLibraryProject(); refreshLibraries(); }
-    return selected?.root;
-  };
-  const openLibraryDetail = createLibraryDetailOpener(extensionContext, {
-    mcppExecutable: (root) => cliController.mcppExecutable(root ? { root, manifestPath: `${root}/mcpp.toml` } : undefined),
-    projectRoot: libraryProject,
-    chooseProject: chooseLibraryProject,
-    onPackageOpened: (key) => library.select(key),
+  registerPages(extensionContext, {
     output,
-    isTrusted: () => vscode.workspace.isTrusted,
-    onDependenciesChanged: () => { void library.refresh(); },
-    onProjectFilesRead: (root, manifest, lock) => { if (root === libraryProjectRoot) { selectedLibraryPoll?.observe(manifest, lock); } },
-  });
-  const library = registerLibraryView(extensionContext, {
-    projectRoot: libraryProject,
-    mcppExecutable: () => cliController.mcppExecutable(libraryProjectRoot ? { root: libraryProjectRoot, manifestPath: `${libraryProjectRoot}/mcpp.toml` } : undefined),
-    openDetail: openLibraryDetail,
-    output,
-    isTrusted: () => vscode.workspace.isTrusted,
-  });
-  const dependencyWatcher = vscode.workspace.createFileSystemWatcher("**/mcpp.{toml,lock}");
-  let selectedLibraryWatcher: vscode.Disposable | undefined;
-  let selectedLibraryPoll: ReturnType<typeof watchProjectFiles> | undefined;
-  let libraryTimer: NodeJS.Timeout | undefined;
-  const refreshLibraries = (): void => {
-    void selectedLibraryPoll?.check();
-    if (libraryTimer) { clearTimeout(libraryTimer); }
-    libraryTimer = setTimeout(() => {
-      libraryTimer = undefined;
-      void library.refresh();
-      void openLibraryDetail.refresh();
-    }, 120);
-  };
-  // A non-recursive RelativePattern also observes scratch/gitignored projects
-  // which a workspace's recursive watcher may intentionally exclude.
-  function watchSelectedLibraryProject(): void {
-    selectedLibraryWatcher?.dispose();
-    selectedLibraryWatcher = undefined;
-    selectedLibraryPoll = undefined;
-    if (!libraryProjectRoot) { return; }
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(libraryProjectRoot), "mcpp.{toml,lock}"));
-    selectedLibraryPoll = watchProjectFiles(libraryProjectRoot, refreshLibraries);
-    selectedLibraryWatcher = vscode.Disposable.from(selectedLibraryPoll, watcher, watcher.onDidCreate(refreshLibraries), watcher.onDidChange(refreshLibraries), watcher.onDidDelete(refreshLibraries));
-  }
-  watchSelectedLibraryProject();
-  extensionContext.subscriptions.push(
-    { dispose: () => selectedLibraryWatcher?.dispose() },
-    dependencyWatcher,
-    dependencyWatcher.onDidCreate(refreshLibraries),
-    dependencyWatcher.onDidChange(refreshLibraries),
-    dependencyWatcher.onDidDelete(refreshLibraries),
-    vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor?.document.uri.scheme === "file") { const active = findCurrentProject()?.root; if (active && active !== libraryProjectRoot) { libraryProjectRoot = active; watchSelectedLibraryProject(); } refreshLibraries(); } }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => { libraryProjectRoot = undefined; watchSelectedLibraryProject(); refreshLibraries(); }),
-    vscode.workspace.onDidGrantWorkspaceTrust(refreshLibraries),
-    vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("mcpp.library") || event.affectsConfiguration("mcpp.path") || event.affectsConfiguration("mcpp.ui.language")) { refreshLibraries(); }
-    }),
-    { dispose: () => { if (libraryTimer) { clearTimeout(libraryTimer); } } },
-  );
-  // `registerLibraryView` registers its own webview provider; these are only the
-  // entry points a menu or the project view can name.
-  extensionContext.subscriptions.push(
-    vscode.commands.registerCommand(LIBRARY_COMMANDS.search, async () => {
-      await vscode.commands.executeCommand("mcpp.library.focus");
-    }),
-    vscode.commands.registerCommand(LIBRARY_COMMANDS.openDetail, async (id: unknown) => {
-      if (typeof id === "string" && id.length > 0) {
-        await openLibraryDetail(id);
-      }
-    }),
-    vscode.commands.registerCommand(LIBRARY_COMMANDS.updateIndex, async () => {
-      if (!vscode.workspace.isTrusted) {
-        void vscode.window.showWarningMessage(t("This workspace is not trusted. mcpp commands may run external programs named by workspace settings; trust the workspace first."));
-        return;
-      }
-      const root = libraryProject();
-      const project = root ? { root, manifestPath: `${root}/mcpp.toml` } : undefined;
-      if (read<string>("mcpp.library.indexPath").trim()) {
-        output.appendLine(t("Updating the global mcpp index; a configured custom checkout is only reread."));
-      }
-      library.setUpdateStatus(t("Updating mcpp index…"));
-      const result = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: t("Refreshing the mcpp Package Index…") },
-        () => runMcpp(vscode.workspace.isTrusted, cliController.mcppExecutable(project), ["index", "update"], project?.root, { timeoutMs: 300_000 }),
-      );
-      if (result === undefined || result.exitCode !== 0) {
-        library.setUpdateStatus(t("Index update failed; showing the last available local snapshot."));
-        if (result?.stderr) { output.appendLine(result.stderr.trimEnd()); }
-        void vscode.window.showErrorMessage(t("mcpp index update failed with exit code {0}", result?.exitCode ?? -1));
-        return;
-      }
-      invalidateIndexCache();
-      await library.refresh();
-      await openLibraryDetail.refresh();
-      const snapshot = await loadSnapshot({ projectRoot: root });
-      library.setUpdateStatus(t("Index updated; {0} local packages.", snapshot.entries.length));
-    }),
-  );
-  // There is no `mcpp.library.indexFound` context key and no `viewsWelcome`
-  // entry for the library view. `paneview.ts`'s base `ViewPane` answers
-  // `shouldShowWelcome() === false`; only the tree-shaped panes override it, so
-  // welcome content can never render inside a `"type": "webview"` view. The
-  // library view states its own empty case in the document instead, which is the
-  // only place VS Code will show it.
-
-  registerCacheView(extensionContext, {
-    output,
-    currentProject: findCurrentProject,
     mcppExecutable: (project) => cliController.mcppExecutable(project),
-    isTrusted: () => vscode.workspace.isTrusted,
+    languageService,
   });
-  registerSettingsPanel(extensionContext);
 
   // Text analysis only: no mcpp process, so both stay available in a restricted
   // workspace, which is exactly what the `limited` capability promises.

@@ -14,11 +14,7 @@ import {
   type ToolchainInventory,
   type ToolchainItem,
 } from "./toolchain";
-import {
-  discoveryBoundaryOf,
-  type DiscoveryBoundary,
-  type McppProjectDiscovery,
-} from "../projects/discovery";
+import { type McppProjectDiscovery } from "../projects/discovery";
 import { updateEditorTitleButtonsContext } from "../projects/context";
 import { createLogger, type Logger } from "../util/log";
 import { runMcppCommand } from "./process";
@@ -250,9 +246,7 @@ function failureGuidanceText(kind: McppFailureKind): string | undefined {
  * passes the result into `findNearestMcppProject`, whose walk stays pure. The
  * resource is the workspace folder, because the setting is resource-scoped.
  */
-export function discoveryBoundaryFromSettings(resource?: vscode.Uri): DiscoveryBoundary {
-  return discoveryBoundaryOf(read<string>("mcpp.project.discoveryBoundary", resource));
-}
+export { discoveryBoundaryFromSettings } from "../projects/current";
 
 const SUCCESS_STATUS_MS = 6000;
 
