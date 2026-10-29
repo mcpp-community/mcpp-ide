@@ -21,8 +21,9 @@
     <depends>com.intellij.modules.clion</depends>
     <depends>com.intellij.modules.cidr.debugger</depends>
     <depends>io.github.sunrisepeak.mcppls</depends>
-    <!-- Since 2026.1 the panels' browser and the test tree are plugins of their own; in 2025.2 they are
-         the platform's. Optional, so the classes are found either way. -->
+    <!-- The panels' browser is a module of its own (com.intellij.modules.jcef). The test tree is the
+         platform's in CLion 2026.1 and a plugin of its own from 2026.2 on (intellij.testRunner.plugin);
+         optional, so the classes are found either way. -->
     <depends optional="true" config-file="mcpp-jcef.xml">com.intellij.modules.jcef</depends>
     <depends optional="true" config-file="mcpp-testrunner.xml">intellij.testRunner.plugin</depends>
 

@@ -7,7 +7,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.intellij.DynamicBundle
-import com.intellij.ide.impl.isTrusted
+import com.intellij.ide.trustedProjects.TrustedProjects
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
@@ -79,7 +79,7 @@ class McppSession(private val project: Project) : Disposable {
         started?.let { if (backend?.running == true || !it.isDone) return it }
         val future = CompletableFuture<JsonObject>()
         started = future
-        val configured = if (project.isTrusted()) McppSettings.get().string("mcpp.ide.backendPath") else ""
+        val configured = if (TrustedProjects.isProjectTrusted(project)) McppSettings.get().string("mcpp.ide.backendPath") else ""
         val located = Locate.backend(configured, pluginRoot())
         if (located == null) {
             notify(t("The mcpp-ide backend was not found. Install it with `xlings install mcpp-ide`, or set mcpp.ide.backendPath."), NotificationType.ERROR)
@@ -97,7 +97,7 @@ class McppSession(private val project: Project) : Disposable {
             add("client", JsonObject().apply { addProperty("name", ApplicationInfo.getInstance().versionName); addProperty("version", ApplicationInfo.getInstance().fullVersion) })
             addProperty("editor", "jetbrains")
             addProperty("locale", DynamicBundle.getLocale().toLanguageTag())
-            addProperty("trusted", project.isTrusted())
+            addProperty("trusted", TrustedProjects.isProjectTrusted(project))
             add("settings", McppSettings.get().values())
             add("workspaceFolders", JsonArray().apply { project.basePath?.let { add(it) } })
             add("languageService", JsonObject().apply { add("candidates", mcpplsCandidates()) })
@@ -158,7 +158,7 @@ class McppSession(private val project: Project) : Disposable {
         val b = backend ?: return
         b.request("settings/update", JsonObject().apply {
             add("settings", McppSettings.get().values())
-            addProperty("trusted", project.isTrusted())
+            addProperty("trusted", TrustedProjects.isProjectTrusted(project))
             addProperty("locale", DynamicBundle.getLocale().toLanguageTag())
         })
     }
