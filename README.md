@@ -53,7 +53,7 @@ on my mcpp project.
 |---|---|---|
 | VS Code | the Marketplace (`mcpp-community.mcpp-vscode`), or `mcpp-vscode-<version>.vsix` | search *mcpp*, or `code --install-extension mcpp-vscode-<version>.vsix` |
 | VS Code-compatible editors | Open VSX, or the `.vsix` | install the `.vsix` from the extensions view |
-| CLion 2025.2+ | JetBrains Marketplace (`mcpp-clion`), or `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk; the mcppls CLion plugin first |
+| CLion 2026.1+ | JetBrains Marketplace (`mcpp-clion`), or `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk; the mcppls CLion plugin (its package for this system carries the server) first |
 | Agents, other clients | `mcpp-ide-<version>-openkal.tar.gz` (both images; okrun for Linux x64/arm64, macOS arm64, Windows x64), `mcpp-ide-<version>.okb` with okrun, or `xlings install mcpp-ide` | run `bin/mcpp-ide serve` (`bin\mcpp-ide.cmd` on Windows), or `okrun mcpp-ide-<version>.okb serve` |
 
 Each editor package serves every system: it carries the backend as one ok-image bundle

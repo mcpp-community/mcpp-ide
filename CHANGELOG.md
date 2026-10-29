@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.1
+
+mcpp-vscode 1.0.1 and mcpp-clion 0.1.1, with mcppls 0.0.19.
+
+- **mcppls is found as the command that starts it.** mcppls 0.0.18 and later carry the server as an
+  okb that the platform's runner starts (`payload.json`'s `server`: `bin/okrun bin/mcppls.okb`). The
+  backend ran the okb itself for `--version`, so the VS Code extension's mcppls was reported as not
+  reporting its version (`permission denied`), and the payload in the user data directory was looked
+  for as `bin/mcppls`. A candidate is now a payload directory, whose `server` is started as it says,
+  or a program; `languageService/status` reports the `command` beside the `program`.
+- **VS Code**: the candidate is the mcppls extension's payload directory (`MCPPLS_PAYLOAD`, else
+  `<extension>/payload`), and `MCPPLS_SERVER`.
+- **CLion**: the candidate is the payload the mcppls CLion plugin carries (mcppls 0.0.19 ships one
+  package per system, each with its server), and `MCPPLS_SERVER`. *Install mcppls* and *Update
+  mcppls* open Settings | Plugins, where the Marketplace gives this system's package.
+- **CLion 2026.1 and later** (since-build 261), as the mcppls plugin mcpp-clion depends on; the
+  Plugin Verifier checks 2026.1 and 2026.2.3, and the build loads this machine's mcppls 0.0.19
+  package.
+
 ## 0.1.0
 
 The first release of mcpp-ide: one backend for mcpp's editor integrations, the VS Code extension

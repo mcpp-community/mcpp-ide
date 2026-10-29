@@ -28,7 +28,7 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "0.1.0";
+inline constexpr std::string_view kVersion = "0.1.1";
 inline constexpr int kProtocol = 1;
 
 // The methods `install` registers, for the protocol schema's test: a method
@@ -787,8 +787,10 @@ std::expected<Json, rpc::Error> Session::language_service(const Json& p) {
     }
     const auto s = languageservice::probe(candidates);
     const std::string required(languageservice::kRequired);
+    Json command = Json::array();
+    for (const auto& part : s.command) command.push_back(part.generic_string());
     Json out{{"state", languageservice::state_name(s.state)}, {"program", s.program.generic_string()},
-             {"source", s.source}, {"version", s.version}, {"required", required}};
+             {"command", command}, {"source", s.source}, {"version", s.version}, {"required", required}};
     Json actions = Json::array();
     switch (s.state) {
         case languageservice::State::ok:

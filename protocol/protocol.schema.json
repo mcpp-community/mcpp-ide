@@ -16,7 +16,7 @@
           "trusted": { "type": "boolean" },
           "settings": { "$ref": "#/$defs/settingValues" },
           "workspaceFolders": { "type": "array", "items": { "type": "string" } },
-          "languageService": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "string" } } } }
+          "languageService": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "string" }, "description": "Payload directories (payload.json's `server`) or programs, the adapter's mcppls first" } } }
         }
       },
       "result": {
@@ -324,7 +324,8 @@
       "required": ["state", "required", "message", "actions"],
       "properties": {
         "state": { "enum": ["ok", "outdated", "missing", "unreadable"] },
-        "program": { "type": "string" },
+        "program": { "type": "string", "description": "The server that answered: the image (an okb its runner starts) or the program" },
+        "command": { "type": "array", "items": { "type": "string" }, "description": "What starts it: the runner and the image, or the program" },
         "source": { "type": "string" },
         "version": { "type": "string" },
         "required": { "type": "string" },

@@ -8,7 +8,6 @@ import com.intellij.execution.ProgramRunnerUtil
 import com.intellij.execution.RunManager
 import com.intellij.execution.executors.DefaultDebugExecutor
 import com.intellij.execution.executors.DefaultRunExecutor
-import com.intellij.ide.BrowserUtil
 import com.intellij.ide.impl.ProjectUtil
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
@@ -222,11 +221,9 @@ object Dispatch {
     }
 
     fun languageServiceAction(project: Project, id: String) {
-        // The mcppls CLion plugin: its page on the Marketplace when it is listed there, else its releases.
-        if (id == "install" || id == "update") {
-            ShowSettingsUtil.getInstance().showSettingsDialog(project, "Plugins")
-            BrowserUtil.browse("https://github.com/Sunrisepeak/mcpp-language-server/releases")
-        }
+        // The mcppls CLion plugin is installed and updated where every plugin is: Settings | Plugins,
+        // whose Marketplace tab gives this system's package, the server inside it.
+        if (id == "install" || id == "update") ShowSettingsUtil.getInstance().showSettingsDialog(project, "Plugins")
     }
 
     private fun languageService(project: Project) {

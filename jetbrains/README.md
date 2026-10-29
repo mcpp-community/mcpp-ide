@@ -1,6 +1,6 @@
 # mcpp-clion
 
-mcpp's project features in CLion 2025.2 and later, over the mcpp-ide backend:
+mcpp's project features in CLion 2026.1 and later, over the mcpp-ide backend:
 
 - the **mcpp** run configuration type: run (the program in a PTY console), test (the IDE's test
   tree) or build, for a target and a profile; a ▶ beside `main` runs the project, or the test whose
@@ -21,7 +21,7 @@ registers no language service.
 xlings install gradle            # Gradle and its JDK
 mcpp build                       # in the repository root: the backend and mcpp-ide-dev
 gradle buildPlugin               # build/distributions/mcpp-clion-<version>.zip
-gradle verifyPlugin              # CLion 2025.2 and the version in gradle.properties
+gradle verifyPlugin              # CLion 2026.1 and the version in gradle.properties
 ```
 
 What the archive carries of the backend: `MCPP_IDE_OKB` (the ok-image bundle, as

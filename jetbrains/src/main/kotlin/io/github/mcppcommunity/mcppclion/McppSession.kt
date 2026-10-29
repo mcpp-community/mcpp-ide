@@ -8,12 +8,14 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.intellij.DynamicBundle
 import com.intellij.ide.impl.isTrusted
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
 import io.github.mcppcommunity.mcppclion.backend.Backend
 import io.github.mcppcommunity.mcppclion.backend.Locate
@@ -63,11 +65,15 @@ class McppSession(private val project: Project) : Disposable {
     private fun pluginRoot(): File? = pluginDirectory()
 
     /**
-     * The servers to ask first. The mcppls CLion plugin starts mcppls from PATH or from the payload its
-     * `--install` puts in the user data directory, which the backend looks at itself; MCPPLS_SERVER
-     * names another.
+     * The servers to ask first: MCPPLS_SERVER, then the payload the mcppls CLion plugin carries
+     * (`<plugin>/payload`, whose payload.json's `server` the backend starts: the runner and the okb).
+     * PATH and xlings are the backend's own to look at.
      */
-    private fun mcpplsCandidates(): JsonArray = JsonArray().apply { System.getenv("MCPPLS_SERVER")?.let { add(it) } }
+    private fun mcpplsCandidates(): JsonArray = JsonArray().apply {
+        System.getenv("MCPPLS_SERVER")?.let { add(it) }
+        PluginManagerCore.getPlugin(PluginId.getId("io.github.sunrisepeak.mcppls"))?.pluginPath?.resolve("payload")
+            ?.takeIf { it.resolve("payload.json").toFile().isFile }?.let { add(it.toString()) }
+    }
 
     fun start(): CompletableFuture<JsonObject> {
         started?.let { if (backend?.running == true || !it.isDone) return it }

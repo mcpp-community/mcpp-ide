@@ -27,12 +27,23 @@ repositories {
 
 // The mcppls CLion plugin, from its release: the dependency the sandbox, the tests and the verifier
 // load beside this plugin. Fetched once, when the build is configured, because the platform's
-// dependency resolution reads it then.
+// dependency resolution reads it then. mcppls ships one package per platform, each carrying that
+// platform's server (mcppls 0.0.19); this machine's is the one loaded here.
 val mcpplsVersion = providers.gradleProperty("mcpplsPluginVersion").get()
-val mcpplsArchive: File = layout.buildDirectory.file("mcppls/mcppls-clion-$mcpplsVersion.zip").get().asFile
+val hostPlatform: String = run {
+    val os = System.getProperty("os.name").lowercase()
+    val system = when {
+        os.startsWith("windows") -> "win32"
+        os.startsWith("mac") -> "darwin"
+        else -> "linux"
+    }
+    val arch = System.getProperty("os.arch").lowercase()
+    "$system-${if (arch == "aarch64" || arch == "arm64") "arm64" else "x64"}"
+}
+val mcpplsArchive: File = layout.buildDirectory.file("mcppls/mcppls-clion-$mcpplsVersion-$hostPlatform.zip").get().asFile
 if (!mcpplsArchive.exists()) {
     mcpplsArchive.parentFile.mkdirs()
-    val url = "https://github.com/Sunrisepeak/mcpp-language-server/releases/download/v$mcpplsVersion/mcppls-clion-$mcpplsVersion.zip"
+    val url = "https://github.com/Sunrisepeak/mcpp-language-server/releases/download/v$mcpplsVersion/mcppls-clion-$mcpplsVersion-$hostPlatform.zip"
     val partial = File(mcpplsArchive.path + ".part")
     uri(url).toURL().openStream().use { input -> partial.outputStream().use { input.copyTo(it) } }
     partial.renameTo(mcpplsArchive)
@@ -57,8 +68,8 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
-    // Built against the current CLion, run on 2025.2 too: no platform default method is copied
-    // into this plugin's classes as a call to `super` that 2025.2 lacks.
+    // Built against the current CLion, run on 2026.1 too: no platform default method is copied
+    // into this plugin's classes as a call to `super` that 2026.1 lacks.
     compilerOptions { jvmDefault = JvmDefaultMode.NO_COMPATIBILITY }
 }
 
@@ -107,15 +118,17 @@ intellijPlatform {
         id = "io.github.mcpp-community.mcpp-clion"
         name = "mcpp"
         version = providers.gradleProperty("pluginVersion")
+        // 2026.1, as the mcppls plugin it depends on: the first IDE the JetBrains Marketplace gives
+        // the mcppls package of its own system.
         ideaVersion {
-            sinceBuild = "252"
+            sinceBuild = "261"
             untilBuild = provider { null }
         }
     }
     // `gradle verifyPlugin`: the oldest CLion the plugin claims and the one it is built on.
     pluginVerification {
         ides {
-            create(IntelliJPlatformType.CLion, "2025.2")
+            create(IntelliJPlatformType.CLion, "2026.1")
             create(IntelliJPlatformType.CLion, providers.gradleProperty("platformVersion").get())
         }
     }

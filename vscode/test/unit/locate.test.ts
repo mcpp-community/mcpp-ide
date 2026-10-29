@@ -44,10 +44,12 @@ test("PATH lookup appends .exe on Windows", () => {
   assert.equal(onPath("mcpp-ide", { PATH: dir }, "linux"), undefined);
 });
 
-test("mcppls: the extension's payload names its server", () => {
+test("mcppls: the extension's payload is the candidate, for the backend to start its server", () => {
   const ext = fs.mkdtempSync(path.join(os.tmpdir(), "mcppls-ext-"));
+  assert.deepEqual(mcpplsCandidates(ext, {}), [], "no payload, nothing");
   fs.mkdirSync(path.join(ext, "payload"));
-  fs.writeFileSync(path.join(ext, "payload", "payload.json"), JSON.stringify({ server: { path: "bin/mcppls" } }));
-  assert.deepEqual(mcpplsCandidates(ext, {}), [path.join(ext, "payload", "bin", "mcppls")]);
+  fs.writeFileSync(path.join(ext, "payload", "payload.json"), JSON.stringify({ server: { path: "bin/mcppls.okb", runner: "bin/okrun" } }));
+  assert.deepEqual(mcpplsCandidates(ext, {}), [path.join(ext, "payload")]);
+  assert.deepEqual(mcpplsCandidates(ext, { MCPPLS_PAYLOAD: path.join(ext, "payload") }), [path.join(ext, "payload")]);
   assert.deepEqual(mcpplsCandidates(undefined, { MCPPLS_SERVER: "/s/mcppls" }), ["/s/mcppls"]);
 });
