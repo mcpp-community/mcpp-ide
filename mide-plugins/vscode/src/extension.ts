@@ -225,7 +225,12 @@ async function autoConfigureModulesWizard(
   }
 }
 
-export async function activate(extensionContext: vscode.ExtensionContext): Promise<void> {
+/** What the extension hands to whoever activates it (its own tests): the backend session. */
+export interface McppApi {
+  session: Session;
+}
+
+export async function activate(extensionContext: vscode.ExtensionContext): Promise<McppApi> {
   const output = vscode.window.createOutputChannel("mcpp");
 
   // Language first: everything below may want to speak to the user.
@@ -587,6 +592,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     manifestWatcher.onDidChange(() => cliController.refreshStatus()),
     manifestWatcher.onDidDelete(() => cliController.refreshStatus()),
   );
+  return { session };
 }
 
 /**

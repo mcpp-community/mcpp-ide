@@ -121,6 +121,38 @@ suite(`mcpp extension smoke (mcppls stub: ${STUB})`, () => {
     await vscode.commands.executeCommand("mcpp.selfCheck");
   });
 
+  test("the backend starts and reaches mcpp through the configured path", async () => {
+    const extension = vscode.extensions.getExtension<{ session: { request<T>(method: string, params?: unknown): Promise<T> } }>(
+      "mcpp-community.mcpp-vscode");
+    assert.ok(extension);
+    const api = await extension.activate();
+    const exec = await api.session.request<{ exitCode: number; stdout: string }>("mcpp/exec", { args: ["--version"] });
+    assert.equal(exec.exitCode, 0);
+    assert.match(exec.stdout, /^mcpp \d/);
+    const mcppLog = process.env.MCPP_E2E_LOG;
+    assert.ok(mcppLog);
+    assert.ok(lines(mcppLog).includes("--version"), "the backend ran the configured mcpp");
+  });
+
+  test("the targets come from the backend, with no set while mcpp names none", async () => {
+    const api = await vscode.extensions.getExtension<{ session: { request<T>(method: string, params?: unknown): Promise<T> } }>(
+      "mcpp-community.mcpp-vscode")!.activate();
+    const targets = await api.session.request<{ rows: { target: string; set?: boolean }[] }>("targets/list", {});
+    assert.ok(targets.rows.some((row) => row.target === "x86_64-openkal"));
+    // The mock is mcpp 2026.10.27.1, before target sets (2026.10.30.1).
+    assert.ok(!targets.rows.some((row) => row.set === true));
+  });
+
+  test("an mcpp launch configuration without a debugger extension says so and starts nothing", async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    const started = await vscode.debug.startDebugging(folder, { type: "mcpp", request: "launch", name: "mcpp: debug" });
+    assert.equal(started, false);
+  });
+
+  test("mcpp.showCachePanel brings the cache view on screen", async () => {
+    await vscode.commands.executeCommand("mcpp.showCachePanel");
+  });
+
   test("opening the settings panel does not throw", async () => {
     await vscode.commands.executeCommand("mcpp.openSettings");
   });

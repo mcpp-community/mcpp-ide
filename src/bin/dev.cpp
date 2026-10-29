@@ -5,12 +5,11 @@
 //       The golden fixtures under protocol/fixtures, from a real mcpp: the envelopes, streams and
 //       records the backend reads. The mock mcpp and both adapters' tests replay them, so a change in
 //       mcpp's contract shows up as a diff here first.
-//   mcpp-ide-dev gen vscode --out DIR [--stage] [--okb FILE] [--okrun DIR] [--backends DIR]
-//       The VS Code extension's declarations from spec/: package.json (mide-plugins/vscode/package.json
-//       with the generated commands, keybindings, menus and configuration), package.nls.json and
-//       package.nls.zh-cn.json. With --stage, also the files the extension ships (its out/, media,
-//       syntaxes, the webui, README, CHANGELOG, LICENSE, and the backend: see stage_backend): the
-//       directory `vsce package` packs.
+//   mcpp-ide-dev gen vscode
+//       The VS Code extension's declarations from spec/, written in place: mide-plugins/vscode's
+//       package.json (its commands, keybindings, menus and configuration), package.nls.json,
+//       package.nls.zh-cn.json and data/config-registry.json (the settings registry the extension
+//       reads). The rest of the manifest is the extension's own. CI regenerates and expects no change.
 //   mcpp-ide-dev gen jetbrains --out DIR
 //       The CLion plugin's declarations from spec/ (the IntelliJ platform's, editor id `jetbrains`):
 //       META-INF/mcpp-actions.xml (included by plugin.xml) and the message bundles
@@ -20,9 +19,10 @@
 //       entry in spec/i18n/runtime.zh-cn.json; every editor string a Chinese one in
 //       manifest.zh-cn.json.
 //
-// Nothing generated is written into the repository: the outputs go where the adapters' builds put
-// them (mide-plugins/vscode/dist, mide-plugins/clion/build). The Neovim plugin (mide-plugins/nvim)
-// declares nothing statically: it reads the command table from the backend at run time.
+// The VS Code declarations are kept in the repository (mcpp-vscode packs its own directory, and its
+// gates read the manifest); CI checks they are spec/'s. The CLion declarations go where its build
+// puts them (mide-plugins/clion/build). The Neovim plugin (mide-plugins/nvim) declares nothing
+// statically: it reads the command table from the backend at run time.
 import std;
 import nlohmann.json;
 import mcpplibs.os;
@@ -258,80 +258,19 @@ void vscode_contributes(const Spec& spec, Json& contributes) {
     contributes["configuration"] = Json{{"title", "%mcpp.configuration.title%"}, {"properties", properties}};
 }
 
-void copy_tree(const fs::path& from, const fs::path& to, std::span<const std::string_view> skip = {}) {
-    std::error_code ec;
-    if (!fs::exists(from, ec)) return;
-    for (fs::recursive_directory_iterator it(from, ec), end; !ec && it != end; it.increment(ec)) {
-        const auto rel = fs::relative(it->path(), from, ec);
-        const auto relText = rel.generic_string();
-        if (std::ranges::any_of(skip, [&](std::string_view s) { return relText == s || relText.starts_with(std::string(s) + "/"); })) {
-            if (it->is_directory(ec)) it.disable_recursion_pending();
-            continue;
-        }
-        if (it->is_directory(ec)) { fs::create_directories(to / rel, ec); continue; }
-        fs::create_directories((to / rel).parent_path(), ec);
-        fs::copy_file(it->path(), to / rel, fs::copy_options::overwrite_existing, ec);
-        if (ec) throw std::runtime_error(std::format("copying {}: {}", it->path().generic_string(), ec.message()));
-    }
-}
-
-// What an editor package carries of the backend (mcpp design 2026-10-28 part 2 §15):
-//   --okb FILE (MCPP_IDE_OKB)      the ok-image bundle, as backend/mcpp-ide.okb: one for every system
-//   --okrun DIR (MCPP_IDE_OKRUN)   okrun for each system and architecture, laid out
-//                                  <os>-<arch>/okrun[.exe], as backend/okrun/
-void stage_backend(std::span<const std::string> args, const fs::path& out) {
-    auto from = [&](std::string_view flag, const char* variable) {
-        auto v = option(args, flag);
-        if (!v) v = mcpplibs::os::env::get(variable);
-        return v && !v->empty() ? std::optional<fs::path>(*v) : std::nullopt;
-    };
-    if (auto okb = from("--okb", "MCPP_IDE_OKB")) {
-        fs::create_directories(out / "backend");
-        fs::copy_file(*okb, out / "backend" / "mcpp-ide.okb", fs::copy_options::overwrite_existing);
-    }
-    if (auto okrun = from("--okrun", "MCPP_IDE_OKRUN")) copy_tree(*okrun, out / "backend" / "okrun");
-}
-
-int gen_vscode(std::span<const std::string> args) {
+int gen_vscode(std::span<const std::string>) {
     const auto root = repo();
     const auto ext = plugin(root, "vscode");
-    const auto out = fs::path(option(args, "--out").value_or((ext / "dist" / "extension").string()));
     const auto spec = load_spec(root);
     auto pkg = read_json(ext / "package.json");
     vscode_contributes(spec, pkg["contributes"]);
     Json zh = spec.en;
     for (auto it = spec.zh.begin(); it != spec.zh.end(); ++it) zh[it.key()] = it.value();
-    // --dev: the development manifest itself, its strings and the settings registry the extension
-    // reads (data/config-registry.json), written in place; CI regenerates and expects no change.
-    if (flag(args, "--dev")) {
-        spit(ext / "package.json", pkg.dump(2) + "\n");
-        spit(ext / "package.nls.json", spec.en.dump(2) + "\n");
-        spit(ext / "package.nls.zh-cn.json", zh.dump(2) + "\n");
-        spit(ext / "data" / "config-registry.json", spec.settings.dump(2) + "\n");
-        std::println("vscode declarations in {}", ext.generic_string());
-        return 0;
-    }
-    // npm's own fields stay in the development manifest.
-    pkg.erase("scripts");
-    pkg.erase("devDependencies");
-    spit(out / "package.json", pkg.dump(2) + "\n");
-    spit(out / "package.nls.json", spec.en.dump(2) + "\n");
-    spit(out / "package.nls.zh-cn.json", zh.dump(2) + "\n");
-    if (flag(args, "--stage")) {
-        copy_tree(ext / "out" / "src", out / "out" / "src");
-        copy_tree(ext / "media", out / "media");
-        copy_tree(ext / "syntaxes", out / "syntaxes");
-        static constexpr std::array<std::string_view, 3> webuiSkip{"tests", "tsconfig.json", "js/types.d.ts"};
-        copy_tree(root / "webui", out / "webui", webuiSkip);
-        for (const auto* f : {"README.md", "CHANGELOG.md", ".vscodeignore"})
-            if (fs::exists(ext / f)) fs::copy_file(ext / f, out / f, fs::copy_options::overwrite_existing);
-        fs::copy_file(root / "LICENSE", out / "LICENSE.txt", fs::copy_options::overwrite_existing);
-        // The runtime strings, for what the extension says before its backend runs.
-        fs::create_directories(out / "i18n");
-        fs::copy_file(root / "spec" / "i18n" / "runtime.zh-cn.json", out / "i18n" / "runtime.zh-cn.json", fs::copy_options::overwrite_existing);
-        stage_backend(args, out);
-    }
-    std::println("vscode declarations in {}", out.generic_string());
+    spit(ext / "package.json", pkg.dump(2) + "\n");
+    spit(ext / "package.nls.json", spec.en.dump(2) + "\n");
+    spit(ext / "package.nls.zh-cn.json", zh.dump(2) + "\n");
+    spit(ext / "data" / "config-registry.json", spec.settings.dump(2) + "\n");
+    std::println("vscode declarations in {}", ext.generic_string());
     return 0;
 }
 
@@ -472,9 +411,9 @@ int check_i18n(std::span<const std::string>) {
     const auto zh = read_json(root / "spec" / "i18n" / "runtime.zh-cn.json");
     std::set<std::string> missing;
     std::size_t seen = 0;
-    const std::array<std::pair<fs::path, std::vector<std::string>>, 5> trees{{
+    // The VS Code extension carries its own strings (data/i18n, checked by its l10n gate).
+    const std::array<std::pair<fs::path, std::vector<std::string>>, 4> trees{{
         {root / "src", {".cppm", ".cpp"}},
-        {plugin(root, "vscode") / "src", {".ts"}},
         {root / "webui", {".js"}},
         {plugin(root, "clion") / "src" / "main" / "kotlin", {".kt"}},
         {plugin(root, "nvim") / "lua", {".lua"}},
@@ -520,7 +459,7 @@ int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
     try {
         if (args.empty() || args[0] == "--help") {
-            std::println("mcpp-ide-dev capture | gen vscode|jetbrains --out DIR | check-i18n");
+            std::println("mcpp-ide-dev capture | gen vscode | gen jetbrains --out DIR | check-i18n");
             return args.empty() ? 2 : 0;
         }
         const std::span<const std::string> rest(args.begin() + 1, args.end());

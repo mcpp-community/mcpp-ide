@@ -1362,7 +1362,7 @@
     "test:e2e:one": "node dist/test/e2e/runTest.js",
     "gen:examples": "node tools/generate-library-examples.mjs",
     "test:graphs-ui": "npm run compile && node tools/test-graphs-ui.mjs",
-    "gen": "cd ../.. && mcpp run mcpp-ide-dev -- gen vscode --dev",
+    "gen": "cd ../.. && mcpp run mcpp-ide-dev -- gen vscode",
     "stage:backend": "node tools/stage-backend.mjs",
     "test:parity": "npm run compile && node --test \"dist/test/parity/*.test.js\""
   },

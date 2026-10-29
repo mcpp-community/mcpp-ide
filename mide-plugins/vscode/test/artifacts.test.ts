@@ -610,87 +610,72 @@ test("the rename offer is only marked answered after the user answered it", () =
   );
 });
 
-test("tag release 工作流校验版本并发布 VSIX", () => {
-  const workflow = readFileSync(path.join(root, ".github/workflows/release.yml"), "utf8");
-  assert.match(workflow, /push:\s*\n\s+tags:\s*\n\s+- "v\*"/);
+// The workflows are the repository's (mcpp-ide): the extension is mide-plugins/vscode of it.
+const workflows = path.join(root, "..", "..", ".github", "workflows");
+
+test("a release publishes the VSIX CI built, with its checksum", () => {
+  const workflow = readFileSync(path.join(workflows, "release.yml"), "utf8");
+  assert.match(workflow, /push:\s*\n\s+tags: \['v\*'\]/);
   assert.match(workflow, /contents: write/);
-  assert.match(workflow, /npm ci/);
-  assert.match(workflow, /npm test/);
-  assert.match(workflow, /npm run package/);
-  assert.match(workflow, /GITHUB_REF_NAME.*v\$\{PACKAGE_VERSION\}/s);
+  // The release publishes what CI on the commit built and tested, not a second build.
+  assert.match(workflow, /uses: \.\/\.github\/workflows\/ci\.yml/);
+  assert.match(workflow, /artifacts\/mcpp-vscode-vsix\/\*\.vsix/);
   assert.match(workflow, /sha256sum/);
   assert.match(workflow, /gh release create/);
-  assert.match(workflow, /gh release upload.*--clobber/s);
 });
 
-test("the release workflow guards the published artefact against local leakage", () => {
-  const workflow = readFileSync(path.join(root, ".github/workflows/release.yml"), "utf8");
-  assert.match(workflow, /校验 VSIX 体积与内容/);
-  const forbidden = /for forbidden in ([^;\n]+)/.exec(workflow)?.[1].trim().split(/\s+/) ?? [];
-  for (const directory of [".dev-profile/", ".agents/", ".agnets/", "test/", "tools/", "src/", "node_modules/"]) {
-    assert.ok(forbidden.includes(directory), `${directory} must be excluded from the VSIX`);
-  }
-  assert.match(workflow, /unzip -t/);
-});
-
-test("tag release publishes Open VSX and leaves Marketplace upload manual", () => {
-  const workflow = readFileSync(path.join(root, ".github/workflows/release.yml"), "utf8");
-  // 两个市场收到的都是 GitHub Release 上的那只 VSIX，不重新打包。Open VSX 的
-  // secret 名就是仓库实际配置的 OPENVSX_TOKEN（曾写成 OVSX_PAT，首版必然失败）。
-  assert.match(workflow, /npx ovsx publish "mcpp-vscode-\$\{PACKAGE_VERSION\}\.vsix" --pat "\$OPENVSX_TOKEN"/);
-  assert.doesNotMatch(workflow, /npx vsce publish/);
-  // Open VSX 是必发目标：缺 token 显式失败。
-  assert.match(workflow, /OPENVSX_TOKEN: \$\{\{ secrets\.OPENVSX_TOKEN \}\}/);
-  assert.match(workflow, /if \[ -z "\$\{OPENVSX_TOKEN:-\}" \]; then[\s\S]*?exit 1/);
-  assert.match(workflow, /Upload the GitHub Release VSIX manually/);
-  // 发布用的是仓库锁定的 ovsx：npx 不在发布中途去网络解析。
-  const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as PackageManifest;
-  assert.ok(manifest.devDependencies?.ovsx, "ovsx must be a devDependency the release resolves offline");
-});
-
-test("CI runs the gates, the package checks, the drift check and every e2e variant", () => {
-  const workflow = readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8");
-  assert.match(workflow, /pull_request:/);
-  assert.match(workflow, /push:\s*\n\s+branches:\s*\n\s+- main/);
-  assert.match(workflow, /permissions:\s*\n\s+contents: read/);
-  assert.match(workflow, /concurrency:[\s\S]*cancel-in-progress: true/);
-  assert.match(workflow, /node-version: \$\{\{ env.NODE_VERSION \}\}/);
-  assert.match(workflow, /NODE_VERSION: 22/);
-  // Cross-platform confidence: the unit gates, the Extension Host e2e and the
-  // isolated install all run the same three-OS matrix — Linux, macOS ARM64 and
-  // Windows, where the spawn and path handling actually differ.
-  const osMatrixes = workflow.match(/os: \[ubuntu-latest, macos-14, windows-latest\]/g) ?? [];
-  assert.equal(
-    osMatrixes.length,
-    3,
-    "gates, extension-host-e2e and isolated-install must all run on Linux, macOS and Windows",
-  );
-  assert.match(workflow, /gates:/);
-  assert.match(workflow, /extension-host-e2e:/);
-  assert.match(workflow, /package:/);
-  assert.match(workflow, /npm ci/);
-  assert.match(workflow, /npm test/);
-  assert.match(workflow, /npm run package/);
-  assert.match(workflow, /unzip -t/);
-  // A local dev profile once leaked into the VSIX (64 MB); the guard is now explicit.
+test("the package job guards the published artefact against local leakage", () => {
+  const workflow = readFileSync(path.join(workflows, "ci.yml"), "utf8");
   assert.match(workflow, /The VSIX stays small and free of local state/);
   const forbidden = /for forbidden in ([^;\n]+)/.exec(workflow)?.[1].trim().split(/\s+/) ?? [];
   for (const directory of [".dev-profile/", ".agents/", ".agnets/", "test/", "tools/", "src/", "node_modules/"]) {
     assert.ok(forbidden.includes(directory), `${directory} must be excluded from the VSIX`);
   }
+  assert.match(workflow, /unzip -t/);
+  // The backend the package carries: the bundle and every system's runner.
+  assert.match(workflow, /extension\/backend\/mcpp-ide\.okb/);
+  for (const system of ["linux-x86_64", "linux-aarch64", "macos-aarch64", "windows-x86_64"]) {
+    assert.match(workflow, new RegExp(`extension/backend/okrun/${system}/okrun`));
+  }
+});
+
+test("a release publishes Open VSX and leaves the Marketplace upload manual", () => {
+  const workflow = readFileSync(path.join(workflows, "release.yml"), "utf8");
+  assert.match(workflow, /npx ovsx publish "\$GITHUB_WORKSPACE\/\$vsix" --pat "\$OPENVSX_TOKEN"/);
+  assert.doesNotMatch(workflow, /npx vsce publish/);
+  // Open VSX is a required destination: a missing token fails the release.
+  assert.match(workflow, /OPENVSX_TOKEN: \$\{\{ secrets\.OPENVSX_TOKEN \}\}/);
+  assert.match(workflow, /if \[ -z "\$\{OPENVSX_TOKEN:-\}" \]; then[\s\S]*?exit 1/);
+  assert.match(workflow, /Upload the GitHub Release VSIX manually/);
+  const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as PackageManifest;
+  assert.ok(manifest.devDependencies?.ovsx, "ovsx must be a devDependency the release resolves offline");
+});
+
+test("CI runs the gates, the package checks, the drift check and every e2e variant", () => {
+  const workflow = readFileSync(path.join(workflows, "ci.yml"), "utf8");
+  assert.match(workflow, /pull_request:/);
+  assert.match(workflow, /push:\s*\n\s+branches: \[main\]/);
+  assert.match(workflow, /concurrency:[\s\S]*cancel-in-progress: true/);
+  assert.match(workflow, /node-version: \$\{\{ env.NODE_VERSION \}\}/);
+  assert.match(workflow, /NODE_VERSION: 22/);
+  // The unit gates, the Extension Host e2e and the isolated install all run on Linux, macOS and
+  // Windows, where the spawn and path handling actually differ.
+  const osMatrixes = workflow.match(/os: \[ubuntu-latest, macos-14, windows-latest\]/g) ?? [];
+  assert.equal(osMatrixes.length, 3, "gates, the Extension Host e2e and the isolated install must run on three systems");
+  for (const job of ["vscode-gates:", "vscode-drift:", "vscode:", "vscode-e2e:", "vscode-isolated-install:", "vscode-graph-browser:"]) {
+    assert.match(workflow, new RegExp(`^  ${job}`, "m"), job);
+  }
+  assert.match(workflow, /npm ci/);
+  assert.match(workflow, /npm test/);
+  assert.match(workflow, /npm run test:parity/);
+  assert.match(workflow, /npm run package/);
   assert.match(workflow, /xvfb-run -a npm run test:e2e:one/);
-  // The snapshot drift gate only means something with an mcpp checkout present.
-  assert.match(workflow, /generated-drift:/);
+  // The manifest is spec/'s, and the snapshots are mcpp's.
+  assert.match(workflow, /mcpp-ide-dev -- gen vscode\n/);
   assert.match(workflow, /repository: mcpp-community\/mcpp/);
   assert.match(workflow, /MCPP_REPO: \$\{\{ github.workspace \}\}\/\.mcpp-source/);
-  // The end-to-end dependency resolution check.
-  assert.match(workflow, /graph-browser:/);
   assert.match(workflow, /npm run test:graphs-ui/);
-  assert.match(workflow, /isolated-install:/);
-  assert.match(workflow, /sunrisepeak.mcpp-language-server@/);
-  // The ubuntu runner ships no `code` on PATH, so the job downloads the CLI via
-  // the e2e tooling instead. A step that calls bare `code` again is the exact
-  // `code: command not found` failure this gate was added after.
+  assert.match(workflow, /sunrisepeak.mcpp-language-server/);
   assert.match(workflow, /tools\/ci-vscode-cli\.mjs/);
   assert.doesNotMatch(workflow, /^\s+code --/m);
 });

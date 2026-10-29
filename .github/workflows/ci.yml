@@ -13,6 +13,7 @@ concurrency:
 
 env:
   XLINGS_NON_INTERACTIVE: '1'
+  NODE_VERSION: 22
 
 jobs:
   # The backend on each system the editors run on: build every program (the backend, the mock mcpp,
@@ -83,9 +84,71 @@ jobs:
           name: backend
           path: backend
 
-  # The VS Code extension (mide-plugins/vscode): unit tests (the wire, the mappings) and the shared panels in a DOM, both
-  # against the backend built here; the extension in a real VS Code (the oldest it supports) over the
-  # mock mcpp, with that backend and with the bundle it carries; then the package, and its file list.
+  # The VS Code extension (mide-plugins/vscode), mcpp-vscode 0.9.0 over the backend. Its gates
+  # (the registry, the translations, the unit suite) on the three desktop systems; the manifest
+  # generated from spec/ with no drift, and the snapshots generated from mcpp's source; the parity
+  # gates against 0.9.0; the package with the bundle and every system's okrun; the Extension Host
+  # suite against every mcppls variant on the three systems, over the bundled backend; an isolated
+  # install that resolves the language service; the graph page in Chromium.
+  vscode-gates:
+    name: VS Code gates (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mide-plugins/vscode
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mide-plugins/vscode/package-lock.json
+      - run: npm ci
+      - name: Registry, translation and unit gates
+        run: npm test
+
+  vscode-drift:
+    name: VS Code manifest and snapshots
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: mcpp-community/mcpp
+          path: .mcpp-source
+          fetch-depth: 1
+      - uses: ./.github/actions/setup-mcpp
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mide-plugins/vscode/package-lock.json
+      - name: The manifest, its strings and the settings registry are spec/'s
+        run: |
+          mcpp run mcpp-ide-dev -- gen vscode
+          git diff --exit-code -- mide-plugins/vscode spec
+      - run: npm ci
+        working-directory: mide-plugins/vscode
+      - name: The committed snapshots match the current mcpp
+        working-directory: mide-plugins/vscode
+        env:
+          MCPP_REPO: ${{ github.workspace }}/.mcpp-source
+        run: npm run check:generated
+      - name: The settings documentation matches the registry
+        working-directory: mide-plugins/vscode
+        run: |
+          npm run gen:docs
+          git diff --exit-code docs/settings.md
+
   vscode:
     name: VS Code extension
     needs: backend
@@ -99,7 +162,7 @@ jobs:
       - uses: ./.github/actions/setup-mcpp
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: mide-plugins/vscode/package-lock.json
       - uses: actions/download-artifact@v5
@@ -114,31 +177,208 @@ jobs:
             echo "MCPP_IDE_OKB=$GITHUB_WORKSPACE/backend/mcpp-ide.okb"
             echo "MCPP_IDE_OKRUN=$GITHUB_WORKSPACE/backend/okrun"
           } >> "$GITHUB_ENV"
-      - name: Install
+      - run: npm ci
         working-directory: mide-plugins/vscode
-        run: npm ci
-      - name: Unit and panel tests
+      - name: Unit tests, with the backend built here
         working-directory: mide-plugins/vscode
         run: npm test
-      - name: The panels type-check
+      - name: Parity with 0.9.0 (the manifest and strings, every page's document)
         working-directory: mide-plugins/vscode
-        run: npm run check:webui
-      - name: The extension in VS Code ${{ env.VSCODE_VERSION }}
+        run: npm run test:parity
+      - name: Package, with the bundle and every system's okrun
         working-directory: mide-plugins/vscode
-        run: xvfb-run -a npm run test:e2e
-      - name: Package
+        run: npm run package
+      - name: Verify the VSIX archive
+        working-directory: mide-plugins/vscode
+        run: unzip -t mcpp-vscode-*.vsix
+      - name: The manifest keeps its promises
         working-directory: mide-plugins/vscode
         run: |
-          npm run package
-          (cd dist/extension && npx vsce ls --no-dependencies) | tee files.txt
-          grep -qx "backend/mcpp-ide.okb" files.txt
-          for p in linux-x86_64/okrun linux-aarch64/okrun macos-aarch64/okrun windows-x86_64/okrun.exe; do grep -qx "backend/okrun/$p" files.txt; done
-          [ "$(grep -c '\.okb$' files.txt)" = 1 ]
-          ls -l dist/*.vsix
+          node -e '
+            const p = require("./package.json");
+            const fail = (message) => { console.error(message); process.exit(1); };
+            if (p.extensionDependencies?.[0] !== "sunrisepeak.mcpp-language-server") fail("the dependency moved");
+            if (p.extensionDependencies.some((id) => id.includes("clangd"))) fail("clangd is back in the dependency list");
+            if (p.dependencies?.["vscode-languageclient"] || p.devDependencies?.["vscode-languageclient"]) fail("a second language client crept in");
+            if ((p.activationEvents ?? []).some((event) => event.startsWith("onCommand:"))) fail("onCommand activations are derived since 1.74");
+            if (!p.contributes?.viewsContainers?.activitybar?.length) fail("the view container disappeared");
+            console.log("manifest ok");
+          '
+      - name: The VSIX carries the runtime artefacts and the backend
+        working-directory: mide-plugins/vscode
+        run: |
+          set -euo pipefail
+          VSIX=$(ls mcpp-vscode-*.vsix)
+          for entry in \
+            extension/l10n/bundle.l10n.zh-cn.json \
+            extension/package.nls.json \
+            extension/package.nls.zh-cn.json \
+            extension/dist/data/config-registry.json \
+            extension/media/settings.css \
+            extension/backend/mcpp-ide.okb \
+            extension/backend/okrun/linux-x86_64/okrun \
+            extension/backend/okrun/linux-aarch64/okrun \
+            extension/backend/okrun/macos-aarch64/okrun \
+            extension/backend/okrun/windows-x86_64/okrun.exe; do
+            unzip -l "$VSIX" | grep -q "$entry" || { echo "missing from the VSIX: $entry"; exit 1; }
+          done
+          echo "VSIX contents ok"
+      - name: The VSIX stays small and free of local state
+        working-directory: mide-plugins/vscode
+        run: |
+          set -euo pipefail
+          VSIX=$(ls mcpp-vscode-*.vsix)
+          SIZE=$(stat -c %s "$VSIX")
+          COUNT=$(unzip -l "$VSIX" | tail -1 | awk '{print $2}')
+          echo "VSIX: $COUNT files, $((SIZE / 1024)) KiB"
+          if [ "$COUNT" -gt 220 ]; then echo "the VSIX has $COUNT files; something local leaked in"; exit 1; fi
+          # Offline Mermaid, the pinned official tests, the backend bundle (two images) and four okruns.
+          if [ "$SIZE" -gt 12582912 ]; then echo "the VSIX is over 12 MiB ($SIZE bytes)"; exit 1; fi
+          for required in dist/vendor/mermaid.js dist/vendor/MERMAID-LICENSE dist/data/library-examples.json; do
+            unzip -p "$VSIX" "extension/$required" > /dev/null
+          done
+          for forbidden in .dev-profile/ .agents/ .agnets/ test/ tools/ src/ node_modules/; do
+            if unzip -l "$VSIX" | grep -q "extension/$forbidden"; then
+              echo "leaked into the VSIX: $forbidden"
+              exit 1
+            fi
+          done
+      - name: No second language client in the build output
+        working-directory: mide-plugins/vscode
+        run: |
+          test ! -e dist/src/languageClient.js
+          ! grep -rqsE "require\(['\"]vscode-languageclient['\"]\)|from ['\"]vscode-languageclient['\"]" dist/src package.json
       - uses: actions/upload-artifact@v5
         with:
           name: mcpp-vscode-vsix
-          path: mide-plugins/vscode/dist/*.vsix
+          path: mide-plugins/vscode/mcpp-vscode-*.vsix
+          if-no-files-found: error
+
+  # One Extension Host run per mcppls variant, on the three desktop systems, over the backend the
+  # package carries (staged into the extension): the spawn and path handling the suite exercises is
+  # exactly what differs between them.
+  vscode-e2e:
+    name: VS Code Extension Host (${{ matrix.os }})
+    needs: backend
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: mide-plugins/vscode
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mide-plugins/vscode/package-lock.json
+      - uses: actions/download-artifact@v5
+        with:
+          name: backend
+          path: backend
+      - run: npm ci
+      - run: npm run compile
+      - name: The backend the package carries
+        run: MCPP_IDE_OKB="$GITHUB_WORKSPACE/backend/mcpp-ide.okb" MCPP_IDE_OKRUN="$GITHUB_WORKSPACE/backend/okrun" npm run stage:backend
+      - name: Cache the pinned VS Code download
+        uses: actions/cache@v5
+        with:
+          path: mide-plugins/vscode/.vscode-test
+          key: vscode-1.91.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Extension Host smoke tests against every mcppls variant
+        run: |
+          if [ "$(uname)" = "Linux" ]; then
+            xvfb-run -a npm run test:e2e:one
+          else
+            npm run test:e2e:one
+          fi
+
+  # The only check that proves the dependency resolves end to end: install the packed VSIX into a
+  # private profile and let VS Code pull the platform build of the language service.
+  vscode-isolated-install:
+    name: VS Code isolated install (${{ matrix.os }})
+    needs: vscode
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: mide-plugins/vscode
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mide-plugins/vscode/package-lock.json
+      - run: npm ci
+      - uses: actions/download-artifact@v5
+        with:
+          name: mcpp-vscode-vsix
+          path: mide-plugins/vscode
+      - name: Cache the pinned VS Code download
+        uses: actions/cache@v5
+        with:
+          path: mide-plugins/vscode/.vscode-test
+          key: vscode-1.91.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Download the VS Code CLI
+        run: |
+          set -euo pipefail
+          CODE=$(node tools/ci-vscode-cli.mjs | tr '\\' '/')
+          "$CODE" --version
+          echo "CODE=$CODE" >> "$GITHUB_ENV"
+      - name: Install into a private profile
+        run: |
+          set -euo pipefail
+          "$CODE" --extensions-dir "$PWD/.ci-extensions" --user-data-dir "$PWD/.ci-user" \
+            --install-extension mcpp-vscode-*.vsix --force
+          "$CODE" --extensions-dir "$PWD/.ci-extensions" --user-data-dir "$PWD/.ci-user" \
+            --install-extension sunrisepeak.mcpp-language-server
+      - name: The dependency resolved, with a version
+        run: |
+          set -euo pipefail
+          LIST=$("$CODE" --extensions-dir "$PWD/.ci-extensions" --user-data-dir "$PWD/.ci-user" \
+            --list-extensions --show-versions | tr -d '\r')
+          echo "$LIST"
+          echo "$LIST" | grep -q "^mcpp-community.mcpp-vscode@" || { echo "the extension is missing"; exit 1; }
+          echo "$LIST" | grep -q "^sunrisepeak.mcpp-language-server@" || { echo "the dependency did not resolve"; exit 1; }
+          VERSION=$(printf '%s\n' "$LIST" | sed -n 's/^sunrisepeak\.mcpp-language-server@//p')
+          echo "resolved mcppls $VERSION"
+          echo "resolved mcppls \`$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+
+  vscode-graph-browser:
+    name: VS Code graph page in Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mide-plugins/vscode
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mide-plugins/vscode/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Render and interact with the shipped graph in Chromium
+        run: npm run test:graphs-ui
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: graph-browser-evidence
+          path: mide-plugins/vscode/.dev-profile/graph-ui-artifacts
+          if-no-files-found: warn
 
   # The CLion plugin (mide-plugins/clion; the protocol's editor `jetbrains`, the IntelliJ platform):
   # its tests (the wire and a session over the mock mcpp), the archive carrying the bundle and every

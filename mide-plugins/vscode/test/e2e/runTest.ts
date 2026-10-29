@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -42,6 +42,18 @@ async function runVariant(repositoryRoot: string, fixtureRoot: string, variant: 
   copyFileSync(join(fixtureRoot, "project/mcpp.toml"), join(workspaceDir, "mcpp.toml"));
   copyFileSync(join(fixtureRoot, "project/main.cpp"), join(workspaceDir, "main.cpp"));
   copyFileSync(join(fixtureRoot, "project/build.mcpp"), join(workspaceDir, "build.mcpp"));
+  // The backend: the one this build produced when MCPP_IDE_BACKEND names it, as a user's settings
+  // would, else the bundle staged into the extension (npm run stage:backend), as a user's
+  // installation carries it. And the fake mcpp from the start: the backend reaches mcpp through it.
+  const backend = process.env.MCPP_IDE_BACKEND;
+  if (!backend && !existsSync(join(repositoryRoot, "backend", "mcpp-ide.okb"))) {
+    throw new Error("no backend: set MCPP_IDE_BACKEND, or stage the bundle (npm run stage:backend)");
+  }
+  mkdirSync(join(userDataDir, "User"), { recursive: true });
+  writeFileSync(join(userDataDir, "User", "settings.json"), JSON.stringify({
+    ...(backend ? { "mcpp.ide.backendPath": backend } : {}),
+    "mcpp.path": fakeMcpp,
+  }, null, 2));
 
   // `MCPP_E2E_CODE` runs the suite against an already-installed VS Code, which is
   // what makes the Extension Host tests runnable without the 135 MB download.
@@ -68,6 +80,7 @@ async function runVariant(repositoryRoot: string, fixtureRoot: string, variant: 
       ],
       extensionTestsEnv: {
         MCPP_E2E_FAKE_MCPP: fakeMcpp,
+        MCPP_E2E_FIXTURES: join(repositoryRoot, "..", "..", "protocol", "fixtures"),
         MCPP_E2E_LOG: mcppLogPath,
         MCPP_E2E_MCPPLS_LOG: mcpplsLogPath,
         MCPP_E2E_STUB: variant,

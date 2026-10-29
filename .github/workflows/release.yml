@@ -39,3 +39,24 @@ jobs:
           cp "artifacts/backend/mcpp-ide-${version}-openkal.tar.gz" dist/
           (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
           gh release create "v${version}" dist/* --target "$GITHUB_SHA" --title "mcpp-ide ${version}" --notes-file CHANGELOG.md
+      # Open VSX receives the exact VSIX attached to the GitHub Release; the Visual Studio
+      # Marketplace and the JetBrains Marketplace receive the same assets through their portals.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Publish to Open VSX
+        env:
+          OPENVSX_TOKEN: ${{ secrets.OPENVSX_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENVSX_TOKEN:-}" ]; then
+            echo "OPENVSX_TOKEN is not set: Open VSX is a required destination of a release."
+            echo "Create a token with the publish scope at open-vsx.org (Settings, Access Tokens) and add it"
+            echo "as the OPENVSX_TOKEN secret of this repository (Settings, Secrets and variables, Actions)."
+            exit 1
+          fi
+          (cd mide-plugins/vscode && npm ci --ignore-scripts)
+          vsix="$(ls dist/mcpp-vscode-*.vsix)"
+          (cd mide-plugins/vscode && npx ovsx publish "$GITHUB_WORKSPACE/$vsix" --pat "$OPENVSX_TOKEN")
+      - name: The Marketplaces
+        run: echo "Upload the GitHub Release VSIX manually to Visual Studio Marketplace, and the CLion zip to JetBrains Marketplace."
