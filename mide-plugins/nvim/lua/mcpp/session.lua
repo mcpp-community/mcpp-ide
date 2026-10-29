@@ -367,8 +367,9 @@ local function initialize()
     state.values = resolved.values or {}
     report_rejected(resolved)
   end
+  -- What cannot work, said once; the language service is said with what installs it (init.lua).
   for _, check in ipairs(info.checks or {}) do
-    if check.status == 'error' then
+    if check.status == 'error' and check.id ~= 'languageService' then
       vim.notify('mcpp: ' .. check.message, vim.log.levels.ERROR)
     end
   end
