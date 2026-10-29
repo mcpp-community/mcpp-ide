@@ -31,7 +31,7 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "0.1.1";
+inline constexpr std::string_view kVersion = "0.2.0";
 inline constexpr int kProtocol = 1;
 
 // The methods `install` registers, for the protocol schema's test: a method

@@ -2,7 +2,20 @@
 
 ## 1.1.0
 
-- The extension is mcpp-vscode 0.9.0 again in everything a user sees and does, over the mcpp-ide backend.
+- The extension is mcpp-vscode 0.9.0 in everything a user sees and does: the same views (Project,
+  Libraries, Cache), pages (a package's page, the settings page, the dependency and module graphs),
+  commands, menus, keybindings, settings and strings. 1.0's simplified panels are gone.
+- mcpp runs through the mcpp-ide backend (`mcpp/exec`) and mcppls through it
+  (`languageService/exec`); the backend is bundled (`backend/`, an ok image with okrun for Linux,
+  macOS and Windows) and located as 1.0 located it (`mcpp.backendPath`, the bundle, PATH).
+- Kept from 1.0, in 0.9.0's style: **Debug** (`mcpp.debug`, the `mcpp` launch type through CodeLLDB,
+  the C/C++ extension or lldb-dap), the **Testing** tree, **Select Target** with rows for target
+  sets (mcpp 2026.10.30.1 and later), **Pack**, build on save (`mcpp.build.onSave`), the build's
+  profile and target (`mcpp.build.profile`, `mcpp.build.target`), and cancelling a running job.
+- A launch without a debugger extension is refused at once; the message offers to install CodeLLDB.
+- The build-script API and the `mcpp.toml` schema follow mcpp 2026.10.29.1, the platform plane
+  included.
+- Releases are published to Open VSX beside the GitHub release.
 
 ## 0.9.0 - 2026-10-20
 

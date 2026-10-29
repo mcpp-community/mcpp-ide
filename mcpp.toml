@@ -9,7 +9,7 @@
 # M2/M3), where the system it runs upon is answered when the image is loaded.
 [package]
 name        = "mcpp-ide"
-version     = "0.1.1"
+version     = "0.2.0"
 description = "The IDE backend for mcpp: sessions, jobs, records and view models over mcpp's control contract"
 license     = "Apache-2.0"
 authors     = ["mcpp-community"]

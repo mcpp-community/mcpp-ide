@@ -19,7 +19,7 @@ C++ 模块语义——诊断、补全、悬停、定义、引用、模块图—�
 | --- | --- | --- |
 | [mcpp](https://github.com/mcpp-community/mcpp) | 本扩展驱动的 C++23 构建工具 | — |
 | [mcpp-language-server](https://github.com/Sunrisepeak/mcpp-language-server) | C++ Modules 语言服务；本扩展的硬依赖 | [Marketplace](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) · [Open VSX](https://open-vsx.org/extension/sunrisepeak/mcpp-language-server) |
-| mcpp-vscode（本扩展） | VS Code 前端 | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) · [Releases](https://github.com/mcpp-community/mcpp-vscode/releases) |
+| mcpp-vscode（本扩展） | VS Code 前端 | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) · [Releases](https://github.com/mcpp-community/mcpp-ide/releases) |
 
 模块入口分组、父节点深度、局部展开、刷新和 SVG/PNG 导出见 [依赖图使用说明](docs/dependency-graphs.md)。
 
@@ -58,7 +58,14 @@ C++ 模块语义——诊断、补全、悬停、定义、引用、模块图—�
 - **库生态** —— 离线浏览本机已刷新的包索引；详情页展示真实示例代码、版本矩阵，以及工程是否已依赖它。
 - **缓存视图与清理** —— 工程产物与共享缓存，删除前一律先给出预览：[docs/cache.md](docs/cache.md)。
 - **C++ Modules** —— 对方扩展的状态与操作，集中在工程视图与状态栏快捷菜单，只转发不重写：[docs/commands.md](docs/commands.md)。
+- **调试、测试、目标、打包** —— **mcpp: 调试**与 `mcpp` 启动类型（CodeLLDB、C/C++ 扩展或 lldb-dap）、测试树、**mcpp: 选择构建目标**（mcpp 2026.10.30.1 起含目标集合行）、**mcpp: 打包**，以及保存时构建（`mcpp.build.onSave`）。
 - **设置与诊断** —— 注册表驱动的设置面板（`mcpp.openSettings`）与可复制的环境自检（`mcpp.selfCheck`）：[docs/settings.md](docs/settings.md)。`mcpp.ui.language` 只覆盖本扩展的运行时提示与面板；命令面板标题始终跟随 VS Code（[docs/architecture.md](docs/architecture.md#language)）。
+
+## 后端
+
+扩展携带 [mcpp-ide](https://github.com/mcpp-community/mcpp-ide) 后端（`backend/`：一个 ok 映像包，以及
+Linux x64/arm64、macOS arm64、Windows x64 的 okrun），mcpp 与 mcppls 都经后端运行；`mcpp.backendPath`
+可指定另一个后端。CLion 插件在同一后端上显示同一套页面。
 
 ## 故障排查
 
@@ -68,13 +75,13 @@ C++ 模块语义——诊断、补全、悬停、定义、引用、模块图—�
 
 ## 开发
 
-`npm ci`、`npm run compile`、`npm test`（先门禁后单测）、`npm run test:e2e`、
+`npm ci`、`npm run compile`、`npm test`（先门禁后单测，含对 0.9.0 的一致性门）、`npm run test:e2e`、
+`npm run test:webui`（CLion 工作台在 Chromium 中运行）、`npm run gen`（由仓库的 `spec/` 生成声明）、
 `npm run package`，以及 `node tools/dev-profile.mjs`（在 `.dev-profile/` 下建一次性 profile，
 不会碰你自己的）。
 
-发布：把 `package.json` 与 `package-lock.json` 的版本号改好并提交，推送与版本完全一致的
-tag。工作流会跑测试、打包同一只 VSIX，并发布到 GitHub Releases 与 Open VSX。官方 Marketplace
-使用 Release 中的同一 VSIX 手动上传。
+发布：扩展随 mcpp-ide 发布（该仓库的 `v<version>` tag）。工作流运行测试、打包携带后端的同一只 VSIX，
+并发布到 GitHub Releases 与 Open VSX。官方 Marketplace 使用 Release 中的同一 VSIX 手动上传。
 
 ## 许可证
 

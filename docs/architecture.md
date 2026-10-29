@@ -6,18 +6,44 @@
 |---|---|---|
 | mcpp | the machine contract: event streams, result records, launch descriptors, JSON queries, `--deny` (mcpp docs/50) | any IDE concept |
 | mcpp-ide backend (`src/`) | sessions and projects (which mcpp.toml a file belongs to), watching (result records, manifests), jobs (one at a time per project, cancellation, a newer job replacing a waiting one), view models (project, targets and platforms, cache, libraries, graphs), cleanup plans and their danger levels, settings validation and migration, the command table, runtime strings, the self-check, the handshakes with mcpp (`--protocol-version`) and mcppls (`--version`) | parsing mcpp.toml, resolving dependencies |
-| adapters (`mide-plugins/`) | declarations generated from `spec/`, the protocol mapped onto native UI, the panels' host, the backend process, finding the backend, workspace trust | any decision |
+| adapters (`mide-plugins/`) | declarations generated from `spec/`, the protocol mapped onto native UI, the pages' host, the backend process, finding the backend, workspace trust | any decision |
 
-The panels (`webui/`) are one set of classic scripts that the VS Code extension and the CLion
-plugin load: a VS Code webview and a JCEF page. A panel speaks the backend's protocol through its
-host and asks the host only for what the editor does (open a file, confirm, store a setting).
+## The pages
+
+The views and pages a user sees -- the project tree, the libraries and a package's page, the cache,
+the settings page, the dependency and module graphs -- are mcpp-vscode's
+(`mide-plugins/vscode/src`), as mcpp-vscode 0.9.0 drew them; `registerPages` registers them. They
+read projects and the index from disk and run mcpp through the backend's `mcpp/exec` and mcppls
+through its `languageService/exec`; the extension starts no other process for either.
+
+The workbench (`webui/`) runs the same modules in a browser host. `webui/src` answers what they ask
+of VS Code (the `vscode` module: settings, commands, dialogs, views, webviews) and of Node (`fs`,
+`path`, `os`, `crypto`) through a bridge to the IDE; `tools/bundle-webui.mjs` bundles them into one
+script. Views are tabs in the manifest's order and names; a webview is an iframe with the page's
+own document, its CSP and nonce, and the IDE's colours as the `--vscode-*` variables. The bridge
+carries requests through `mcppHostSend`/`mcppHostReceive`, and a synchronous file read as a
+`prompt` the host answers. mcpp-clion hosts the workbench in JCEF (`webui/Workbench.kt`).
+
+| Bridge action | What it stands for in VS Code | What mcpp-clion answers (Workbench.kt) |
+|---|---|---|
+| `rpc` | the backend's method | the backend's method |
+| `settings.read`, `settings.write` | the configuration | the plugin's settings store |
+| `message`, `input`, `pick`, `saveDialog`, `progress.*` | notifications, input box, quick pick, save dialog, progress | notifications or dialogs, input dialog, list popup, file saver, background task |
+| `openFile`, `openText`, `clipboard`, `openExternal` | editors, the clipboard, the browser | editors, the clipboard, the browser |
+| `command` | the command | the command table's action |
+| `fs.*`, `findFiles` | the file system | the file system |
+
+The parity gates hold the pages to 0.9.0: the manifest's contributions and strings contain 0.9.0's
+exactly; every page's document, rendered by the extension's generators, is byte-identical to the
+snapshot 0.9.0's generators render (`test/parity`); a Chromium test runs the workbench over a real
+backend (`webui/tests`).
 
 ## The adapters
 
 | Directory | Plugin | `editor` | Declares | Holds |
 |---|---|---|---|---|
-| `mide-plugins/vscode` | mcpp-vscode | `vscode` | package.json's contributes, from `mcpp-ide-dev gen vscode` | tasks, the Testing view, debug configurations, Problems, the panels' webviews |
-| `mide-plugins/clion` | mcpp-clion | `jetbrains` (the IntelliJ platform) | actions and message bundles, from `mcpp-ide-dev gen jetbrains` | run configurations, the test tree, CLion's debugger, the panels in JCEF |
+| `mide-plugins/vscode` | mcpp-vscode | `vscode` | package.json's contributes, from `mcpp-ide-dev gen vscode` | the pages, tasks, the Testing view, debug configurations, Problems |
+| `mide-plugins/clion` | mcpp-clion | `jetbrains` (the IntelliJ platform) | actions and message bundles, from `mcpp-ide-dev gen jetbrains` | run configurations, the test tree, CLion's debugger, the workbench in JCEF |
 | `mide-plugins/nvim` | mcpp-nvim | `nvim` | nothing: `:Mcpp` reads the command table from the backend | jobs in a buffer, a terminal for the program, `vim.diagnostic` and the quickfix list, the view models as text, nvim-dap |
 
 `spec/commands.json` says which editors offer a command (`editors`, every editor when absent; a
@@ -75,8 +101,8 @@ system and starts what they carry for it (`.github/scripts/check-package.sh`).
 ## Generated declarations
 
 `spec/` is the source of everything the editors declare statically. `mcpp-ide-dev gen vscode` writes
-the extension's package.json (commands, keybindings, menus, configuration) and its message bundles
-into `mide-plugins/vscode/dist`; `mcpp-ide-dev gen jetbrains` writes the CLion plugin's actions and
+the extension's package.json (commands, keybindings, menus, configuration), its message bundles and
+its settings registry in place, in `mide-plugins/vscode` (CI regenerates them and expects no change); `mcpp-ide-dev gen jetbrains` writes the CLion plugin's actions and
 message bundles into `mide-plugins/clion/build`. The backend embeds the same files (build.mcpp), so
 the commands an editor registers at run time are the ones it declared; which rows an editor offers
 is one rule (`spec::offered_in`) for both. The Neovim plugin declares nothing and offers what the

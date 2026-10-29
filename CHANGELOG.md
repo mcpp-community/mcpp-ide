@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.0
+
+mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 §10).
+
+- **mcpp-vscode 1.1.0 is mcpp-vscode 0.9.0 over the backend.** 0.9.0's extension is imported with
+  its history (`mide-plugins/vscode`); every view, page, command, menu, setting and string a user
+  sees is 0.9.0's. What 1.0 added stays, in 0.9.0's style: debugging (`mcpp.debug`, the `mcpp`
+  launch type), the test tree, the target picker with target-set rows, packing, build on save,
+  cancellable jobs. mcpp is run through the backend's `mcpp/exec`, mcppls through its
+  `languageService/exec`; the extension starts no other process for mcpp or mcppls.
+- **Parity gates against 0.9.0.** The manifest's contributions and strings contain 0.9.0's exactly
+  (`spec/` states them; `mcpp-ide-dev gen vscode` writes the manifest); every page's document,
+  rendered by the extension's generators, is byte-identical to the snapshot rendered by 0.9.0's;
+  the Extension Host suite runs over the bundled backend.
+- **One page library for VS Code and CLion.** The workbench (`webui/`) runs mcpp-vscode's page
+  modules unchanged in a browser host: the `vscode` module and Node's built-ins are answered by
+  the host's bridge, views are tabs, webviews are iframes with the IDE's `--vscode-*` theme.
+  mcpp-clion's tool window and its settings page are this workbench in JCEF; the earlier panels
+  (`webui/js`) are removed. A Chromium test runs the workbench over a real backend.
+- **Backend methods.** `mcpp/exec` (a bounded mcpp run: timeout, output limit, truncation reported),
+  `languageService/exec` (the located mcppls with arguments), `project/files` (manifest, lock and
+  the source count 0.9.0 shows); `targets` rows for target sets (`set`, `members`, `label`) when mcpp
+  is 2026.10.30.1 or later.
+- **mcpp-clion on 2026.1 through 2026.3.** Trust through `TrustedProjects.isProjectTrusted`, debug
+  sessions through `XDebuggerManager.newSessionBuilder`, the debugger driver through
+  `createDriverConfiguration(project, CPPEnvironment(toolchain))`; packing is a job over the
+  backend's `pack/formats`.
+- **CI and release.** 0.9.0's gates run in this repository (registry, translations, unit suite on
+  three systems, manifest drift, parity, Extension Host on three systems, isolated install, the
+  graph page in Chromium); the release publishes the VSIX to Open VSX beside the GitHub release.
+
 ## 0.1.1
 
 mcpp-vscode 1.0.1, mcpp-clion 0.1.1 and the first mcpp-nvim (0.1.1), with mcppls 0.0.19.

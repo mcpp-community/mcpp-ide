@@ -12,8 +12,8 @@
 每个编辑器各写一遍，这些决定就会分歧；从一个编辑器换到另一个，用户遇到的就是另一个工具。
 
 mcpp-ide 只做一次。它的后端 `mcpp-ide serve` 是一个 C++ 程序，只读取 mcpp 的机器契约（事件流、结果记录、启动描述、
-JSON 查询），通过 JSON-RPC 回答编辑器。VS Code 扩展与 CLion 插件把这些回答映射到各自的界面，并共用一套网页面板；
-Neovim 插件把它们映射到缓冲区、浮动窗口与 quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。
+JSON 查询），通过 JSON-RPC 回答编辑器。VS Code 扩展的视图与页面即 mcpp-vscode 0.9.0 的视图与页面；CLion 插件在自己的
+工作台（JCEF）中显示同一套页面；Neovim 插件把这些回答映射到缓冲区、浮动窗口与 quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。
 C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-language-server)；mcpp-ide 不注册任何语言服务。
 
 ## 功能
@@ -25,7 +25,8 @@ C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-lan
 | 调试 | CodeLLDB、C/C++（gdb、lldb）、lldb-dap | CLion 的 GDB 或 LLDB | nvim-dap（codelldb、lldb-dap、cppdbg、gdb） |
 | 诊断 | 问题面板，来自 mcpp 带位置的诊断 | 控制台链接到报告的位置 | `vim.diagnostic`，`:Mcpp problems` 填入 quickfix 列表 |
 | mcpp.toml | 问题来自 mcpp；补全、悬停、大纲来自 mcpp 的键注册表 | 问题来自 mcpp | 问题来自 mcpp |
-| 目标与平台、库、依赖图、缓存、打包、设置 | 共享网页面板 | 同一套面板（JCEF） | 浮动窗口中的文本、`vim.ui.select`；设置在 `setup()` 中 |
+| 库、包页面、依赖图、缓存、设置 | mcpp-vscode 的视图与页面 | 同一套页面，位于 JCEF 工作台 | 浮动窗口中的文本、`vim.ui.select`；设置在 `setup()` 中 |
+| 目标（含目标集合）、打包 | 快速选择 | 弹出列表 | `vim.ui.select` |
 | 语言功能 | mcppls（随扩展一并安装） | mcppls CLion 插件（依赖） | mcppls-nvim（`xlings install mcppls-nvim`） |
 
 - **处处同一答案**——构建运行什么、测试如何报告、清理的代价：都由后端决定
@@ -62,7 +63,8 @@ x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 �
 ```bash
 mcpp build                                     # 后端、mock mcpp、mcpp-ide-dev
 mcpp test                                      # 后端测试
-cd mide-plugins/vscode && npm ci && npm test   # 扩展与面板的测试
+cd mide-plugins/vscode && npm ci && npm test   # 扩展的测试，含对 0.9.0 的一致性门
+npm run test:webui                             # 工作台在 Chromium 中、经后端运行
 npm run package                                # dist/mcpp-vscode-<version>.vsix
 cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
 cd ../.. && nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua   # Neovim 插件的测试

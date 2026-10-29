@@ -8,8 +8,10 @@ mcpp's project features in CLion 2026.1 and later, over the mcpp-ide backend:
 - **debugging** under CLion's own GDB or LLDB (the default toolchain's); an ok image runs under
   `okrun`, whose images reach GDB through the JIT interface;
 - **console links** to `file:line:column`;
-- the **mcpp tool window**: project, libraries, cache, targets and platforms, and the graphs, pack
-  and settings panels (Settings | Tools | mcpp);
+- the **mcpp tool window**: mcpp-vscode's views and pages -- the project tree, the libraries and a
+  package's page, the cache, the dependency and module graphs -- in a workbench (JCEF) whose tabs
+  are the views; the settings page is Settings | Tools | mcpp;
+- **Select the Build Target** (target sets among the rows) and **Pack** as popups, packing as a job;
 - the **Tools | mcpp** menu, generated from `spec/commands.json`.
 
 Language features of C++ files come from the mcppls CLion plugin, which this plugin depends on; it
@@ -20,6 +22,7 @@ registers no language service.
 ```bash
 xlings install gradle            # Gradle and its JDK
 mcpp build                       # in the repository root: the backend and mcpp-ide-dev
+(cd ../vscode && npm ci)         # the extension's dependencies: the build bundles the workbench with them
 gradle buildPlugin               # build/distributions/mcpp-clion-<version>.zip
 gradle verifyPlugin              # CLion 2026.1 and the version in gradle.properties
 ```
@@ -32,4 +35,6 @@ docs/architecture.md, Distribution. Without them the plugin finds the backend th
 ## Tests
 
 `gradle test` runs the wire's tests, and a session over the mock mcpp when `MCPP_IDE_BACKEND` and
-`MCPP_IDE_MOCK_MCPP` name the programs `mcpp build` produced.
+`MCPP_IDE_MOCK_MCPP` name the programs `mcpp build` produced. `npm run test:webui` in
+`../vscode` runs the workbench in Chromium over the backend, answering its bridge as Workbench.kt
+does.

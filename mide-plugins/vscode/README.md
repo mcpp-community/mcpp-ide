@@ -19,7 +19,7 @@ its own and only **forwards** to it ([docs/architecture.md](docs/architecture.md
 | --- | --- | --- |
 | [mcpp](https://github.com/mcpp-community/mcpp) | The C++23 build tool this extension drives | — |
 | [mcpp-language-server](https://github.com/Sunrisepeak/mcpp-language-server) | The C++ Modules language service; a hard dependency of this extension | [Marketplace](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) · [Open VSX](https://open-vsx.org/extension/sunrisepeak/mcpp-language-server) |
-| mcpp-vscode (this extension) | The VS Code front end | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) · [Releases](https://github.com/mcpp-community/mcpp-vscode/releases) |
+| mcpp-vscode (this extension) | The VS Code front end | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) · [Releases](https://github.com/mcpp-community/mcpp-ide/releases) |
 
 See [dependency graph navigation and exports](docs/dependency-graphs.md) for entry groups, importer depth, refresh behavior and SVG/PNG export.
 
@@ -58,7 +58,15 @@ Opening a project never runs `mcpp` on its own and never downloads a toolchain.
 - **Libraries** — browse the official mcpp-index offline, choose a target project and dependency type, and view available versions and verified example code. Other registry hits have separate previews. See [Libraries](docs/libraries.md).
 - **Cache views and cleanup** — project artifacts and the shared build cache, previewed before anything is deleted: [docs/cache.md](docs/cache.md).
 - **C++ Modules** — the other extension's state and actions, in the project view and the status-bar menu, forwarded not reimplemented: [docs/commands.md](docs/commands.md).
+- **Debug, tests, targets, packing** — **mcpp: Debug** and the `mcpp` launch type (CodeLLDB, the C/C++ extension or lldb-dap), the Testing tree, **mcpp: Select the Build Target** (target sets among its rows with mcpp 2026.10.30.1 and later), **mcpp: Pack**, and build on save (`mcpp.build.onSave`).
 - **Settings and diagnostics** — a registry-backed settings panel (`mcpp.openSettings`) and a copyable environment self-check (`mcpp.selfCheck`): [docs/settings.md](docs/settings.md). `mcpp.ui.language` overrides our messages and panels only; palette titles always follow VS Code ([docs/architecture.md](docs/architecture.md#language)).
+
+## The backend
+
+The extension carries the [mcpp-ide](https://github.com/mcpp-community/mcpp-ide) backend
+(`backend/`: one ok-image bundle and okrun for Linux x64/arm64, macOS arm64 and Windows x64) and runs
+mcpp and mcppls through it; `mcpp.backendPath` names another. The CLion plugin shows the same pages
+over the same backend.
 
 ## Troubleshooting
 
@@ -69,13 +77,15 @@ service — are in [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Development
 
-`npm ci`, `npm run compile`, `npm test` (the gates first, then the unit tests), `npm run test:e2e`,
-`npm run package`, and `node tools/dev-profile.mjs` for a throwaway profile under `.dev-profile/`
+`npm ci`, `npm run compile`, `npm test` (the gates first, then the unit tests, the parity gates
+against 0.9.0 among them), `npm run test:e2e`, `npm run test:webui` (the CLion workbench in
+Chromium), `npm run gen` (the declarations from the repository's `spec/`), `npm run package`, and `node tools/dev-profile.mjs` for a throwaway profile under `.dev-profile/`
 that never touches your real one.
 
-Release: bump the version in `package.json` and `package-lock.json`, commit, and push a tag
-matching the version exactly. The workflow runs the tests, packages one VSIX, and publishes that
-same artifact to GitHub Releases and Open VSX. Upload that VSIX manually through the Visual Studio Marketplace publisher portal.
+Release: the extension is released with mcpp-ide (a `v<version>` tag of that repository). The
+workflow runs the tests, packages one VSIX with the backend, and publishes that same artifact to
+GitHub Releases and Open VSX. Upload that VSIX manually through the Visual Studio Marketplace
+publisher portal.
 
 ## License
 
