@@ -53,12 +53,27 @@ export function quoteWindowsArgument(argument: string): string {
   return `"${quoted}"`;
 }
 
+/**
+ * Who runs mcpp. With a backend installed (`useMcppExecutor`, from 1.1.0 the mcpp-ide session),
+ * every query and write below is one `mcpp/exec` of the backend, which runs mcpp as it runs every
+ * command — the mcpp it located, the session's client identity, the effects an untrusted workspace
+ * denies — and the output reaches the same parsers it reached when the extension ran mcpp itself.
+ */
+let mcppExecutor: ProcessRunner | undefined;
+
+export function useMcppExecutor(executor: ProcessRunner | undefined): void {
+  mcppExecutor = executor;
+}
+
 export async function runProcess(
   executable: string,
   args: string[],
   cwd?: string,
   options: ProcessRunOptions = {},
 ): Promise<ProcessResult> {
+  if (mcppExecutor !== undefined) {
+    return mcppExecutor(executable, args, cwd, options);
+  }
   try {
     const needsShell = spawnNeedsShell(executable);
     const result = await execFileAsync(

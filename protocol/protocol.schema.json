@@ -224,7 +224,11 @@
                 "platform": { "$ref": "#/$defs/platform" },
                 "platformText": { "type": "string" },
                 "selected": { "type": "boolean" },
-                "installed": { "type": "boolean" }
+                "installed": { "type": "boolean" },
+                "set": { "type": "boolean", "description": "A target set (mcpp SPEC-015): the triple without the architecture, offered when the installed mcpp names sets (2026.10.30.1)." },
+                "members": { "type": "array", "items": { "type": "string" } },
+                "label": { "type": "string" },
+                "tier": { "type": "string" }
               }
             }
           },
@@ -265,6 +269,44 @@
     "toml/hover": { "params": { "$ref": "#/$defs/textPosition" }, "result": { "type": ["object", "null"] } },
     "toml/symbols": { "params": { "type": "object", "required": ["text"] }, "result": { "type": "array" } },
     "buildscript/complete": { "params": { "$ref": "#/$defs/textPosition" }, "result": { "type": "object", "required": ["items"] } },
+    "mcpp/exec": {
+      "description": "One command of mcpp, as an editor's own parsers read it (mcpp-vscode's views): what it printed and how it ended. The backend runs it as every command it runs -- the mcpp it located, the session's client, the effects an untrusted workspace denies -- ended past timeoutMs (without one, after a day: an install runs as long as it needs) and keeping at most maxOutputBytes (default 16 MiB) of each output.",
+      "params": {
+        "type": "object",
+        "required": ["args"],
+        "properties": {
+          "args": { "type": "array", "items": { "type": "string" } },
+          "cwd": { "type": "string" },
+          "timeoutMs": { "type": "integer", "minimum": 1 },
+          "maxOutputBytes": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["exitCode", "stdout", "stderr", "timedOut", "truncated"],
+        "properties": {
+          "exitCode": { "type": "integer" },
+          "stdout": { "type": "string" },
+          "stderr": { "type": "string" },
+          "timedOut": { "type": "boolean" },
+          "truncated": { "type": "boolean" }
+        }
+      }
+    },
+    "project/files": {
+      "description": "What an editor reads of a project to describe it: the text of mcpp.toml and mcpp.lock (null when absent) and the number of source files under the root, counted as mcpp-vscode 0.9.0 counted them.",
+      "params": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" } } },
+      "result": {
+        "type": "object",
+        "required": ["root", "manifest", "lock", "sourceFiles"],
+        "properties": {
+          "root": { "type": "string" },
+          "manifest": { "type": ["string", "null"] },
+          "lock": { "type": ["string", "null"] },
+          "sourceFiles": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
     "shutdown": { "description": "Waits for the requests in flight; the next message is `exit`.", "params": { "type": "object" }, "result": { "type": "null" } },
     "exit": { "description": "A notification: the backend ends (status 0 after shutdown, 1 otherwise).", "params": { "type": "object" }, "result": { "type": "null" } }
   },

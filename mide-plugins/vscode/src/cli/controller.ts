@@ -78,6 +78,8 @@ const QUICK_MENU_ICON_DIRECTORY = "media/quick-menu";
 export interface ProjectTaskRunOptions {
   /** Set to false when the caller performs its own post-task action. */
   notify?: boolean;
+  /** The arguments after the subcommand, for a pack the caller assembled. */
+  args?: readonly string[];
 }
 
 function taskScope(root: string): vscode.WorkspaceFolder | vscode.TaskScope {
@@ -366,7 +368,12 @@ export class McppCliController {
 
     let completion: TaskCompletion | undefined;
     try {
-      const plan = projectTaskPlan(kind, read<string[]>(TASK_ARGUMENT_SETTINGS[kind]));
+      const plan = kind === "pack"
+        ? projectTaskPlan(kind, options.args ?? [])
+        : projectTaskPlan(kind, read<string[]>(TASK_ARGUMENT_SETTINGS[kind]), {
+          target: read<string>("mcpp.build.target", vscode.Uri.file(project.root)),
+          profile: read<string>("mcpp.build.profile", vscode.Uri.file(project.root)),
+        });
       completion = await this.executeTask(
         project.root,
         this.mcppExecutable(project),

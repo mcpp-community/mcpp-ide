@@ -16,19 +16,21 @@ import {
   subKey,
 } from "../../src/config/registry";
 
-test("the registry declares 10 groups and 69 settings", () => {
+test("the registry declares 10 groups and 75 settings", () => {
   assert.equal(GROUPS.length, 10);
-  assert.equal(SETTINGS.length, 69);
+  // 0.9.0's 69, and the six the mcpp-ide backend reads (build target, profile and on-save, the
+  // debugger, the backend's path, the effects an untrusted workspace denies).
+  assert.equal(SETTINGS.length, 75);
 });
 
 test("the registry's own shape rules hold", () => {
   assert.deepEqual(registryShapeProblems(), []);
 });
 
-test("32 settings are public and the rest are advanced", () => {
-  assert.equal(settingsByTier("public").length, 32);
-  // 33 advanced + the 4 deprecated keys the Settings UI keeps out of the way.
-  assert.equal(settingsByTier("advanced").length, 37);
+test("36 settings are public and the rest are advanced", () => {
+  assert.equal(settingsByTier("public").length, 36);
+  // 35 advanced + the 4 deprecated keys the Settings UI keeps out of the way.
+  assert.equal(settingsByTier("advanced").length, 39);
   // The four deprecated keys live in `advanced` so the Settings UI keeps them out of the way.
   assert.equal(settingsByTier("advanced").filter((entry) => entry.deprecated === true).length, 4);
 });

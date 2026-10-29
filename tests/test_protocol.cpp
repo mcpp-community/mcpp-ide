@@ -165,6 +165,21 @@ int main() {
     auto launch = result_of("run/launch", rooted);
     CHECK(!launch["argv"].empty());
     result_of("debug/configuration", Json{{"root", root.generic_string()}, {"available", Json::array({"lldb"})}});
+    // What mcpp-vscode's own parsers read: one command's output as it printed it, and a project's
+    // files with its source count.
+    auto exec = result_of("mcpp/exec", Json{{"args", Json::array({"--version"})}, {"cwd", root.generic_string()}});
+    CHECK(exec["exitCode"] == 0 && exec["stdout"].get<std::string>().find("mcpp") != std::string::npos);
+    CHECK(exec["timedOut"] == false && exec["truncated"] == false);
+    auto bounded = result_of("mcpp/exec", Json{{"args", Json::array({"--version"})}, {"maxOutputBytes", 3}});
+    CHECK(bounded["truncated"] == true && bounded["stdout"].get<std::string>().size() <= 3);
+    CHECK(wire.call("mcpp/exec", Json{{"args", "--version"}}).contains("error"));
+    std::ofstream(root / "src" / "main.cpp") << "int main() {}\n";
+    std::ofstream(root / "src" / "notes.txt") << "not a source\n";
+    std::filesystem::create_directories(root / "target" / "obj");
+    std::ofstream(root / "target" / "obj" / "gen.cpp") << "// build output\n";
+    auto files = result_of("project/files", rooted);
+    CHECK(files["manifest"].get<std::string>().starts_with("[package]") && files["lock"].is_null());
+    CHECK(files["sourceFiles"] == 1);
 
     result_of("job/start", Json{{"kind", "build"}, {"root", root.generic_string()}});
     result_of("job/start", Json{{"kind", "test"}, {"root", root.generic_string()}});

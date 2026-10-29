@@ -1,5 +1,9 @@
 ## Unreleased
 
+## 1.1.0
+
+- The extension is mcpp-vscode 0.9.0 again in everything a user sees and does, over the mcpp-ide backend.
+
 ## 0.9.0 - 2026-10-20
 
 - Node operations use a keyboard-accessible right-click menu. Refresh/Export use theme colors, aligned chevrons and matching control heights; depth selectors align in View options.

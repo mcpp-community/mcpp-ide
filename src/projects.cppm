@@ -38,6 +38,14 @@ bool declares_workspace(const std::filesystem::path& manifest);
 // The record `target/.last-result.json` names, or null.
 Json last_result(const std::filesystem::path& root);
 
+// What an editor reads of a project to describe it (mcpp-vscode's project view, its graphs and
+// libraries): the text of mcpp.toml and mcpp.lock (null when absent) and how many source files lie
+// under the root, counted as mcpp-vscode 0.9.0 counted them -- the C and C++ suffixes, at most 8
+// directories down and 20000 entries, not into target/, build/, out/, dist/, node_modules/, .git/,
+// .mcpp/, .vscode/ or .cache/, not through symbolic links.
+Json files(const std::filesystem::path& root);
+std::int64_t count_source_files(const std::filesystem::path& root);
+
 class Watcher {
 public:
     using Changed = std::function<void(const std::filesystem::path& root, std::string_view what, const Json& detail)>;
@@ -124,6 +132,55 @@ std::vector<Project> discover(const std::filesystem::path& folder, int depth) {
     out.erase(std::unique(out.begin(), out.end(), [](const Project& a, const Project& b) { return a.root == b.root; }),
               out.end());
     return out;
+}
+
+namespace {
+std::optional<std::string> slurp_text(const std::filesystem::path& p) {
+    std::ifstream in(p, std::ios::binary);
+    if (!in) return std::nullopt;
+    return std::string(std::istreambuf_iterator<char>(in), {});
+}
+}  // namespace
+
+std::int64_t count_source_files(const std::filesystem::path& root) {
+    static constexpr std::array<std::string_view, 14> kSuffixes = {".c", ".cc", ".cpp", ".cxx", ".c++", ".cppm", ".ixx",
+                                                                   ".mpp", ".h", ".hh", ".hpp", ".hxx", ".ipp", ".inl"};
+    static constexpr std::array<std::string_view, 9> kSkip = {"target", "build", "out", "dist", "node_modules", ".git",
+                                                              ".mcpp", ".vscode", ".cache"};
+    constexpr int kMaxDepth = 8;
+    constexpr std::int64_t kMaxEntries = 20000;
+    std::int64_t count = 0, seen = 0;
+    // Depth first, as the extension walked: a directory's entries, each directory entered in turn.
+    std::function<void(const std::filesystem::path&, int)> visit = [&](const std::filesystem::path& dir, int depth) {
+        if (depth > kMaxDepth || seen >= kMaxEntries) return;
+        std::error_code ec;
+        std::filesystem::directory_iterator it(dir, ec), end;
+        if (ec) return;
+        for (; it != end; it.increment(ec)) {
+            if (ec) return;
+            if (++seen > kMaxEntries) return;
+            const auto& e = *it;
+            if (e.is_symlink(ec)) continue;
+            const auto name = e.path().filename().string();
+            if (e.is_directory(ec)) {
+                if (std::ranges::find(kSkip, name) == kSkip.end()) visit(e.path(), depth + 1);
+            } else if (e.is_regular_file(ec)) {
+                auto ext = e.path().extension().string();
+                std::ranges::transform(ext, ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (std::ranges::find(kSuffixes, ext) != kSuffixes.end()) ++count;
+            }
+        }
+    };
+    visit(root, 0);
+    return count;
+}
+
+Json files(const std::filesystem::path& root) {
+    auto text = [](const std::optional<std::string>& t) { return t ? Json(*t) : Json(nullptr); };
+    return Json{{"root", root.generic_string()},
+                {"manifest", text(slurp_text(root / "mcpp.toml"))},
+                {"lock", text(slurp_text(root / "mcpp.lock"))},
+                {"sourceFiles", count_source_files(root)}};
 }
 
 Json last_result(const std::filesystem::path& root) {

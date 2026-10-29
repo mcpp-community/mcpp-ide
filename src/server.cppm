@@ -36,7 +36,7 @@ inline constexpr int kProtocol = 1;
 
 // The methods `install` registers, for the protocol schema's test: a method
 // here and not in protocol/protocol.schema.json (or the other way) fails it.
-inline constexpr std::array<std::string_view, 42> kMethods = {
+inline constexpr std::array<std::string_view, 44> kMethods = {
     "initialize", "settings/update", "settings/registry", "settings/preset", "i18n/bundle",
     "selfCheck", "commands/list", "menu/quick", "languageService/status",
     "projects/list", "projects/forFile", "project/summary", "project/new", "result/last",
@@ -45,7 +45,7 @@ inline constexpr std::array<std::string_view, 42> kMethods = {
     "toolchains/list", "toolchains/install", "toolchains/setDefault", "targets/list",
     "cache/inventory", "cache/plan", "cache/apply", "graph/packages", "graph/modules",
     "pack/formats", "pack/start", "manifest/check", "toml/complete", "toml/hover", "toml/symbols",
-    "buildscript/complete", "shutdown", "exit"};
+    "buildscript/complete", "mcpp/exec", "project/files", "shutdown", "exit"};
 
 // The notifications the backend sends.
 inline constexpr std::array<std::string_view, 13> kNotifications = {
@@ -74,6 +74,7 @@ private:
     Result cache_apply(const Json& p);
     Result graph(const Json& p, bool modules);
     Result project_summary(const Json& p);
+    Result mcpp_exec(const Json& p);
     Result project_new(const Json& p);
     Result manifest_check(const Json& p);
     Result language_service(const Json& p);
@@ -334,6 +335,35 @@ std::expected<mcpp::Client::EnvelopeResult, rpc::Error> Session::query(const std
     auto r = client.envelope(o);
     if (!r) return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, r.error()});
     return *r;
+}
+
+// One command of mcpp, as an editor's own parsers read it (mcpp-vscode's views): what it printed and
+// how it ended. The backend runs it as it runs every command -- the mcpp it located, the session's
+// client, the effects an untrusted workspace denies -- bounded in time and in output.
+std::expected<Json, rpc::Error> Session::mcpp_exec(const Json& p) {
+    mcpp::Client client;
+    {
+        std::lock_guard lock(mutex_);
+        client = client_;
+    }
+    if (!client.ready()) return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, mcppError_.empty() ? "mcpp is not available" : mcppError_});
+    if (!p.contains("args") || !p["args"].is_array()) return std::unexpected(rpc::Error{rpc::INVALID_PARAMS, "args: an array of strings"});
+    mcpp::RunOptions o;
+    for (const auto& a : p["args"]) {
+        if (!a.is_string()) return std::unexpected(rpc::Error{rpc::INVALID_PARAMS, "args: an array of strings"});
+        o.args.push_back(a.get<std::string>());
+    }
+    o.cwd = p.contains("cwd") && p["cwd"].is_string() ? std::filesystem::path(p["cwd"].get<std::string>()) : std::filesystem::path{};
+    o.deny = deny();
+    o.client = client_label();
+    const auto timeoutMs = p.contains("timeoutMs") && p["timeoutMs"].is_number_integer() && p["timeoutMs"].get<std::int64_t>() > 0
+                               ? p["timeoutMs"].get<std::int64_t>() : std::int64_t{24} * 3600 * 1000;
+    const auto limit = p.contains("maxOutputBytes") && p["maxOutputBytes"].is_number_integer() && p["maxOutputBytes"].get<std::int64_t>() > 0
+                           ? static_cast<std::size_t>(p["maxOutputBytes"].get<std::int64_t>()) : std::size_t{16} << 20;
+    auto r = client.exec(o, std::chrono::milliseconds(timeoutMs), limit);
+    if (!r) return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, r.error()});
+    return Json{{"exitCode", r->exitCode}, {"stdout", r->out}, {"stderr", r->err}, {"timedOut", r->timedOut},
+                {"truncated", r->truncated}};
 }
 
 std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::path& root) {
@@ -814,7 +844,13 @@ std::expected<Json, rpc::Error> Session::targets(const Json& p) {
     if (!r) return std::unexpected(r.error());
     const auto chosen = p.contains("selected") && p["selected"].is_string() ? p["selected"].get<std::string>()
                       : setting("mcpp.build.target").is_string() ? setting("mcpp.build.target").get<std::string>() : std::string{};
-    Json out = views::targets(r->envelope, chosen);
+    // Sets are named on the command line from mcpp 2026.10.30.1 on (SPEC-015).
+    bool sets;
+    {
+        std::lock_guard lock(mutex_);
+        sets = client_.ready() && mcpp::compare_versions(client_.protocol().version, "2026.10.30.1") >= 0;
+    }
+    Json out = views::targets(r->envelope, chosen, sets);
     if (const auto root = root_of(p); !root.empty()) {
         std::lock_guard lock(mutex_);
         if (auto it = plans_.find(root); it != plans_.end()) out["lastPlan"] = it->second;
@@ -980,6 +1016,8 @@ void Session::install() {
         return project_json(*proj);
     });
     s.on("project/summary", [this](const Json& p, const rpc::Context&) { return project_summary(p); });
+    s.on("mcpp/exec", [this](const Json& p, const rpc::Context&) { return mcpp_exec(p); });
+    s.on("project/files", [](const Json& p, const rpc::Context&) -> Result { return projects::files(root_of(p)); });
     s.on("project/new", [this](const Json& p, const rpc::Context&) { return project_new(p); });
     s.on("result/last", [](const Json& p, const rpc::Context&) -> Result { return projects::last_result(root_of(p)); });
     s.on("job/start", [this](const Json& p, const rpc::Context&) { return job_start(p); });

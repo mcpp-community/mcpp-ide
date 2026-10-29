@@ -12,3 +12,6 @@ dist/
 
 # 界面原型（tools/ 之外的设计评审产物，体积大，不入库）
 .agents/prototypes/
+
+# The backend the package carries (tools/stage-backend.mjs).
+backend/

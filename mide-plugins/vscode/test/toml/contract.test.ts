@@ -166,7 +166,12 @@ const DEP_SPEC_CASES: ReadonlyArray<readonly [string, string]> = [
 test("模板键契约：[feature-deps] 下依赖 spec 各键被接受", { skip: skipReason, timeout: 600_000 }, async (t) => {
   for (const [name, spec] of DEP_SPEC_CASES) {
     await t.test(name, async () => {
-      const run = await buildWith(`[feature-deps.f1]\n${spec}\n`);
+      // `workspace = true` names the [workspace.dependencies] of the workspace that lists this
+      // package; mcpp resolves it even for a feature that is off, so the template stands in one.
+      const workspace = name === "workspace"
+        ? '[workspace]\nmembers = ["."]\n[workspace.dependencies]\ndep = "1.0.0"\n\n'
+        : "";
+      const run = await buildWith(`${workspace}[feature-deps.f1]\n${spec}\n`);
       assertClean(run, `[feature-deps.f1] 依赖 spec 键 ${name}`);
     });
   }

@@ -85,6 +85,17 @@ public:
     };
     std::expected<RecordsResult, std::string> records(const RunOptions& o) const;
 
+    // Runs any command and returns what it printed, bounded: past `timeout` it is ended, and each
+    // output keeps at most `outputLimit` bytes. What an editor's own parsers read (mcpp-vscode's
+    // views): the backend is the one place mcpp runs, with the session's client and denied effects.
+    struct ExecResult {
+        int exitCode = -1;
+        std::string out, err;
+        bool timedOut = false, truncated = false;
+    };
+    std::expected<ExecResult, std::string> exec(const RunOptions& o, std::chrono::milliseconds timeout,
+                                                std::size_t outputLimit) const;
+
 private:
     std::filesystem::path program_;
     Protocol protocol_;
@@ -255,6 +266,18 @@ std::expected<Client::RecordsResult, std::string> Client::records(const RunOptio
         pos = end + 1;
     }
     return out;
+}
+
+std::expected<Client::ExecResult, std::string> Client::exec(const RunOptions& o, std::chrono::milliseconds timeout,
+                                                           std::size_t outputLimit) const {
+    mcpplibs::os::process::bounds limits;
+    limits.hard = timeout;
+    limits.out_limit = outputLimit;
+    limits.err_limit = outputLimit;
+    auto r = mcpplibs::os::process::run(spawn_options(o), limits);
+    if (!r) return std::unexpected(r.error().message());
+    return ExecResult{r->status.shell_code(), std::move(r->out), std::move(r->err), r->timed_out,
+                      r->out_truncated || r->err_truncated};
 }
 
 Json diagnostics_of(const Json& envelope) {

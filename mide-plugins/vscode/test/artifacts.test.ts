@@ -68,6 +68,9 @@ test("declares mcpp-language-server as the C++ modules language service", () => 
   assert.deepEqual(manifest.activationEvents, [
     "workspaceContains:mcpp.toml",
     "onLanguage:mcpp-toml",
+    // The `mcpp` launch configurations (1.1.0): resolved, and offered with no launch.json.
+    "onDebugResolve:mcpp",
+    "onDebugDynamicConfigurations:mcpp",
   ]);
   assert.equal(manifest.capabilities?.untrustedWorkspaces?.supported, "limited");
   assert.equal(manifest.capabilities?.untrustedWorkspaces?.description, "%untrustedWorkspaces.description%");
@@ -141,9 +144,11 @@ test("一键向导只执行普通 build 并在之后刷新 C++ 模块语言服�
 test("the promised keybindings are contributed and scoped to a project", () => {
   const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as PackageManifest;
   const bindings = manifest.contributes?.keybindings ?? [];
+  // The set, not the order: the keys differ, so the order decides nothing (spec/commands.json
+  // lists the commands by group).
   assert.deepEqual(
-    bindings.map((binding) => binding.command),
-    ["mcpp.build", "mcpp.run", "mcpp.test", "mcpp.cleanProjectArtifacts", "mcpp.showMenu"],
+    bindings.map((binding) => binding.command).sort(),
+    ["mcpp.build", "mcpp.cleanProjectArtifacts", "mcpp.run", "mcpp.showMenu", "mcpp.test"],
   );
   for (const binding of bindings) {
     assert.match(binding.key ?? "", /^ctrl\+alt\+[a-z]$/);
@@ -540,9 +545,10 @@ test("新建工程契约是创建并打开，不自动构建", () => {
 test("声明 GitHub 仓库和扩展图标", () => {
   const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as PackageManifest;
   assert.equal(manifest.icon, "media/logo.png");
-  assert.equal(manifest.repository?.url, "https://github.com/mcpp-community/mcpp-vscode.git");
-  assert.equal(manifest.homepage, "https://github.com/mcpp-community/mcpp-vscode#readme");
-  assert.equal(manifest.bugs?.url, "https://github.com/mcpp-community/mcpp-vscode/issues");
+  // From 1.0.0 the extension lives in mcpp-ide (mide-plugins/vscode), with the same identity.
+  assert.equal(manifest.repository?.url, "https://github.com/mcpp-community/mcpp-ide.git");
+  assert.equal(manifest.homepage, "https://github.com/mcpp-community/mcpp-ide/tree/main/mide-plugins/vscode#readme");
+  assert.equal(manifest.bugs?.url, "https://github.com/mcpp-community/mcpp-ide/issues");
 
   const icon = readFileSync(path.join(root, manifest.icon));
   assert.deepEqual([...icon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);

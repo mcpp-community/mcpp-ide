@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { McppCliController, discoveryBoundaryFromSettings } from "./cli/controller";
-import { runMcpp } from "./cli/process";
+import { runMcpp, useMcppExecutor } from "./cli/process";
 import { parseProtocolInfo } from "./cli/protocol";
 import { buildSelfCheckText } from "./cli/selfCheck";
 import { CLI_COMMANDS, LEGACY_LANGUAGE_SERVER_COMMANDS, LIBRARY_COMMANDS, TOOL_COMMANDS } from "./commands/ids";
@@ -32,11 +32,18 @@ import {
   type ModuleSetupDecision,
   type ModuleSetupStepResult,
 } from "./workflows/moduleSetup";
-import type { TaskCompletion } from "./cli/tasks";
+import type { ProjectTaskKind, TaskCompletion } from "./cli/tasks";
+import { Debugging } from "./ide/debug";
+import { packArguments, selectTarget } from "./ide/flows";
+import { Jobs } from "./ide/jobs";
+import type { IdeProjects } from "./ide/projects";
+import { Session } from "./ide/session";
+import { Testing } from "./ide/testing";
 import { changedSettings, onDidChange as onConfigurationChanged, read } from "./config/access";
 import { applyRenames, pendingRenames, renamePrompt } from "./config/migrate";
 import { registerSettingsPanel } from "./config/panel";
 import { languagePreference, setLanguagePreference, t, type LanguagePreference } from "./i18n/t";
+import { CACHE_VIEW_FOCUS_COMMAND } from "./cache/cachePanel";
 import { readCacheSnapshot, registerCacheView } from "./cache/cacheView";
 import { registerLanguageServerCommands } from "./views/languageServerView";
 import { createLibraryDetailOpener } from "./library/detailPanel";
@@ -262,7 +269,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
 
   const afterProjectTask = async (
     _project: McppProjectDiscovery,
-    _kind: "build" | "run" | "test" | "clean",
+    _kind: ProjectTaskKind,
     completion: TaskCompletion,
   ): Promise<void> => {
     if (completion.state === "cancelled") {
@@ -295,6 +302,76 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
       return view.available ? view.state : undefined;
     },
   });
+
+  // ── the mcpp-ide backend ─────────────────────────────────────────────────
+  // The backend (`mcpp-ide serve`, carried as one ok-image bundle and every system's runner) answers
+  // the views' data and the flows 0.9.0 did not have: debugging, the Testing view, the targets and
+  // target sets, packing. It starts in the background; nothing above waits for it.
+  const session = new Session(extensionContext, output);
+  const ideProjects: IdeProjects = {
+    current: () => findCurrentProject(),
+    all: () => session.info?.projects ?? [],
+  };
+  const jobs = new Jobs(session);
+  // 0.9.0's one seam for running mcpp now runs it through the backend; the parsers are unchanged.
+  useMcppExecutor(async (_executable, args, cwd, options = {}) => {
+    try {
+      const answer = await session.request<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }>("mcpp/exec", {
+        args,
+        ...(cwd ? { cwd } : {}),
+        ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
+        maxOutputBytes: Math.max(1, options.maxBufferMiB ?? 16) * 1024 * 1024,
+      });
+      return { exitCode: answer.timedOut && answer.exitCode === 0 ? 1 : answer.exitCode, stdout: answer.stdout, stderr: answer.stderr };
+    } catch (error) {
+      return { exitCode: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
+    }
+  });
+  extensionContext.subscriptions.push({ dispose: () => useMcppExecutor(undefined) });
+  extensionContext.subscriptions.push(
+    session,
+    jobs,
+    new Debugging(session, ideProjects),
+    new Testing(session, jobs, ideProjects),
+    jobs.onDidChangeRunning.event((n) => void vscode.commands.executeCommand("setContext", "mcpp.jobRunning", n > 0)),
+    vscode.tasks.onDidStartTask(() => void updateJobRunning()),
+    vscode.tasks.onDidEndTask(() => void updateJobRunning()),
+    vscode.commands.registerCommand(CLI_COMMANDS.debug, runGuarded(async () => {
+      const project = findCurrentProject();
+      const folder = project ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(project.root)) : undefined;
+      await vscode.debug.startDebugging(folder, { type: "mcpp", request: "launch", name: "mcpp: debug" });
+    })),
+    vscode.commands.registerCommand(CLI_COMMANDS.selectTarget, runGuarded(() => selectTarget(session, ideProjects))),
+    vscode.commands.registerCommand(CLI_COMMANDS.showTargets, runGuarded(() => selectTarget(session, ideProjects, true))),
+    vscode.commands.registerCommand(CLI_COMMANDS.pack, runGuarded(async () => {
+      const project = findCurrentProject();
+      if (project === undefined) {
+        void vscode.window.showWarningMessage(t("No mcpp.toml was found in this workspace. Run this command inside an mcpp project."));
+        return;
+      }
+      const args = await packArguments(session, project.root);
+      if (args !== undefined) await cliController.runProjectTask("pack", { args });
+    })),
+    vscode.commands.registerCommand(CLI_COMMANDS.cancelJob, runGuarded(async () => {
+      for (const execution of vscode.tasks.taskExecutions) {
+        if (execution.task.definition.type === "mcpp") execution.terminate();
+      }
+      for (const id of jobs.runningIds) await session.request("job/cancel", { jobId: id });
+    })),
+    vscode.commands.registerCommand(CLI_COMMANDS.showCachePanel, () => vscode.commands.executeCommand(CACHE_VIEW_FOCUS_COMMAND)),
+    // `mcpp.build.onSave`: a save in a project builds it, unless an mcpp task already runs.
+    vscode.workspace.onDidSaveTextDocument(async (document) => {
+      if (!read<boolean>("mcpp.build.onSave", document.uri) || cliController.isBusy()) return;
+      if (!/\.(cppm|cpp|cc|cxx|ixx|mpp|h|hpp|toml|mcpp)$/.test(document.fileName)) return;
+      const project = findCurrentProject();
+      if (project && document.fileName.startsWith(project.root)) await cliController.runProjectTask("build", { notify: false });
+    }),
+  );
+  function updateJobRunning(): Thenable<unknown> {
+    const running = jobs.runningCount > 0 || vscode.tasks.taskExecutions.some((e) => e.task.definition.type === "mcpp");
+    return vscode.commands.executeCommand("setContext", "mcpp.jobRunning", running);
+  }
+  void session.start();
 
   // ── views ────────────────────────────────────────────────────────────────
   // Each view owns its own tree provider and its own commands; the project view

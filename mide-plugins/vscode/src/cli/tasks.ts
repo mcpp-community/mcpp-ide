@@ -1,6 +1,6 @@
 import { t } from "../i18n/t";
 
-export type ProjectTaskKind = "build" | "run" | "test" | "clean";
+export type ProjectTaskKind = "build" | "run" | "test" | "clean" | "pack";
 export type TaskState = "succeeded" | "failed" | "cancelled";
 
 export interface ProjectTaskPlan {
@@ -28,22 +28,53 @@ function taskTitle(kind: ProjectTaskKind): string {
       return t("mcpp: Test");
     case "clean":
       return t("mcpp: Clean");
+    case "pack":
+      return t("mcpp: Pack");
   }
 }
 
 /** `mcpp.task.<kind>Args`, so a user can pass `-j 4` or `--quiet` without a wrapper. */
-export const TASK_ARGUMENT_SETTINGS: Readonly<Record<ProjectTaskKind, string>> = {
+export const TASK_ARGUMENT_SETTINGS: Readonly<Record<Exclude<ProjectTaskKind, "pack">, string>> = {
   build: "mcpp.task.buildArgs",
   run: "mcpp.task.runArgs",
   test: "mcpp.task.testArgs",
   clean: "mcpp.task.cleanArgs",
 };
 
-export function projectTaskPlan(kind: ProjectTaskKind, extraArgs: readonly string[] = []): ProjectTaskPlan {
+/**
+ * What the build, run and test tasks build for: `mcpp.build.target` (a triple, or a target set such
+ * as `openkal`; empty is this machine) and `mcpp.build.profile` (`dev`, the default, or `release`).
+ * Clean and pack take neither: pack chooses its own target and profile.
+ */
+export interface BuildSelection {
+  target?: string;
+  profile?: string;
+}
+
+export function selectionArgs(kind: ProjectTaskKind, selection: BuildSelection = {}): string[] {
+  if (kind !== "build" && kind !== "run" && kind !== "test") {
+    return [];
+  }
+  const out: string[] = [];
+  const target = typeof selection.target === "string" ? selection.target.trim() : "";
+  if (target !== "") {
+    out.push("--target", target);
+  }
+  if (selection.profile === "release") {
+    out.push("--release");
+  }
+  return out;
+}
+
+export function projectTaskPlan(
+  kind: ProjectTaskKind,
+  extraArgs: readonly string[] = [],
+  selection: BuildSelection = {},
+): ProjectTaskPlan {
   return {
     kind,
     title: taskTitle(kind),
-    args: [kind, ...extraArgs],
+    args: [kind, ...selectionArgs(kind, selection), ...extraArgs],
   };
 }
 

@@ -2,17 +2,17 @@
   "name": "mcpp-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.9.0",
+  "version": "1.1.0",
   "publisher": "mcpp-community",
   "license": "Apache-2.0",
   "icon": "media/logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mcpp-community/mcpp-vscode.git"
+    "url": "https://github.com/mcpp-community/mcpp-ide.git"
   },
-  "homepage": "https://github.com/mcpp-community/mcpp-vscode#readme",
+  "homepage": "https://github.com/mcpp-community/mcpp-ide/tree/main/mide-plugins/vscode#readme",
   "bugs": {
-    "url": "https://github.com/mcpp-community/mcpp-vscode/issues"
+    "url": "https://github.com/mcpp-community/mcpp-ide/issues"
   },
   "engines": {
     "vscode": "^1.91.0"
@@ -22,10 +22,14 @@
   ],
   "activationEvents": [
     "workspaceContains:mcpp.toml",
-    "onLanguage:mcpp-toml"
+    "onLanguage:mcpp-toml",
+    "onDebugResolve:mcpp",
+    "onDebugDynamicConfigurations:mcpp"
   ],
   "categories": [
     "Programming Languages",
+    "Debuggers",
+    "Testing",
     "Other"
   ],
   "capabilities": {
@@ -1272,13 +1276,76 @@
         }
       }
     ],
-    "viewsWelcome": []
+    "viewsWelcome": [],
+    "debuggers": [
+      {
+        "type": "mcpp",
+        "label": "%debugger.mcpp.label%",
+        "languages": [
+          "cpp",
+          "c"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "target": {
+                "type": "string",
+                "description": "%debug.mcpp.target%"
+              },
+              "profile": {
+                "type": "string",
+                "enum": [
+                  "dev",
+                  "release"
+                ],
+                "description": "%debug.mcpp.profile%"
+              },
+              "engine": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "cppdbg",
+                  "lldb",
+                  "lldb-dap",
+                  "gdb"
+                ],
+                "description": "%debug.mcpp.engine%"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "%debug.mcpp.args%"
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "mcpp",
+            "request": "launch",
+            "name": "mcpp: debug"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "mcpp: debug",
+            "body": {
+              "type": "mcpp",
+              "request": "launch",
+              "name": "mcpp: debug"
+            }
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "compile": "tsc -p tsconfig.json && node tools/copy-webview-assets.mjs",
     "test": "npm run check && npm run clean && npm run compile && node --test \"dist/test/**/*.test.js\"",
-    "package": "npm run clean && npm run compile && vsce package",
+    "package": "npm run clean && npm run compile && npm run stage:backend && vsce package",
     "test:e2e": "npm run compile && node dist/test/e2e/runTest.js",
     "test:all": "npm test && npm run test:e2e",
     "gen:l10n": "node tools/generate-l10n.mjs",
@@ -1294,7 +1361,9 @@
     "check:generated": "node tools/check-generators.mjs",
     "test:e2e:one": "node dist/test/e2e/runTest.js",
     "gen:examples": "node tools/generate-library-examples.mjs",
-    "test:graphs-ui": "npm run compile && node tools/test-graphs-ui.mjs"
+    "test:graphs-ui": "npm run compile && node tools/test-graphs-ui.mjs",
+    "gen": "cd ../.. && mcpp run mcpp-ide-dev -- gen vscode --dev",
+    "stage:backend": "node tools/stage-backend.mjs"
   },
   "devDependencies": {
     "@mermaid-js/tiny": "12.2.0",

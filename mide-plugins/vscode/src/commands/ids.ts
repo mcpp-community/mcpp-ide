@@ -24,6 +24,13 @@ export const CLI_COMMANDS = {
   installToolchain: "mcpp.installToolchain",
   selectDefaultToolchain: "mcpp.selectDefaultToolchain",
   autoConfigureModules: "mcpp.autoConfigureModules",
+  // From 1.1.0, over the mcpp-ide backend.
+  debug: "mcpp.debug",
+  pack: "mcpp.pack",
+  cancelJob: "mcpp.cancelJob",
+  selectTarget: "mcpp.selectTarget",
+  showTargets: "mcpp.showTargets",
+  showCachePanel: "mcpp.showCachePanel",
 } as const;
 
 /** The language-service entries that existed in 0.4.x (kept as aliases, see below). */
