@@ -12,7 +12,8 @@
 每个编辑器各写一遍，这些决定就会分歧；从一个编辑器换到另一个，用户遇到的就是另一个工具。
 
 mcpp-ide 只做一次。它的后端 `mcpp-ide serve` 是一个 C++ 程序，只读取 mcpp 的机器契约（事件流、结果记录、启动描述、
-JSON 查询），通过 JSON-RPC 回答编辑器。VS Code 扩展与 CLion 插件把这些回答映射到各自的界面，并共用一套网页面板。
+JSON 查询），通过 JSON-RPC 回答编辑器。VS Code 扩展与 CLion 插件把这些回答映射到各自的界面，并共用一套网页面板；
+二者位于本仓库的 `mide-plugins/`。
 C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-language-server)；mcpp-ide 不注册任何语言服务。
 
 ## 功能
@@ -57,11 +58,11 @@ x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 �
 ### 从源码构建
 
 ```bash
-mcpp build                        # 后端、mock mcpp、mcpp-ide-dev
-mcpp test                         # 后端测试
-cd vscode && npm ci && npm test   # 扩展与面板的测试
-npm run package                   # dist/mcpp-vscode-<version>.vsix
-cd ../jetbrains && gradle buildPlugin verifyPlugin   # build/distributions/mcpp-clion-<version>.zip
+mcpp build                                     # 后端、mock mcpp、mcpp-ide-dev
+mcpp test                                      # 后端测试
+cd mide-plugins/vscode && npm ci && npm test   # 扩展与面板的测试
+npm run package                                # dist/mcpp-vscode-<version>.vsix
+cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
 ```
 
 `xlings install gradle` 会一并带来 Gradle 及其 JDK。
@@ -72,7 +73,7 @@ cd ../jetbrains && gradle buildPlugin verifyPlugin   # build/distributions/mcpp-
 - [protocol/protocol.schema.json](protocol/protocol.schema.json)——后端的方法与通知
 - [protocol/mcpp-contract.schema.json](protocol/mcpp-contract.schema.json)——后端读取的 mcpp 契约部分
 - [spec/](spec)——设置、命令、翻译：两个编辑器声明的唯一来源
-- [vscode/README.md](vscode/README.md)、[jetbrains/README.md](jetbrains/README.md)
+- [mide-plugins/vscode/README.md](mide-plugins/vscode/README.md)、[mide-plugins/clion/README.md](mide-plugins/clion/README.md)
 
 ## 参与贡献
 

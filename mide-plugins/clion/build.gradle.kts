@@ -1,8 +1,8 @@
 // mcpp-clion: mcpp's project features in CLion -- run configurations, the test tree, debugging, the
-// console's links, and the shared panels (../webui) -- over the mcpp-ide backend (`mcpp-ide serve`).
+// console's links, and the shared panels (../../webui) -- over the mcpp-ide backend (`mcpp-ide serve`).
 //
 // Language features are mcppls's: this plugin depends on the mcppls CLion plugin and registers no
-// language service. The declarations generated from ../spec (actions, message bundles) are written
+// language service. The declarations generated from ../../spec (actions, message bundles) are written
 // by the backend's `mcpp-ide-dev gen jetbrains` before the resources are processed; nothing
 // generated is in the repository.
 //
@@ -19,6 +19,9 @@ plugins {
 
 group = "io.github.mcpp-community"
 version = providers.gradleProperty("pluginVersion").get()
+
+// The repository: this plugin is mide-plugins/clion of it.
+val repositoryRoot: File = rootDir.resolve("../..").canonicalFile
 
 repositories {
     mavenCentral()
@@ -73,22 +76,22 @@ kotlin {
     compilerOptions { jvmDefault = JvmDefaultMode.NO_COMPATIBILITY }
 }
 
-// ../spec -> the generated resources: the actions (META-INF/mcpp-actions.xml, included by plugin.xml)
+// ../../spec -> the generated resources: the actions (META-INF/mcpp-actions.xml, included by plugin.xml)
 // and the message bundles. `mcpp-ide-dev` is the backend package's program; MCPP_IDE_DEV names a
 // built one, else `mcpp run` builds it.
 val generatedResources = layout.buildDirectory.dir("generated/mcpp-ide")
 val generateDeclarations = tasks.register<Exec>("generateDeclarations") {
     val out = generatedResources.get().asFile
-    inputs.dir(rootDir.resolve("../spec"))
+    inputs.dir(repositoryRoot.resolve("spec"))
     outputs.dir(out)
-    workingDir = rootDir.resolve("..")
+    workingDir = repositoryRoot
     val dev = System.getenv("MCPP_IDE_DEV")
     if (dev != null) commandLine(dev, "gen", "jetbrains", "--out", out.absolutePath)
     else commandLine("mcpp", "run", "mcpp-ide-dev", "--", "gen", "jetbrains", "--out", out.absolutePath)
 }
-// ../webui, as it is: the panels JCEF loads.
+// ../../webui, as it is: the panels JCEF loads.
 val copyWebui = tasks.register<Sync>("copyWebui") {
-    from(rootDir.resolve("../webui")) { exclude("tests/**", "tsconfig.json", "js/types.d.ts") }
+    from(repositoryRoot.resolve("webui")) { exclude("tests/**", "tsconfig.json", "js/types.d.ts") }
     into(layout.buildDirectory.dir("generated/webui/webui"))
 }
 sourceSets {
@@ -135,7 +138,7 @@ intellijPlatform {
 }
 
 tasks.test {
-    systemProperty("mcppide.fixtures", rootDir.resolve("../protocol/fixtures").absolutePath)
+    systemProperty("mcppide.fixtures", repositoryRoot.resolve("protocol/fixtures").absolutePath)
     providers.environmentVariable("MCPP_IDE_BACKEND").orNull?.let { systemProperty("mcppide.backend", it) }
     providers.environmentVariable("MCPP_IDE_MOCK_MCPP").orNull?.let { systemProperty("mcppide.mockMcpp", it) }
     systemProperty("patch.engine.backend.freeze.timeout", "0")

@@ -16,8 +16,9 @@ different tool.
 mcpp-ide makes them once. Its backend, `mcpp-ide serve`, is a C++ program that reads only mcpp's
 machine contract (event streams, result records, launch descriptors, JSON queries) and answers the
 editors over JSON-RPC. The VS Code extension and the CLion plugin map those answers onto their own
-UI and share one set of web panels. Language features of C++ files come from
-[mcppls](https://github.com/Sunrisepeak/mcpp-language-server); mcpp-ide registers none.
+UI and share one set of web panels; both are `mide-plugins/` of this repository. Language features
+of C++ files come from [mcppls](https://github.com/Sunrisepeak/mcpp-language-server); mcpp-ide
+registers none.
 
 ## Features
 
@@ -63,11 +64,11 @@ Linux x64/arm64, macOS arm64 and Windows x64.
 ### From source
 
 ```bash
-mcpp build                        # the backend, the mock mcpp, mcpp-ide-dev
-mcpp test                         # the backend's tests
-cd vscode && npm ci && npm test   # the extension's and the panels' tests
-npm run package                   # dist/mcpp-vscode-<version>.vsix
-cd ../jetbrains && gradle buildPlugin verifyPlugin   # build/distributions/mcpp-clion-<version>.zip
+mcpp build                                     # the backend, the mock mcpp, mcpp-ide-dev
+mcpp test                                      # the backend's tests
+cd mide-plugins/vscode && npm ci && npm test   # the extension's and the panels' tests
+npm run package                                # dist/mcpp-vscode-<version>.vsix
+cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
 ```
 
 `xlings install gradle` brings Gradle and its JDK.
@@ -78,7 +79,8 @@ cd ../jetbrains && gradle buildPlugin verifyPlugin   # build/distributions/mcpp-
 - [protocol/protocol.schema.json](protocol/protocol.schema.json) -- the backend's methods and notifications
 - [protocol/mcpp-contract.schema.json](protocol/mcpp-contract.schema.json) -- the part of mcpp's contract it reads
 - [spec/](spec) -- settings, commands, translations: the source of both editors' declarations
-- [vscode/README.md](vscode/README.md), [jetbrains/README.md](jetbrains/README.md)
+- [mide-plugins/vscode/README.md](mide-plugins/vscode/README.md),
+  [mide-plugins/clion/README.md](mide-plugins/clion/README.md)
 
 ## Contributing
 

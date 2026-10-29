@@ -283,11 +283,11 @@
   },
   "scripts": {
     "compile": "tsc -p tsconfig.json",
-    "gen": "cd .. && mcpp run mcpp-ide-dev -- gen vscode --out vscode/dist/extension --stage",
-    "test": "npm run compile && node --test \"out/test/unit/**/*.test.js\" && node --test \"../webui/tests/*.test.js\"",
+    "gen": "cd ../.. && mcpp run mcpp-ide-dev -- gen vscode --out mide-plugins/vscode/dist/extension --stage",
+    "test": "npm run compile && node --test \"out/test/unit/**/*.test.js\" && node --test \"../../webui/tests/*.test.js\"",
     "test:e2e": "npm run compile && npm run gen && node out/test/e2e/runTest.js && MCPP_E2E_BUNDLED=1 node out/test/e2e/runTest.js",
     "package": "npm run compile && npm run gen && cd dist/extension && vsce package --no-dependencies -o ../mcpp-vscode-$npm_package_version.vsix",
-    "check:webui": "tsc -p ../webui/tsconfig.json"
+    "check:webui": "tsc -p ../../webui/tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

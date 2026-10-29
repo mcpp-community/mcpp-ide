@@ -6,7 +6,7 @@
 |---|---|---|
 | mcpp | the machine contract: event streams, result records, launch descriptors, JSON queries, `--deny` (mcpp docs/50) | any IDE concept |
 | mcpp-ide backend (`src/`) | sessions and projects (which mcpp.toml a file belongs to), watching (result records, manifests), jobs (one at a time per project, cancellation, a newer job replacing a waiting one), view models (project, targets and platforms, cache, libraries, graphs), cleanup plans and their danger levels, settings validation and migration, the command table, runtime strings, the self-check, the handshakes with mcpp (`--protocol-version`) and mcppls (`--version`) | parsing mcpp.toml, resolving dependencies |
-| adapters (`vscode/`, `jetbrains/`) | declarations generated from `spec/`, the protocol mapped onto native UI, the panels' host, the backend process, finding the backend, workspace trust | any decision |
+| adapters (`mide-plugins/vscode`, `mide-plugins/clion`: the CLion plugin, editor id `jetbrains`, the IntelliJ platform's) | declarations generated from `spec/`, the protocol mapped onto native UI, the panels' host, the backend process, finding the backend, workspace trust | any decision |
 
 The panels (`webui/`) are one set of classic scripts that both editors load: a VS Code webview and a
 JCEF page. A panel speaks the backend's protocol through its host and asks the host only for what

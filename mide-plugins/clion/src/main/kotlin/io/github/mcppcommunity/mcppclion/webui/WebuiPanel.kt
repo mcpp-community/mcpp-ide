@@ -1,4 +1,4 @@
-// The shared panels (../webui) in a JCEF browser. The page speaks the backend's protocol through
+// The shared panels (webui/) in a JCEF browser. The page speaks the backend's protocol through
 // this host -- `window.mcppHostSend` (a JBCefJSQuery) out, `window.mcppHostReceive` in -- and asks
 // it for what only the IDE does: open a file, confirm, store a setting, run a command.
 package io.github.mcppcommunity.mcppclion.webui

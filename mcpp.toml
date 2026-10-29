@@ -1,6 +1,6 @@
 # mcpp-ide: the IDE backend for mcpp (one C++ program, `mcpp-ide serve`, JSON-RPC
 # on its standard streams), the shared panels, and the editor adapters that host
-# it (vscode/, jetbrains/). This file builds the backend.
+# it (mide-plugins/: vscode, clion). This file builds the backend.
 #
 # The operating system is reached through mcpplibs.os (processes, the
 # environment, the standard streams, a request to end), which is openkal

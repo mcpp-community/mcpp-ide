@@ -6,20 +6,21 @@
 //       records the backend reads. The mock mcpp and both adapters' tests replay them, so a change in
 //       mcpp's contract shows up as a diff here first.
 //   mcpp-ide-dev gen vscode --out DIR [--stage] [--okb FILE] [--okrun DIR] [--backends DIR]
-//       The VS Code extension's declarations from spec/: package.json (vscode/package.json with the
-//       generated commands, keybindings, menus and configuration), package.nls.json and
-//       package.nls.zh-cn.json. With --stage, also the files the extension ships (vscode/out, media,
+//       The VS Code extension's declarations from spec/: package.json (mide-plugins/vscode/package.json
+//       with the generated commands, keybindings, menus and configuration), package.nls.json and
+//       package.nls.zh-cn.json. With --stage, also the files the extension ships (its out/, media,
 //       syntaxes, the webui, README, CHANGELOG, LICENSE, and the backend: see stage_backend): the
 //       directory `vsce package` packs.
 //   mcpp-ide-dev gen jetbrains --out DIR
-//       The CLion plugin's declarations from spec/: META-INF/mcpp-actions.xml (included by
-//       plugin.xml) and the message bundles messages/McppClionBundle[_zh_CN].properties.
+//       The CLion plugin's declarations from spec/ (the IntelliJ platform's, editor id `jetbrains`):
+//       META-INF/mcpp-actions.xml (included by plugin.xml) and the message bundles
+//       messages/McppClionBundle[_zh_CN].properties.
 //   mcpp-ide-dev check-i18n
 //       Every runtime string the backend and the adapters pass to t(...) has a Chinese entry in
 //       spec/i18n/runtime.zh-cn.json; every editor string a Chinese one in manifest.zh-cn.json.
 //
 // Nothing generated is written into the repository: the outputs go where the adapters' builds put
-// them (vscode/dist, jetbrains/build).
+// them (mide-plugins/vscode/dist, mide-plugins/clion/build).
 import std;
 import nlohmann.json;
 import mcpplibs.os;
@@ -61,6 +62,9 @@ fs::path repo() {
     }
     throw std::runtime_error("run mcpp-ide-dev inside the mcpp-ide repository");
 }
+
+// An editor's plugin: mide-plugins/<editor> (vscode, clion).
+fs::path plugin(const fs::path& root, std::string_view editor) { return root / "mide-plugins" / editor; }
 
 std::optional<std::string> option(std::span<const std::string> args, std::string_view name) {
     for (std::size_t i = 0; i + 1 < args.size(); ++i) if (args[i] == name) return args[i + 1];
@@ -286,9 +290,10 @@ void stage_backend(std::span<const std::string> args, const fs::path& out) {
 
 int gen_vscode(std::span<const std::string> args) {
     const auto root = repo();
-    const auto out = fs::path(option(args, "--out").value_or((root / "vscode" / "dist" / "extension").string()));
+    const auto ext = plugin(root, "vscode");
+    const auto out = fs::path(option(args, "--out").value_or((ext / "dist" / "extension").string()));
     const auto spec = load_spec(root);
-    auto pkg = read_json(root / "vscode" / "package.json");
+    auto pkg = read_json(ext / "package.json");
     vscode_contributes(spec, pkg["contributes"]);
     // npm's own fields stay in the development manifest.
     pkg.erase("scripts");
@@ -299,13 +304,13 @@ int gen_vscode(std::span<const std::string> args) {
     for (auto it = spec.zh.begin(); it != spec.zh.end(); ++it) zh[it.key()] = it.value();
     spit(out / "package.nls.zh-cn.json", zh.dump(2) + "\n");
     if (flag(args, "--stage")) {
-        copy_tree(root / "vscode" / "out" / "src", out / "out" / "src");
-        copy_tree(root / "vscode" / "media", out / "media");
-        copy_tree(root / "vscode" / "syntaxes", out / "syntaxes");
+        copy_tree(ext / "out" / "src", out / "out" / "src");
+        copy_tree(ext / "media", out / "media");
+        copy_tree(ext / "syntaxes", out / "syntaxes");
         static constexpr std::array<std::string_view, 3> webuiSkip{"tests", "tsconfig.json", "js/types.d.ts"};
         copy_tree(root / "webui", out / "webui", webuiSkip);
         for (const auto* f : {"README.md", "CHANGELOG.md", ".vscodeignore"})
-            if (fs::exists(root / "vscode" / f)) fs::copy_file(root / "vscode" / f, out / f, fs::copy_options::overwrite_existing);
+            if (fs::exists(ext / f)) fs::copy_file(ext / f, out / f, fs::copy_options::overwrite_existing);
         fs::copy_file(root / "LICENSE", out / "LICENSE.txt", fs::copy_options::overwrite_existing);
         // The runtime strings, for what the extension says before its backend runs.
         fs::create_directories(out / "i18n");
@@ -357,7 +362,7 @@ std::string xml_escape(std::string_view s) {
 
 int gen_jetbrains(std::span<const std::string> args) {
     const auto root = repo();
-    const auto out = fs::path(option(args, "--out").value_or((root / "jetbrains" / "build" / "generated" / "mcpp-ide").string()));
+    const auto out = fs::path(option(args, "--out").value_or((plugin(root, "clion") / "build" / "generated" / "mcpp-ide").string()));
     const auto spec = load_spec(root);
     // The actions: one group per spec group under Tools | mcpp, every command one action of the same
     // class, which reads what it does from the backend's command table by its id. JetBrains keeps its
@@ -455,9 +460,9 @@ int check_i18n(std::span<const std::string>) {
     std::size_t seen = 0;
     const std::array<std::pair<fs::path, std::vector<std::string>>, 4> trees{{
         {root / "src", {".cppm", ".cpp"}},
-        {root / "vscode" / "src", {".ts"}},
+        {plugin(root, "vscode") / "src", {".ts"}},
         {root / "webui", {".js"}},
-        {root / "jetbrains" / "src" / "main" / "kotlin", {".kt"}},
+        {plugin(root, "clion") / "src" / "main" / "kotlin", {".kt"}},
     }};
     std::error_code ec;
     for (const auto& [dir, exts] : trees)

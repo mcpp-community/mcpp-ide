@@ -83,7 +83,7 @@ jobs:
           name: backend
           path: backend
 
-  # The VS Code extension: unit tests (the wire, the mappings) and the shared panels in a DOM, both
+  # The VS Code extension (mide-plugins/vscode): unit tests (the wire, the mappings) and the shared panels in a DOM, both
   # against the backend built here; the extension in a real VS Code (the oldest it supports) over the
   # mock mcpp, with that backend and with the bundle it carries; then the package, and its file list.
   vscode:
@@ -101,7 +101,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: vscode/package-lock.json
+          cache-dependency-path: mide-plugins/vscode/package-lock.json
       - uses: actions/download-artifact@v5
         with:
           name: backend
@@ -115,19 +115,19 @@ jobs:
             echo "MCPP_IDE_OKRUN=$GITHUB_WORKSPACE/backend/okrun"
           } >> "$GITHUB_ENV"
       - name: Install
-        working-directory: vscode
+        working-directory: mide-plugins/vscode
         run: npm ci
       - name: Unit and panel tests
-        working-directory: vscode
+        working-directory: mide-plugins/vscode
         run: npm test
       - name: The panels type-check
-        working-directory: vscode
+        working-directory: mide-plugins/vscode
         run: npm run check:webui
       - name: The extension in VS Code ${{ env.VSCODE_VERSION }}
-        working-directory: vscode
+        working-directory: mide-plugins/vscode
         run: xvfb-run -a npm run test:e2e
       - name: Package
-        working-directory: vscode
+        working-directory: mide-plugins/vscode
         run: |
           npm run package
           (cd dist/extension && npx vsce ls --no-dependencies) | tee files.txt
@@ -138,12 +138,13 @@ jobs:
       - uses: actions/upload-artifact@v5
         with:
           name: mcpp-vscode-vsix
-          path: vscode/dist/*.vsix
+          path: mide-plugins/vscode/dist/*.vsix
 
-  # The CLion plugin: its tests (the wire and a session over the mock mcpp), the archive carrying the
-  # bundle and every system's okrun, and the Plugin Verifier against the oldest CLion it claims
-  # (2025.2) and the one it is built on.
-  jetbrains:
+  # The CLion plugin (mide-plugins/clion; the protocol's editor `jetbrains`, the IntelliJ platform):
+  # its tests (the wire and a session over the mock mcpp), the archive carrying the bundle and every
+  # system's okrun, and the Plugin Verifier against the oldest CLion it claims (2026.1) and the one it
+  # is built on.
+  clion:
     name: CLion plugin
     needs: backend
     runs-on: ubuntu-24.04
@@ -159,7 +160,7 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: ~/.gradle/caches/modules-2
-          key: gradle-clion-${{ hashFiles('jetbrains/gradle.properties', 'jetbrains/build.gradle.kts', 'jetbrains/settings.gradle.kts') }}
+          key: gradle-clion-${{ hashFiles('mide-plugins/clion/gradle.properties', 'mide-plugins/clion/build.gradle.kts', 'mide-plugins/clion/settings.gradle.kts') }}
       - uses: actions/download-artifact@v5
         with:
           name: backend
@@ -178,13 +179,13 @@ jobs:
             echo "MCPP_IDE_OKRUN=$GITHUB_WORKSPACE/backend/okrun"
           } >> "$GITHUB_ENV"
       - name: Test and package
-        working-directory: jetbrains
+        working-directory: mide-plugins/clion
         run: gradle --no-daemon test buildPlugin
       - name: Plugin Verifier
-        working-directory: jetbrains
+        working-directory: mide-plugins/clion
         run: gradle --no-daemon verifyPlugin
       - name: The archive carries the bundle and every system's okrun
-        working-directory: jetbrains
+        working-directory: mide-plugins/clion
         run: |
           unzip -l build/distributions/mcpp-clion-*.zip | tee files.txt
           grep -q "mcpp-clion/backend/mcpp-ide.okb" files.txt
@@ -194,14 +195,14 @@ jobs:
       - uses: actions/upload-artifact@v5
         with:
           name: mcpp-clion-zip
-          path: jetbrains/build/distributions/*.zip
+          path: mide-plugins/clion/build/distributions/*.zip
 
   # The packages, opened on every system they serve: the one bundle each editor package carries,
   # started by the okrun it carries for that system (scripts/check-package.sh), and the backend's own
   # universal package started by its launcher.
   packages:
     name: packages on ${{ matrix.os }}
-    needs: [vscode, jetbrains]
+    needs: [vscode, clion]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:

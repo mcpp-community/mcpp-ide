@@ -7,7 +7,7 @@ import * as path from "node:path";
 
 import { runTests } from "@vscode/test-electron";
 
-import { built, repo } from "../unit/harness";
+import { built, extensionDir } from "../unit/harness";
 
 async function main(): Promise<void> {
   const backend = built("mcpp-ide"), mock = built("mcpp-ide-mock-mcpp");
@@ -30,11 +30,11 @@ async function main(): Promise<void> {
   }));
   const executable = process.env.MCPP_E2E_CODE;
   // MCPP_E2E_EXTENSION: another extension directory (an unpacked .vsix) in place of the staged one.
-  const extensionDevelopmentPath = process.env.MCPP_E2E_EXTENSION ?? path.join(repo, "vscode", "dist", "extension");
+  const extensionDevelopmentPath = process.env.MCPP_E2E_EXTENSION ?? path.join(extensionDir, "dist", "extension");
   await runTests({
     ...(executable ? { vscodeExecutablePath: executable } : { version: "1.91.0" }),
     extensionDevelopmentPath,
-    extensionTestsPath: path.join(repo, "vscode", "out", "test", "e2e", "suite", "index.js"),
+    extensionTestsPath: path.join(extensionDir, "out", "test", "e2e", "suite", "index.js"),
     launchArgs: [workspace, "--user-data-dir", path.join(temp, "user-data"), "--extensions-dir", path.join(temp, "extensions"),
                  "--disable-gpu", "--disable-workspace-trust", "--skip-welcome", "--skip-release-notes",
                  // No display (a container, an agent's shell): Chromium's headless platform.

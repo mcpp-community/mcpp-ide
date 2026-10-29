@@ -1,10 +1,13 @@
-// What the unit tests share: the repository, the programs its build produced (the backend and the
-// mock mcpp, newest first), and a project directory the mock answers for.
+// What the unit tests share: the extension's directory (mide-plugins/vscode), the repository, the
+// programs its build produced (the backend and the mock mcpp, newest first), and a project directory
+// the mock answers for.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-export const repo = path.resolve(__dirname, "..", "..", "..", "..");
+// Compiled to out/test/unit.
+export const extensionDir = path.resolve(__dirname, "..", "..", "..");
+export const repo = path.resolve(extensionDir, "..", "..");
 
 export function built(name: string): string | undefined {
   const exe = process.platform === "win32" ? `${name}.exe` : name;

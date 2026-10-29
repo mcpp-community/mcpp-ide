@@ -18,6 +18,10 @@ mcpp-vscode 1.0.1 and mcpp-clion 0.1.1, with mcppls 0.0.19.
 - **CLion 2026.1 and later** (since-build 261), as the mcppls plugin mcpp-clion depends on; the
   Plugin Verifier checks 2026.1 and 2026.2.3, and the build loads this machine's mcppls 0.0.19
   package.
+- **The editor plugins are `mide-plugins/`**: `mide-plugins/vscode` (mcpp-vscode) and
+  `mide-plugins/clion` (mcpp-clion; the protocol's editor id stays `jetbrains`, the IntelliJ
+  platform's). The backend, the panels, `spec/`, `protocol/` and the tests stay at the root; both
+  adapters build and test as before.
 
 ## 0.1.0
 

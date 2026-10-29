@@ -1,4 +1,4 @@
-// The shared panels (../webui) in VS Code: editor-area panels and the sidebar's webview views. The
+// The shared panels (webui/) in VS Code: editor-area panels and the sidebar's webview views. The
 // panel speaks the backend's protocol through this host (rpc in, notifications out) and asks it for
 // what only the editor does: open a file, confirm, write a setting, run a command.
 import { randomBytes } from "node:crypto";
