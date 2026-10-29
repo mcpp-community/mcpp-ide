@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import { McppCliController, discoveryBoundaryFromSettings } from "./cli/controller";
-import { runMcpp, useMcppExecutor } from "./cli/process";
+import { runMcpp, useMcppExecutor, useMcpplsExecutor } from "./cli/process";
 import { parseProtocolInfo } from "./cli/protocol";
 import { buildSelfCheckText } from "./cli/selfCheck";
 import { CLI_COMMANDS, LEGACY_LANGUAGE_SERVER_COMMANDS, LIBRARY_COMMANDS, TOOL_COMMANDS } from "./commands/ids";
@@ -332,7 +332,20 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
       return { exitCode: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
     }
   });
-  extensionContext.subscriptions.push({ dispose: () => useMcppExecutor(undefined) });
+  useMcpplsExecutor(async (args, cwd, options = {}) => {
+    try {
+      const answer = await session.request<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }>("languageService/exec", {
+        args,
+        ...(cwd ? { cwd } : {}),
+        ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
+        maxOutputBytes: Math.max(1, options.maxBufferMiB ?? 16) * 1024 * 1024,
+      });
+      return { exitCode: answer.timedOut && answer.exitCode === 0 ? 1 : answer.exitCode, stdout: answer.stdout, stderr: answer.stderr };
+    } catch (error) {
+      return { exitCode: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
+    }
+  });
+  extensionContext.subscriptions.push({ dispose: () => { useMcppExecutor(undefined); useMcpplsExecutor(undefined); } });
   extensionContext.subscriptions.push(
     session,
     jobs,

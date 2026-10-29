@@ -293,6 +293,30 @@
         }
       }
     },
+    "languageService/exec": {
+      "description": "One command of mcppls (`query module`, for the module graph), run as the command languageService/status found -- a payload's runner and image, or a program -- ended past timeoutMs (default 120000) and keeping at most maxOutputBytes (default 16 MiB) of each output.",
+      "params": {
+        "type": "object",
+        "required": ["args"],
+        "properties": {
+          "args": { "type": "array", "items": { "type": "string" } },
+          "cwd": { "type": "string" },
+          "timeoutMs": { "type": "integer", "minimum": 1 },
+          "maxOutputBytes": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["exitCode", "stdout", "stderr", "timedOut", "truncated"],
+        "properties": {
+          "exitCode": { "type": "integer" },
+          "stdout": { "type": "string" },
+          "stderr": { "type": "string" },
+          "timedOut": { "type": "boolean" },
+          "truncated": { "type": "boolean" }
+        }
+      }
+    },
     "project/files": {
       "description": "What an editor reads of a project to describe it: the text of mcpp.toml and mcpp.lock (null when absent) and the number of source files under the root, counted as mcpp-vscode 0.9.0 counted them.",
       "params": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" } } },

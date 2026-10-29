@@ -21,7 +21,7 @@ import {
 } from "../projects/discovery";
 import { updateEditorTitleButtonsContext } from "../projects/context";
 import { createLogger, type Logger } from "../util/log";
-import { runProcess } from "./process";
+import { runMcppCommand } from "./process";
 import {
   McppOperationRegistry,
   classifyTaskExit,
@@ -582,7 +582,7 @@ export class McppCliController {
 
     try {
       const args = mcppCommandArguments("toolchain", "default", picked.spec);
-      const result = await runProcess(
+      const result = await runMcppCommand(
         this.mcppExecutable(project),
         args,
         workingDirectory(project),
@@ -608,7 +608,7 @@ export class McppCliController {
     );
     if (buildChoice === warningLabels.cleanAndBuild && project !== undefined) {
       const cleanArgs = mcppCommandArguments("clean");
-      const cleanResult = await runProcess(this.mcppExecutable(project), cleanArgs, project.root);
+      const cleanResult = await runMcppCommand(this.mcppExecutable(project), cleanArgs, project.root);
       this.appendShortCommand(t("Clean old artifacts"), this.mcppExecutable(project), cleanArgs, cleanResult);
       await this.runProjectTask("build");
     }
@@ -821,7 +821,7 @@ export class McppCliController {
       run: async (name, cwd) => {
         const executable = this.mcppExecutable(undefined);
         const args = mcppCommandArguments("new", name);
-        const result = await runProcess(executable, args, cwd);
+        const result = await runMcppCommand(executable, args, cwd);
         this.appendShortCommand(t("New project"), executable, args, result);
         return result.exitCode;
       },
@@ -885,7 +885,7 @@ export class McppCliController {
   ): Promise<ToolchainInventory | undefined> {
     const executable = this.mcppExecutable(project);
     const args = mcppCommandArguments("toolchain", "list");
-    const result = await runProcess(executable, args, workingDirectory(project));
+    const result = await runMcppCommand(executable, args, workingDirectory(project));
     this.appendShortCommand(t("Inspect the toolchain"), executable, args, result);
     if (result.exitCode !== 0) {
       this.reportCommandFailure(

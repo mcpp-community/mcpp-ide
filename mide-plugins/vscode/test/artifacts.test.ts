@@ -528,7 +528,7 @@ test("新建工程先校验目标路径再确认创建，成功后只打开不�
   const flow = method.indexOf("runNewProjectFlow");
   const exists = method.indexOf("existsSync", flow);
   const confirm = method.indexOf("showWarningMessage", flow);
-  const create = method.indexOf("runProcess", flow);
+  const create = method.indexOf("runMcppCommand", flow);
   const open = method.indexOf('executeCommand("vscode.openFolder"', flow);
   assert.ok(exists >= 0 && exists < confirm);
   assert.ok(confirm >= 0 && confirm < create);

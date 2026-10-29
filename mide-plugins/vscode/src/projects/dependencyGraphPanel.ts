@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { TOOL_COMMANDS } from "../commands/ids";
 import { t } from "../i18n/t";
 import { queryModuleGraph } from "../cli/moduleGraph";
+import { runMcppls } from "../cli/process";
 import { cachedDescriptorText, loadSnapshot } from "../library/indexLocator";
 import { descriptorDependencies, lockPackageVersions } from "../library/indexModel";
 import type { ProjectSummary } from "../views/models";
@@ -78,10 +79,8 @@ export function registerDependencyGraph(context: vscode.ExtensionContext, projec
       view.name = readProjectSummary(view.root, manifest.split(/\r?\n/)).name ?? path.basename(view.root);
       let graph: VisualGraph;
       if (view.mode === "modules") {
-        const extension = vscode.extensions.getExtension("sunrisepeak.mcpp-language-server");
-        const bundled = extension ? path.join(extension.extensionPath, "payload", "bin", process.platform === "win32" ? "mcppls.exe" : "mcppls") : undefined;
-        const executable = bundled && await exists(bundled) ? bundled : "mcppls";
-        const raw = await queryModuleGraph(vscode.workspace.isTrusted, executable, view.root, undefined, signal);
+        // mcppls as the backend found it: the payload's runner and image (mcppls 0.0.18 on), or a program.
+        const raw = await queryModuleGraph(vscode.workspace.isTrusted, "mcppls", view.root, (_executable, args, cwd, options) => runMcppls(args, cwd, options), signal);
         const patterns = testDiscovery(manifest);
         const discovered = new Set<string>(); let discoveryLimited = false;
         for (const pattern of new Set(patterns.filter(pattern => !pattern.startsWith("!")).map(testCandidateGlob))) {

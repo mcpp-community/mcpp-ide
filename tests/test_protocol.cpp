@@ -173,6 +173,10 @@ int main() {
     auto bounded = result_of("mcpp/exec", Json{{"args", Json::array({"--version"})}, {"maxOutputBytes", 3}});
     CHECK(bounded["truncated"] == true && bounded["stdout"].get<std::string>().size() <= 3);
     CHECK(wire.call("mcpp/exec", Json{{"args", "--version"}}).contains("error"));
+    // mcppls's own commands run as the command the status found (here a program that answers --version).
+    result_of("languageService/status", Json{{"candidates", Json::array({mock.generic_string()})}});
+    auto ls = result_of("languageService/exec", Json{{"args", Json::array({"--version"})}});
+    CHECK(ls["exitCode"] == 0 && !ls["stdout"].get<std::string>().empty());
     std::ofstream(root / "src" / "main.cpp") << "int main() {}\n";
     std::ofstream(root / "src" / "notes.txt") << "not a source\n";
     std::filesystem::create_directories(root / "target" / "obj");

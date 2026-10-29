@@ -36,7 +36,7 @@ inline constexpr int kProtocol = 1;
 
 // The methods `install` registers, for the protocol schema's test: a method
 // here and not in protocol/protocol.schema.json (or the other way) fails it.
-inline constexpr std::array<std::string_view, 44> kMethods = {
+inline constexpr std::array<std::string_view, 45> kMethods = {
     "initialize", "settings/update", "settings/registry", "settings/preset", "i18n/bundle",
     "selfCheck", "commands/list", "menu/quick", "languageService/status",
     "projects/list", "projects/forFile", "project/summary", "project/new", "result/last",
@@ -45,7 +45,7 @@ inline constexpr std::array<std::string_view, 44> kMethods = {
     "toolchains/list", "toolchains/install", "toolchains/setDefault", "targets/list",
     "cache/inventory", "cache/plan", "cache/apply", "graph/packages", "graph/modules",
     "pack/formats", "pack/start", "manifest/check", "toml/complete", "toml/hover", "toml/symbols",
-    "buildscript/complete", "mcpp/exec", "project/files", "shutdown", "exit"};
+    "buildscript/complete", "mcpp/exec", "project/files", "languageService/exec", "shutdown", "exit"};
 
 // The notifications the backend sends.
 inline constexpr std::array<std::string_view, 13> kNotifications = {
@@ -75,6 +75,7 @@ private:
     Result graph(const Json& p, bool modules);
     Result project_summary(const Json& p);
     Result mcpp_exec(const Json& p);
+    Result language_service_exec(const Json& p);
     Result project_new(const Json& p);
     Result manifest_check(const Json& p);
     Result language_service(const Json& p);
@@ -364,6 +365,41 @@ std::expected<Json, rpc::Error> Session::mcpp_exec(const Json& p) {
     if (!r) return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, r.error()});
     return Json{{"exitCode", r->exitCode}, {"stdout", r->out}, {"stderr", r->err}, {"timedOut", r->timedOut},
                 {"truncated", r->truncated}};
+}
+
+// One command of mcppls (`query module`, for the module graph), run as the command languageService/status
+// found: a payload's runner and image, or a program. Bounded as mcpp/exec is.
+std::expected<Json, rpc::Error> Session::language_service_exec(const Json& p) {
+    if (!p.contains("args") || !p["args"].is_array()) return std::unexpected(rpc::Error{rpc::INVALID_PARAMS, "args: an array of strings"});
+    std::vector<std::string> candidates;
+    {
+        std::lock_guard lock(mutex_);
+        candidates = mcpplsCandidates_;
+    }
+    const auto found = languageservice::probe(candidates);
+    if (found.command.empty())
+        return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcppls was not found: C++ files have no completion, navigation or diagnostics from mcpp's build. Install the C++ Modules language server ({0} or later).",
+                                                                  {std::string(languageservice::kRequired)})});
+    mcpplibs::os::process::spawn_options o;
+    o.program = found.command.front();
+    for (std::size_t i = 1; i < found.command.size(); ++i) o.args.push_back(found.command[i].string());
+    for (const auto& a : p["args"]) {
+        if (!a.is_string()) return std::unexpected(rpc::Error{rpc::INVALID_PARAMS, "args: an array of strings"});
+        o.args.push_back(a.get<std::string>());
+    }
+    o.in = mcpplibs::os::process::stdio::null;
+    if (p.contains("cwd") && p["cwd"].is_string()) o.cwd = p["cwd"].get<std::string>();
+    mcpplibs::os::process::bounds limits;
+    limits.hard = std::chrono::milliseconds(p.contains("timeoutMs") && p["timeoutMs"].is_number_integer() && p["timeoutMs"].get<std::int64_t>() > 0
+                                                ? p["timeoutMs"].get<std::int64_t>() : std::int64_t{120000});
+    const auto limit = p.contains("maxOutputBytes") && p["maxOutputBytes"].is_number_integer() && p["maxOutputBytes"].get<std::int64_t>() > 0
+                           ? static_cast<std::size_t>(p["maxOutputBytes"].get<std::int64_t>()) : std::size_t{16} << 20;
+    limits.out_limit = limit;
+    limits.err_limit = limit;
+    auto r = mcpplibs::os::process::run(o, limits);
+    if (!r) return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, r.error().message()});
+    return Json{{"exitCode", r->status.shell_code()}, {"stdout", r->out}, {"stderr", r->err}, {"timedOut", r->timed_out},
+                {"truncated", r->out_truncated || r->err_truncated}};
 }
 
 std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::path& root) {
@@ -1017,6 +1053,7 @@ void Session::install() {
     });
     s.on("project/summary", [this](const Json& p, const rpc::Context&) { return project_summary(p); });
     s.on("mcpp/exec", [this](const Json& p, const rpc::Context&) { return mcpp_exec(p); });
+    s.on("languageService/exec", [this](const Json& p, const rpc::Context&) { return language_service_exec(p); });
     s.on("project/files", [](const Json& p, const rpc::Context&) -> Result { return projects::files(root_of(p)); });
     s.on("project/new", [this](const Json& p, const rpc::Context&) { return project_new(p); });
     s.on("result/last", [](const Json& p, const rpc::Context&) -> Result { return projects::last_result(root_of(p)); });

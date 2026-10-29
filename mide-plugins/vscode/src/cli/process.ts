@@ -54,15 +54,37 @@ export function quoteWindowsArgument(argument: string): string {
 }
 
 /**
- * Who runs mcpp. With a backend installed (`useMcppExecutor`, from 1.1.0 the mcpp-ide session),
- * every query and write below is one `mcpp/exec` of the backend, which runs mcpp as it runs every
- * command — the mcpp it located, the session's client identity, the effects an untrusted workspace
- * denies — and the output reaches the same parsers it reached when the extension ran mcpp itself.
+ * Who runs mcpp and mcppls. With a backend installed (from 1.1.0 the mcpp-ide session), every mcpp
+ * command below is one `mcpp/exec` of the backend, which runs mcpp as it runs every command — the
+ * mcpp it located, the session's client identity, the effects an untrusted workspace denies — and
+ * every mcppls command one `languageService/exec`, which runs the mcppls the backend found (a
+ * payload's runner and image, or a program). The output reaches the same parsers it reached when
+ * the extension ran the programs itself. Any other program still runs here (`runProcess`).
  */
 let mcppExecutor: ProcessRunner | undefined;
+let mcpplsExecutor: ((args: string[], cwd?: string, options?: ProcessRunOptions) => Promise<ProcessResult>) | undefined;
 
 export function useMcppExecutor(executor: ProcessRunner | undefined): void {
   mcppExecutor = executor;
+}
+
+export function useMcpplsExecutor(executor: typeof mcpplsExecutor): void {
+  mcpplsExecutor = executor;
+}
+
+/** Runs mcpp: through the backend when one is installed, else as `executable`. No trust check. */
+export function runMcppCommand(
+  executable: string,
+  args: string[],
+  cwd?: string,
+  options: ProcessRunOptions = {},
+): Promise<ProcessResult> {
+  return mcppExecutor !== undefined ? mcppExecutor(executable, args, cwd, options) : runProcess(executable, args, cwd, options);
+}
+
+/** Runs mcppls: through the backend when one is installed, else `mcppls` from PATH. */
+export function runMcppls(args: string[], cwd?: string, options: ProcessRunOptions = {}): Promise<ProcessResult> {
+  return mcpplsExecutor !== undefined ? mcpplsExecutor(args, cwd, options) : runProcess("mcppls", args, cwd, options);
 }
 
 export async function runProcess(
@@ -71,9 +93,6 @@ export async function runProcess(
   cwd?: string,
   options: ProcessRunOptions = {},
 ): Promise<ProcessResult> {
-  if (mcppExecutor !== undefined) {
-    return mcppExecutor(executable, args, cwd, options);
-  }
   try {
     const needsShell = spawnNeedsShell(executable);
     const result = await execFileAsync(
@@ -133,5 +152,5 @@ export async function runMcpp(
   if (!trusted) {
     return undefined;
   }
-  return runProcess(executable, [...args], cwd, options);
+  return runMcppCommand(executable, [...args], cwd, options);
 }
