@@ -40,7 +40,8 @@ test("the snapshot loads with a usable shape", () => {
   assert.equal(typeof API.sourceCommit, "string");
   assert.ok(API.protocolVersion >= 1);
   assert.ok(API.cacheEpoch >= 1);
-  assert.equal(API.directives.length, 31);
+  // mcpp 2026.10.29.1 answers 37 directives (31 when 0.9.0 was generated).
+  assert.equal(API.directives.length, 37);
   assert.equal(directives().length, apiJson.directives.length);
 });
 

@@ -1,6 +1,6 @@
 {
-  "sourceVersion": "2026.10.17.1",
-  "sourceCommit": "684a306bced037014da08b038412f57c203d0bc9",
+  "sourceVersion": "2026.10.29.1",
+  "sourceCommit": "db3b8159480ce94df2ba7ec20c7f9e0654f97764",
   "sections": [
     {
       "header": "[build]",
@@ -53,6 +53,11 @@
         {
           "key": "cflags",
           "type": "array"
+        },
+        {
+          "key": "compile_commands",
+          "type": "string",
+          "unmodelled": true
         },
         {
           "key": "cxx_runtime",
@@ -249,6 +254,13 @@
       "name": "hooks",
       "plane": "lifecycle",
       "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md#216-hooks--project-build-lifecycle-commands",
+      "deprecatedBy": null
+    },
+    {
+      "header": "[host]",
+      "name": "host",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md",
       "deprecatedBy": null
     },
     {
@@ -497,6 +509,13 @@
       ]
     },
     {
+      "header": "[platform]",
+      "name": "platform",
+      "plane": "platform",
+      "doc": "https://github.com/mcpp-community/mcpp/blob/main/docs/04-mcpp-toml.md",
+      "deprecatedBy": null
+    },
+    {
       "header": "[profile]",
       "name": "profile",
       "plane": "compile",
@@ -618,6 +637,21 @@
           "type": "number"
         },
         {
+          "key": "platform",
+          "type": "string",
+          "unmodelled": true
+        },
+        {
+          "key": "requires",
+          "type": "string",
+          "unmodelled": true
+        },
+        {
+          "key": "run_under",
+          "type": "string",
+          "unmodelled": true
+        },
+        {
           "key": "runner",
           "type": "array",
           "note": "argv template for mcpp run/test on this target"
@@ -689,6 +723,11 @@
         {
           "key": "soname",
           "type": "string"
+        },
+        {
+          "key": "start",
+          "type": "string",
+          "unmodelled": true
         },
         {
           "key": "windows_auto_export",

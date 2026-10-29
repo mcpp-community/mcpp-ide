@@ -1,7 +1,7 @@
 {
-  "sourceVersion": "2026.10.17.1",
-  "sourceCommit": "684a306bced037014da08b038412f57c203d0bc9",
-  "protocolVersion": 15,
+  "sourceVersion": "2026.10.29.1",
+  "sourceCommit": "db3b8159480ce94df2ba7ec20c7f9e0654f97764",
+  "protocolVersion": 17,
   "cacheEpoch": 3,
   "roles": [
     "source",
@@ -131,8 +131,10 @@
       "transform": "Verbatim",
       "mustExist": false,
       "since": 4,
-      "rules": [],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#runner-how-the-artifact-is-executed-20268192"
+      "rules": [
+        "R9.10"
+      ],
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#runner-how-the-artifact-is-executed-20268192"
     },
     {
       "wire": "runner-named",
@@ -263,7 +265,7 @@
         "R2.1",
         "R9.4"
       ],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#warning-succeeding-and-still-being-heard-20268212"
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#warning-succeeding-and-still-being-heard-20268212"
     },
     {
       "wire": "diagnostic",
@@ -299,7 +301,8 @@
         "R5.1",
         "R5.3",
         "R6.4",
-        "R9.2"
+        "R9.2",
+        "R9.10"
       ],
       "docsUrl": null
     },
@@ -314,7 +317,7 @@
       "rules": [
         "R2.1"
       ],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#the-probe-channel-fact-floor-2026952"
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#the-probe-channel-fact-floor-2026952"
     },
     {
       "wire": "floor",
@@ -327,7 +330,7 @@
       "rules": [
         "R2.1"
       ],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#the-probe-channel-fact-floor-2026952"
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#the-probe-channel-fact-floor-2026952"
     },
     {
       "wire": "pack-format",
@@ -337,7 +340,9 @@
       "transform": "Verbatim",
       "mustExist": false,
       "since": 9,
-      "rules": [],
+      "rules": [
+        "R9.10"
+      ],
       "docsUrl": null
     },
     {
@@ -376,7 +381,7 @@
         "R9.2",
         "R9.5"
       ],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#deploying-what-the-program-generated-deploy-20269123-protocol-11"
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#deploying-what-the-program-generated-deploy-20269123-protocol-11"
     },
     {
       "wire": "runtime-search-dir",
@@ -428,6 +433,76 @@
         "R9.2",
         "R9.9"
       ],
+      "docsUrl": null
+    },
+    {
+      "wire": "link-start",
+      "tag": "link-start",
+      "slot": "LinkStart",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 16,
+      "rules": [
+        "R9.2"
+      ],
+      "docsUrl": null
+    },
+    {
+      "wire": "link-driver",
+      "tag": "link-driver",
+      "slot": "LinkDriver",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
+      "docsUrl": null
+    },
+    {
+      "wire": "link-input",
+      "tag": "link-input",
+      "slot": "LinkInputs",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
+      "docsUrl": null
+    },
+    {
+      "wire": "artifact-name",
+      "tag": "artifact-name",
+      "slot": "ArtifactNames",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
+      "docsUrl": null
+    },
+    {
+      "wire": "seal",
+      "tag": "seal",
+      "slot": "Seal",
+      "scope": "LinkGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [
+        "R9.2"
+      ],
+      "docsUrl": null
+    },
+    {
+      "wire": "run-host",
+      "tag": "run-host",
+      "slot": "RunHost",
+      "scope": "RunGlobal",
+      "transform": "Verbatim",
+      "mustExist": false,
+      "since": 17,
+      "rules": [],
       "docsUrl": null
     }
   ]

@@ -126,6 +126,7 @@ const PLANE_LABELS = new Map([
   ["条件", "condition"],
   ["产物元数据", "metadata"],
   ["生命周期", "lifecycle"],
+  ["平台", "platform"],
 ]);
 
 // Sections the plane table does not name. The table is the spec's own closure
