@@ -14,4 +14,4 @@ dist/
 .agents/prototypes/
 
 # The backend the package carries (tools/stage-backend.mjs).
-backend/
+/backend/
