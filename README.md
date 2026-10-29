@@ -61,7 +61,7 @@ the editor I use (VS Code, CLion or Neovim) from its latest release, and check i
 | Agents, other clients | `mcpp-ide-<version>-openkal.tar.gz` (both images; okrun for Linux x64/arm64, macOS arm64, Windows x64), `mcpp-ide-<version>.okb` with okrun, or `xlings install mcpp-ide` | run `bin/mcpp-ide serve` (`bin\mcpp-ide.exe` on Windows), or `okrun mcpp-ide-<version>.okb serve` |
 
 Each editor package serves every system: it carries the backend as one ok-image bundle
-(`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.17.3) and okrun for
+(`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.18.0) and okrun for
 Linux x64/arm64, macOS arm64 and Windows x64. The Neovim plugin carries none: it starts the
 `mcpp-ide` command xlings installs (okrun on the same bundle).
 

@@ -63,9 +63,10 @@ kind = "bin"
 main = "src/bin/dev.cpp"
 
 [dependencies.mcpplibs]
-# os 0.2.1: an ok image's C library, C++ run-time and loader are its platform's, so the package
-# declares no openkal-tools of its own beside the platform's.
-os = "0.2.1"
+# os 0.2.3: openkal-linux 0.18.3 (a program is found in a directory the process may search but not
+# read, mcpp#857). Since 0.2.1 an ok image's C library, C++ run-time and loader are its platform's,
+# so the package declares no openkal-tools of its own beside the platform's.
+os = "0.2.3"
 
 [dependencies.nlohmann]
 json = "3.12.0"
