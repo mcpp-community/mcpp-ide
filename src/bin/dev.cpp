@@ -30,7 +30,7 @@ import mcppide.spec;
 
 namespace {
 
-using Json = nlohmann::json;
+using Json = nlohmann::ordered_json;
 namespace fs = std::filesystem;
 
 std::string slurp(const fs::path& p) {
@@ -197,13 +197,17 @@ Spec load_spec(const fs::path& root) {
 
 // Which rows an editor declares is the backend's rule (spec::offered_in), the one its command table
 // answers at run time.
-using mcppide::spec::offered_in;
+// The tool keeps files in their written order (ordered_json); the rule reads the backend's json.
+bool offered_in(const Json& c, std::string_view editor) {
+    return mcppide::spec::offered_in(nlohmann::json::parse(c.dump()), editor);
+}
 
 // The `contributes` that come from spec/: commands, keybindings, menus, configuration.
 void vscode_contributes(const Spec& spec, Json& contributes) {
     Json commands = Json::array(), keybindings = Json::array();
-    Json menus = contributes.contains("menus") ? contributes["menus"] : Json::object();
-    Json palette = menus.contains("commandPalette") ? menus["commandPalette"] : Json::array();
+    // Every menu entry names a command, so spec/ states them all.
+    Json menus = Json::object();
+    Json palette = Json::array();
     for (const auto& c : spec.commands["commands"]) {
         if (!offered_in(c, "vscode")) continue;
         const auto id = c.value("id", "");
@@ -223,8 +227,10 @@ void vscode_contributes(const Spec& spec, Json& contributes) {
                 if (m.contains("when")) entry["when"] = m["when"];
                 menus[m.value("menu", "")].push_back(entry);
             }
+        // A command is in the palette everywhere unless its row says otherwise; `when` gates its
+        // keybinding and the backend's menus, not the palette.
         if (!c.value("palette", true)) palette.push_back(Json{{"command", id}, {"when", "false"}});
-        else if (c.contains("when")) palette.push_back(Json{{"command", id}, {"when", c["when"]}});
+        else if (c.contains("paletteWhen")) palette.push_back(Json{{"command", id}, {"when", c["paletteWhen"]}});
     }
     menus["commandPalette"] = palette;
     contributes["commands"] = commands;
@@ -239,15 +245,14 @@ void vscode_contributes(const Spec& spec, Json& contributes) {
         const auto key = s.value("key", "");
         Json p{{"type", s.value("type", "string")}, {"default", s.contains("default") ? s["default"] : Json(nullptr)}};
         if (s.contains("enum")) p["enum"] = s["enum"];
-        if (s.value("type", "") == "array") p["items"] = Json{{"type", "string"}};
+        if (s.contains("items")) p["items"] = s["items"];
         if (s.contains("minimum")) p["minimum"] = s["minimum"];
         if (s.contains("maximum")) p["maximum"] = s["maximum"];
         p["scope"] = s.value("scope", "resource");
         p["order"] = groupOrder[s.value("group", "")] * 1000 + s.value("order", 0);
         p["description"] = std::format("%{}.title%", key);
         p["markdownDescription"] = std::format("%{}.description%", key);
-        if (s.value("deprecated", false)) p["markdownDeprecationMessage"] = std::format("%{}.deprecationMessage%", key);
-        if (s.value("tier", "") == "advanced") p["tags"] = Json::array({"advanced"});
+        if (s.value("deprecated", false)) p["deprecationMessage"] = std::format("%{}.deprecationMessage%", key);
         properties[key] = p;
     }
     contributes["configuration"] = Json{{"title", "%mcpp.configuration.title%"}, {"properties", properties}};
@@ -294,13 +299,23 @@ int gen_vscode(std::span<const std::string> args) {
     const auto spec = load_spec(root);
     auto pkg = read_json(ext / "package.json");
     vscode_contributes(spec, pkg["contributes"]);
+    Json zh = spec.en;
+    for (auto it = spec.zh.begin(); it != spec.zh.end(); ++it) zh[it.key()] = it.value();
+    // --dev: the development manifest itself, its strings and the settings registry the extension
+    // reads (data/config-registry.json), written in place; CI regenerates and expects no change.
+    if (flag(args, "--dev")) {
+        spit(ext / "package.json", pkg.dump(2) + "\n");
+        spit(ext / "package.nls.json", spec.en.dump(2) + "\n");
+        spit(ext / "package.nls.zh-cn.json", zh.dump(2) + "\n");
+        spit(ext / "data" / "config-registry.json", spec.settings.dump(2) + "\n");
+        std::println("vscode declarations in {}", ext.generic_string());
+        return 0;
+    }
     // npm's own fields stay in the development manifest.
     pkg.erase("scripts");
     pkg.erase("devDependencies");
     spit(out / "package.json", pkg.dump(2) + "\n");
     spit(out / "package.nls.json", spec.en.dump(2) + "\n");
-    Json zh = spec.en;
-    for (auto it = spec.zh.begin(); it != spec.zh.end(); ++it) zh[it.key()] = it.value();
     spit(out / "package.nls.zh-cn.json", zh.dump(2) + "\n");
     if (flag(args, "--stage")) {
         copy_tree(ext / "out" / "src", out / "out" / "src");

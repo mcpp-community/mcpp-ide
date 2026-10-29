@@ -56,59 +56,46 @@
       "view/title": [
         {
           "command": "mcpp.refreshCacheStats",
-          "when": "view == mcpp.cache",
-          "group": "navigation@2"
+          "group": "navigation@2",
+          "when": "view == mcpp.cache"
         },
         {
           "command": "mcpp.library.updateIndex",
-          "when": "view == mcpp.library",
-          "group": "navigation@2"
-        }
-      ],
-      "commandPalette": [
-        {
-          "command": "mcpp.openMcpplsSettings",
-          "when": "false"
+          "group": "navigation@2",
+          "when": "view == mcpp.library"
         }
       ],
       "view/item/context": [
         {
-          "command": "mcpp.languageServer.restoreConflicts",
-          "when": "view == mcpp.project && viewItem =~ /^mcppOtherCppFeatures.*Restorable$/"
+          "command": "mcpp.project.showDependencyGraph",
+          "group": "inline@1",
+          "when": "view == mcpp.project && viewItem == mcppProjectDependencies"
         },
         {
-          "command": "mcpp.project.showDependencyGraph",
-          "when": "view == mcpp.project && viewItem == mcppProjectDependencies",
-          "group": "inline@1"
+          "command": "mcpp.languageServer.restoreConflicts",
+          "when": "view == mcpp.project && viewItem =~ /^mcppOtherCppFeatures.*Restorable$/"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mcpp.debug",
+          "when": "mcpp.inProject"
+        },
+        {
+          "command": "mcpp.pack",
+          "when": "mcpp.inProject"
+        },
+        {
+          "command": "mcpp.cancelJob",
+          "when": "mcpp.jobRunning"
+        },
+        {
+          "command": "mcpp.openMcpplsSettings",
+          "when": "false"
         }
       ]
     },
     "commands": [
-      {
-        "command": "mcpp.openSettings",
-        "title": "%command.mcpp.openSettings.title%",
-        "category": "%category%"
-      },
-      {
-        "command": "mcpp.openMcpplsSettings",
-        "title": "%command.mcpp.openMcpplsSettings.title%",
-        "category": "%category%"
-      },
-      {
-        "command": "mcpp.selfCheck",
-        "title": "%command.mcpp.selfCheck.title%",
-        "category": "%category%"
-      },
-      {
-        "command": "mcpp.showMenu",
-        "title": "%command.mcpp.showMenu.title%",
-        "category": "%category%"
-      },
-      {
-        "command": "mcpp.newProject",
-        "title": "%command.mcpp.newProject.title%",
-        "category": "%category%"
-      },
       {
         "command": "mcpp.build",
         "title": "%command.mcpp.build.title%",
@@ -121,6 +108,12 @@
         "icon": "$(play)"
       },
       {
+        "command": "mcpp.debug",
+        "title": "%command.mcpp.debug.title%",
+        "category": "%category%",
+        "icon": "$(debug-alt)"
+      },
+      {
         "command": "mcpp.test",
         "title": "%command.mcpp.test.title%",
         "category": "%category%",
@@ -130,6 +123,30 @@
         "command": "mcpp.clean",
         "title": "%command.mcpp.clean.title%",
         "category": "%category%"
+      },
+      {
+        "command": "mcpp.pack",
+        "title": "%command.mcpp.pack.title%",
+        "category": "%category%",
+        "icon": "$(package)"
+      },
+      {
+        "command": "mcpp.cancelJob",
+        "title": "%command.mcpp.cancelJob.title%",
+        "category": "%category%",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "mcpp.selectTarget",
+        "title": "%command.mcpp.selectTarget.title%",
+        "category": "%category%",
+        "icon": "$(target)"
+      },
+      {
+        "command": "mcpp.showTargets",
+        "title": "%command.mcpp.showTargets.title%",
+        "category": "%category%",
+        "icon": "$(server-environment)"
       },
       {
         "command": "mcpp.showToolchains",
@@ -147,13 +164,43 @@
         "category": "%category%"
       },
       {
+        "command": "mcpp.newProject",
+        "title": "%command.mcpp.newProject.title%",
+        "category": "%category%"
+      },
+      {
+        "command": "mcpp.showMenu",
+        "title": "%command.mcpp.showMenu.title%",
+        "category": "%category%"
+      },
+      {
+        "command": "mcpp.openSettings",
+        "title": "%command.mcpp.openSettings.title%",
+        "category": "%category%"
+      },
+      {
+        "command": "mcpp.selfCheck",
+        "title": "%command.mcpp.selfCheck.title%",
+        "category": "%category%"
+      },
+      {
         "command": "mcpp.autoConfigureModules",
         "title": "%command.mcpp.autoConfigureModules.title%",
         "category": "%category%"
       },
       {
+        "command": "mcpp.refreshCompilationDatabase",
+        "title": "%command.mcpp.refreshCompilationDatabase.title%",
+        "category": "%category%"
+      },
+      {
         "command": "mcpp.refreshCacheStats",
         "title": "%command.mcpp.refreshCacheStats.title%",
+        "category": "%category%"
+      },
+      {
+        "command": "mcpp.showCachePanel",
+        "title": "%command.mcpp.showCachePanel.title%",
         "category": "%category%"
       },
       {
@@ -192,8 +239,41 @@
         "category": "%category%"
       },
       {
+        "command": "mcpp.library.search",
+        "title": "%command.mcpp.library.search.title%",
+        "category": "%category%",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "mcpp.library.openDetail",
+        "title": "%command.mcpp.library.openDetail.title%",
+        "category": "%category%"
+      },
+      {
+        "command": "mcpp.library.updateIndex",
+        "title": "%command.mcpp.library.updateIndex.title%",
+        "category": "%category%",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "mcpp.project.showDependencyGraph",
+        "title": "%command.mcpp.project.showDependencyGraph.title%",
+        "category": "%category%",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "mcpp.project.showModuleDependencyGraph",
+        "title": "%command.mcpp.project.showModuleDependencyGraph.title%",
+        "category": "%category%"
+      },
+      {
         "command": "mcpp.languageServer.refreshState",
         "title": "%command.mcpp.languageServer.refreshState.title%",
+        "category": "%category%"
+      },
+      {
+        "command": "mcpp.openMcpplsSettings",
+        "title": "%command.mcpp.openMcpplsSettings.title%",
         "category": "%category%"
       },
       {
@@ -287,11 +367,6 @@
         "category": "%category%"
       },
       {
-        "command": "mcpp.refreshCompilationDatabase",
-        "title": "%command.mcpp.refreshCompilationDatabase.title%",
-        "category": "%category%"
-      },
-      {
         "command": "mcpp.checkModuleSupport",
         "title": "%command.mcpp.checkModuleSupport.title%",
         "category": "%category%"
@@ -304,34 +379,6 @@
       {
         "command": "mcpp.showLanguageServerLogs",
         "title": "%command.mcpp.showLanguageServerLogs.title%",
-        "category": "%category%"
-      },
-      {
-        "command": "mcpp.library.search",
-        "title": "%command.mcpp.library.search.title%",
-        "category": "%category%",
-        "icon": "$(cloud-download)"
-      },
-      {
-        "command": "mcpp.library.openDetail",
-        "title": "%command.mcpp.library.openDetail.title%",
-        "category": "%category%"
-      },
-      {
-        "command": "mcpp.library.updateIndex",
-        "title": "%command.mcpp.library.updateIndex.title%",
-        "category": "%category%",
-        "icon": "$(cloud-download)"
-      },
-      {
-        "command": "mcpp.project.showDependencyGraph",
-        "title": "%command.mcpp.project.showDependencyGraph.title%",
-        "category": "%category%",
-        "icon": "$(type-hierarchy)"
-      },
-      {
-        "command": "mcpp.project.showModuleDependencyGraph",
-        "title": "%command.mcpp.project.showModuleDependencyGraph.title%",
         "category": "%category%"
       }
     ],
@@ -454,6 +501,49 @@
           "order": 20090,
           "description": "%mcpp.task.editorTitleButtons.title%",
           "markdownDescription": "%mcpp.task.editorTitleButtons.description%"
+        },
+        "mcpp.build.onSave": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "order": 20100,
+          "description": "%mcpp.build.onSave.title%",
+          "markdownDescription": "%mcpp.build.onSave.description%"
+        },
+        "mcpp.build.profile": {
+          "type": "string",
+          "default": "dev",
+          "enum": [
+            "dev",
+            "release"
+          ],
+          "scope": "resource",
+          "order": 20110,
+          "description": "%mcpp.build.profile.title%",
+          "markdownDescription": "%mcpp.build.profile.description%"
+        },
+        "mcpp.build.target": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "order": 20120,
+          "description": "%mcpp.build.target.title%",
+          "markdownDescription": "%mcpp.build.target.description%"
+        },
+        "mcpp.debug.engine": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "cppdbg",
+            "lldb",
+            "lldb-dap",
+            "gdb"
+          ],
+          "scope": "resource",
+          "order": 20130,
+          "description": "%mcpp.debug.engine.title%",
+          "markdownDescription": "%mcpp.debug.engine.description%"
         },
         "mcpp.languageService.menuItems": {
           "type": "boolean",
@@ -814,10 +904,10 @@
         "mcpp.views.cache.topN": {
           "type": "number",
           "default": 5,
-          "scope": "window",
-          "order": 70080,
           "minimum": 1,
           "maximum": 50,
+          "scope": "window",
+          "order": 70080,
           "description": "%mcpp.views.cache.topN.title%",
           "markdownDescription": "%mcpp.views.cache.topN.description%"
         },
@@ -1012,6 +1102,25 @@
           "description": "%mcpp.tomlCompletion.title%",
           "markdownDescription": "%mcpp.tomlCompletion.description%",
           "deprecationMessage": "%mcpp.tomlCompletion.deprecationMessage%"
+        },
+        "mcpp.ide.backendPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "order": 100080,
+          "description": "%mcpp.ide.backendPath.title%",
+          "markdownDescription": "%mcpp.ide.backendPath.description%"
+        },
+        "mcpp.trust.denyEffects": {
+          "type": "array",
+          "default": [
+            "exec-build-script",
+            "network"
+          ],
+          "scope": "window",
+          "order": 100090,
+          "description": "%mcpp.trust.denyEffects.title%",
+          "markdownDescription": "%mcpp.trust.denyEffects.description%"
         }
       }
     },
@@ -1132,15 +1241,15 @@
         "when": "mcpp.inProject"
       },
       {
-        "command": "mcpp.cleanProjectArtifacts",
-        "key": "ctrl+alt+l",
-        "mac": "cmd+alt+l",
-        "when": "mcpp.inProject"
-      },
-      {
         "command": "mcpp.showMenu",
         "key": "ctrl+alt+m",
         "mac": "cmd+alt+m",
+        "when": "mcpp.inProject"
+      },
+      {
+        "command": "mcpp.cleanProjectArtifacts",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
         "when": "mcpp.inProject"
       }
     ],

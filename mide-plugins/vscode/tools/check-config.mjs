@@ -79,10 +79,10 @@ for (const entry of settings) {
     problems.push(`registry: ${where} has no description`);
   }
   if (!["public", "advanced"].includes(entry.tier)) problems.push(`registry: ${where} has tier ${entry.tier}`);
-  if (!["immediate", "next-build", "next-clean", "view-reload"].includes(entry.applies)) {
+  if (!["immediate", "next-build", "next-clean", "view-reload", "restart"].includes(entry.applies)) {
     problems.push(`registry: ${where} has applies ${entry.applies}`);
   }
-  if (!["resource", "window"].includes(entry.scope)) problems.push(`registry: ${where} has scope ${entry.scope}`);
+  if (!["resource", "window", "machine"].includes(entry.scope)) problems.push(`registry: ${where} has scope ${entry.scope}`);
   if (entry.enum !== undefined) {
     if (!Array.isArray(entry.enum) || entry.enum.length === 0) problems.push(`registry: ${where} has an empty enum`);
     else if (!entry.enum.includes(entry.default)) problems.push(`registry: ${where} default is not in its enum`);
