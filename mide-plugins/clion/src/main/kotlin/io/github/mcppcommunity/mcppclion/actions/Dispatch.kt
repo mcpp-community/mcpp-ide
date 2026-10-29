@@ -164,7 +164,50 @@ object Dispatch {
         }
     }
 
-    private fun selectTarget(project: Project) {
+    /** The pack's three choices (format, mode, linkage), as VS Code asks them, then the job in a console. */
+    fun pack(project: Project) {
+        val session = McppSession.get(project)
+        val root = session.root ?: return
+        session.request("pack/formats", JsonObject().apply { addProperty("root", root) }).thenAccept { r ->
+            val o = r.asJsonObject
+            val dflt = session.t("the project's default")
+            val formats = listOf("") + (o.getAsJsonArray("formats")?.map { it.asJsonObject["name"].asString } ?: emptyList())
+            val modes = listOf("") + (o.getAsJsonArray("modes")?.map { it.asString } ?: emptyList())
+            val linkages = o.getAsJsonArray("linkages")?.map { it.asString } ?: emptyList()
+            fun choose(title: String, values: List<String>, next: (String) -> Unit) {
+                val step = object : BaseListPopupStep<String>(title, values) {
+                    override fun getTextFor(value: String): String = value.ifEmpty { dflt }
+                    override fun onChosen(value: String, finalChoice: Boolean): PopupStep<*>? {
+                        ApplicationManager.getApplication().invokeLater { next(value) }
+                        return FINAL_CHOICE
+                    }
+                }
+                JBPopupFactory.getInstance().createListPopup(step).showCenteredInCurrentWindow(project)
+            }
+            ApplicationManager.getApplication().invokeLater {
+                choose(session.t("mcpp: Pack (1/3): the package format"), formats) { format ->
+                    choose(session.t("mcpp: Pack (2/3): what the machine that runs it provides"), modes) { mode ->
+                        val start = { linkage: String ->
+                            val params = JsonObject().apply {
+                                addProperty("kind", "pack"); addProperty("root", root); addProperty("color", true)
+                                if (format.isNotEmpty()) addProperty("pkgFormat", format)
+                                if (mode.isNotEmpty()) addProperty("mode", mode)
+                                if (linkage.isNotEmpty()) addProperty("linkage", linkage)
+                                McppSettings.get().string("mcpp.build.target").takeIf { it.isNotBlank() }?.let { addProperty("target", it) }
+                            }
+                            val handler = io.github.mcppcommunity.mcppclion.run.JobProcessHandler(session, params)
+                            com.intellij.execution.RunContentExecutor(project, handler).withTitle(session.t("mcpp: Pack")).withActivateToolWindow(true).run()
+                        }
+                        if (linkages.isEmpty()) start("")
+                        else choose(session.t("mcpp: Pack (3/3): the libraries inside the program or beside it"), listOf("") + linkages, start)
+                    }
+                }
+            }
+        }
+    }
+
+    /** The targets mcpp knows, and the target sets it names (`openkal (aarch64, x86_64)`). */
+    fun selectTarget(project: Project) {
         val session = McppSession.get(project)
         session.request("targets/list", JsonObject().apply { session.root?.let { addProperty("root", it) } }).thenAccept { r ->
             val rows = r.asJsonObject.getAsJsonArray("rows").map { it.asJsonObject }
@@ -172,7 +215,8 @@ object Dispatch {
                 val step = object : BaseListPopupStep<JsonObject>(session.t("Select the build target"), rows) {
                     override fun getTextFor(row: JsonObject): String {
                         val platform = row["platformText"]?.asString?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""
-                        return (if (row["selected"].asBoolean) "✓ " else "") + row["target"].asString + platform
+                        val name = if (row["set"]?.asBoolean == true) row["label"]?.asString ?: row["target"].asString else row["target"].asString
+                        return (if (row["selected"].asBoolean) "✓ " else "") + name + platform
                     }
                     override fun onChosen(row: JsonObject, finalChoice: Boolean): PopupStep<*>? {
                         McppSettings.get().set("mcpp.build.target", com.google.gson.JsonPrimitive(if (row["host"].asBoolean) "" else row["target"].asString))

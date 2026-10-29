@@ -1,5 +1,5 @@
 // mcpp-clion: mcpp's project features in CLion -- run configurations, the test tree, debugging, the
-// console's links, and the shared panels (../../webui) -- over the mcpp-ide backend (`mcpp-ide serve`).
+// console's links, and mcpp-vscode's pages in a workbench (../../webui) -- over the mcpp-ide backend (`mcpp-ide serve`).
 //
 // Language features are mcppls's: this plugin depends on the mcppls CLion plugin and registers no
 // language service. The declarations generated from ../../spec (actions, message bundles) are written
@@ -89,10 +89,23 @@ val generateDeclarations = tasks.register<Exec>("generateDeclarations") {
     if (dev != null) commandLine(dev, "gen", "jetbrains", "--out", out.absolutePath)
     else commandLine("mcpp", "run", "mcpp-ide-dev", "--", "gen", "jetbrains", "--out", out.absolutePath)
 }
-// ../../webui, as it is: the panels JCEF loads.
-val copyWebui = tasks.register<Sync>("copyWebui") {
-    from(repositoryRoot.resolve("webui")) { exclude("tests/**", "tsconfig.json", "js/types.d.ts") }
-    into(layout.buildDirectory.dir("generated/webui/webui"))
+// The workbench JCEF loads: mcpp-vscode's pages over ../../webui, bundled by the extension's
+// tools/bundle-webui.mjs (Node; `npm ci` in ../vscode first), with webui/files.txt naming its files.
+val webuiOut = layout.buildDirectory.dir("generated/webui/webui")
+val bundleWebui = tasks.register<Exec>("bundleWebui") {
+    val extension = repositoryRoot.resolve("mide-plugins/vscode")
+    inputs.dir(repositoryRoot.resolve("webui/src"))
+    inputs.files(repositoryRoot.resolve("webui/index.html"), repositoryRoot.resolve("webui/workbench.css"))
+    inputs.dir(extension.resolve("src"))
+    inputs.dir(extension.resolve("media"))
+    inputs.file(extension.resolve("package.json"))
+    outputs.dir(webuiOut)
+    workingDir = extension
+    doFirst {
+        if (!extension.resolve("node_modules/esbuild").isDirectory)
+            throw GradleException("the workbench is bundled with the extension's dependencies: run `npm ci` in ${extension}")
+    }
+    commandLine("node", "tools/bundle-webui.mjs", "--out", webuiOut.get().asFile.absolutePath)
 }
 sourceSets {
     main {
@@ -100,7 +113,7 @@ sourceSets {
         resources.srcDir(layout.buildDirectory.dir("generated/webui"))
     }
 }
-tasks.processResources { dependsOn(generateDeclarations, copyWebui) }
+tasks.processResources { dependsOn(generateDeclarations, bundleWebui) }
 
 // What the plugin carries of the backend (mcpp design 2026-10-28 part 2 §15), as the VS Code
 // extension carries it: MCPP_IDE_OKB, the ok-image bundle (backend/mcpp-ide.okb, one for every

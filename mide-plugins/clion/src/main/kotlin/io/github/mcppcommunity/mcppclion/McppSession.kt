@@ -163,6 +163,11 @@ class McppSession(private val project: Project) : Disposable {
         })
     }
 
+    /** What the pages write to their output channel: the IDE's log. */
+    fun log(text: String) {
+        text.trimEnd().lines().forEach { log.info("[mcpp] $it") }
+    }
+
     fun notify(message: String, type: NotificationType = NotificationType.INFORMATION) {
         NotificationGroupManager.getInstance().getNotificationGroup("mcpp").createNotification("mcpp", message, type).notify(project)
     }

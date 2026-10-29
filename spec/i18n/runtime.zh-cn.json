@@ -760,5 +760,9 @@
   "{0}–{1} day(s) ago": "{0}–{1} 天前",
   "{0}–{1} days": "{0}–{1} 天",
   "…": "…",
-  "✓ Has examples": "✓ 有示例"
+  "✓ Has examples": "✓ 有示例",
+  "mcpp: Pack": "mcpp：打包",
+  "mcpp: Pack (1/3): the package format": "mcpp：打包（1/3）：包格式",
+  "mcpp: Pack (2/3): what the machine that runs it provides": "mcpp：打包（2/3）：运行它的机器提供什么",
+  "mcpp: Pack (3/3): the libraries inside the program or beside it": "mcpp：打包（3/3）：库在程序里还是在程序旁边"
 }

@@ -1,12 +1,11 @@
-// Settings | Tools | mcpp: the shared settings panel, the same one VS Code shows.
+// Settings | Tools | mcpp: mcpp-vscode's settings page, in the workbench (Workbench.kt).
 package io.github.mcppcommunity.mcppclion.settings
 
-import com.google.gson.JsonObject
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import io.github.mcppcommunity.mcppclion.webui.WebuiPanel
+import io.github.mcppcommunity.mcppclion.webui.Workbench
 import javax.swing.JComponent
 
 class McppConfigurable(private val project: Project) : Configurable {
@@ -17,10 +16,10 @@ class McppConfigurable(private val project: Project) : Configurable {
     override fun createComponent(): JComponent {
         val d = Disposer.newDisposable("mcpp settings")
         disposable = d
-        return WebuiPanel(project, "settings", JsonObject(), d).component
+        return Workbench(project, "settings", d).component
     }
 
-    // Every change is stored as it is made (the panel writes through the host).
+    // Every change is stored as it is made (the page writes through the workbench).
     override fun isModified(): Boolean = false
     override fun apply() {}
 

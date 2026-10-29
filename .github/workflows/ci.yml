@@ -381,9 +381,10 @@ jobs:
           if-no-files-found: warn
 
   # The CLion plugin (mide-plugins/clion; the protocol's editor `jetbrains`, the IntelliJ platform):
-  # its tests (the wire and a session over the mock mcpp), the archive carrying the bundle and every
-  # system's okrun, and the Plugin Verifier against the oldest CLion it claims (2026.1) and the one it
-  # is built on.
+  # its tests (the wire and a session over the mock mcpp), the workbench it shows (mcpp-vscode's pages,
+  # bundled by the extension's tools) in Chromium over the backend built here, the archive carrying
+  # the workbench, the bundle and every system's okrun, and the Plugin Verifier against the oldest
+  # CLion it claims (2026.1) and the one it is built on.
   clion:
     name: CLion plugin
     needs: backend
@@ -395,6 +396,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mcpp
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mide-plugins/vscode/package-lock.json
+      - name: The extension's dependencies (the workbench's bundler)
+        working-directory: mide-plugins/vscode
+        run: npm ci
       - name: Gradle (xim:gradle brings its JDK)
         run: xlings install gradle -y -g
       - uses: actions/cache@v5
@@ -418,6 +427,11 @@ jobs:
             echo "MCPP_IDE_OKB=$GITHUB_WORKSPACE/backend/mcpp-ide.okb"
             echo "MCPP_IDE_OKRUN=$GITHUB_WORKSPACE/backend/okrun"
           } >> "$GITHUB_ENV"
+      - name: The workbench in Chromium, over the backend
+        working-directory: mide-plugins/vscode
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:webui
       - name: Test and package
         working-directory: mide-plugins/clion
         run: gradle --no-daemon test buildPlugin
@@ -431,6 +445,10 @@ jobs:
           grep -q "mcpp-clion/backend/mcpp-ide.okb" files.txt
           for p in linux-x86_64/okrun linux-aarch64/okrun macos-aarch64/okrun windows-x86_64/okrun.exe; do grep -q "mcpp-clion/backend/okrun/$p" files.txt; done
           [ "$(grep -c '\.okb$' files.txt)" = 1 ]
+          jar="$(grep -o 'mcpp-clion/lib/mcpp-clion-[^ ]*\.jar' files.txt | head -1)"
+          unzip -p build/distributions/mcpp-clion-*.zip "$jar" > plugin.jar
+          unzip -l plugin.jar | tee jar.txt | grep -q "webui/files.txt"
+          for f in $(unzip -p plugin.jar webui/files.txt); do grep -q " webui/$f$" jar.txt; done
           ls -l build/distributions/*.zip
       - uses: actions/upload-artifact@v5
         with:
