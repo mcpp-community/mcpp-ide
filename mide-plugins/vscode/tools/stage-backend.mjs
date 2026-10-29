@@ -7,8 +7,9 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const okb = process.env.MCPP_IDE_OKB;
 const okrun = process.env.MCPP_IDE_OKRUN;
 if (!okb || !fs.statSync(okb, { throwIfNoEntry: false })?.isFile()) {
