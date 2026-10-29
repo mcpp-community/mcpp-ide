@@ -1363,7 +1363,8 @@
     "gen:examples": "node tools/generate-library-examples.mjs",
     "test:graphs-ui": "npm run compile && node tools/test-graphs-ui.mjs",
     "gen": "cd ../.. && mcpp run mcpp-ide-dev -- gen vscode --dev",
-    "stage:backend": "node tools/stage-backend.mjs"
+    "stage:backend": "node tools/stage-backend.mjs",
+    "test:parity": "npm run compile && node --test \"dist/test/parity/*.test.js\""
   },
   "devDependencies": {
     "@mermaid-js/tiny": "12.2.0",
