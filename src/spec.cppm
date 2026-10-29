@@ -30,8 +30,15 @@ const Json& presets();                  // spec/presets.json's "presets"
 const std::map<std::string, std::string, std::less<>>& runtime_zh_cn();
 const Json& toml_schema();
 const Json& buildscript_api();
-// spec/commands.json: the command table both adapters declare (groups, commands).
+// spec/commands.json: the command table the editors offer (groups, commands).
 const Json& commands();
+// Whether an editor (the protocol's `editor`: vscode, jetbrains, nvim, cli) offers a command: the
+// row's `editors` when it has them (`omitted` says why an editor is left out), else every editor;
+// a forward to mcppls's own commands or an editor's own command only where those exist (VS Code).
+bool offered_in(const Json& command, std::string_view editor);
+// The name a command line types for a command (`:Mcpp <name>` in Neovim): the row's `subcommand`,
+// else its id after `mcpp.`.
+std::string subcommand_of(const Json& command);
 // The editors' strings (command titles, setting titles, view names): spec/i18n/manifest.<locale>.json.
 // "zh-cn" falls back to English key by key.
 const Json& manifest_strings(std::string_view locale);
@@ -104,6 +111,20 @@ const Json& buildscript_api() {
 const Json& commands() {
     static const Json c = Json::parse(generated::kCommandsJson);
     return c;
+}
+
+bool offered_in(const Json& c, std::string_view editor) {
+    if (c.contains("editors") && c["editors"].is_array())
+        return std::ranges::any_of(c["editors"], [&](const Json& e) { return e.is_string() && e.get<std::string>() == editor; });
+    const auto kind = c.contains("action") && c["action"].is_object() ? c["action"].value("kind", "") : std::string{};
+    if (kind == "forward" || kind == "editor") return editor == "vscode";
+    return true;
+}
+
+std::string subcommand_of(const Json& c) {
+    if (c.contains("subcommand") && c["subcommand"].is_string()) return c["subcommand"].get<std::string>();
+    const auto id = c.value("id", "");
+    return id.starts_with("mcpp.") ? id.substr(5) : id;
 }
 
 const Json& manifest_strings(std::string_view locale) {

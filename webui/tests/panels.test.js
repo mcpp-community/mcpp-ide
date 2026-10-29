@@ -8,7 +8,8 @@ const path = require("node:path");
 const { test, before, after } = require("node:test");
 
 const repo = path.resolve(__dirname, "..", "..");
-const vscodeDir = path.join(repo, "vscode");
+// The VS Code adapter holds the DOM, the wire and the harness the panels are tested with.
+const vscodeDir = path.join(repo, "mide-plugins", "vscode");
 const { JSDOM } = require(path.join(vscodeDir, "node_modules", "jsdom"));
 const { Backend } = require(path.join(vscodeDir, "out", "src", "backend", "client.js"));
 const { built } = require(path.join(vscodeDir, "out", "test", "unit", "harness.js"));

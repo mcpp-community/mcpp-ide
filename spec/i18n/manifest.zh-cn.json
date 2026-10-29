@@ -210,6 +210,7 @@
   "command.mcpp.debug.title": "调试",
   "command.mcpp.pack.title": "打包",
   "command.mcpp.cancelJob.title": "取消正在运行的任务",
+  "command.mcpp.problems.title": "在 quickfix 列表中显示问题",
   "command.mcpp.selectTarget.title": "选择构建目标",
   "command.mcpp.showTargets.title": "目标与平台",
   "group.project": "工程",
