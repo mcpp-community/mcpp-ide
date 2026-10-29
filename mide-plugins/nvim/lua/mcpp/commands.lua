@@ -395,8 +395,10 @@ function M.find(subcommand)
   end
 end
 
+-- A row by its id, offered now or not: the quick menu names rows by id, and a row Neovim leaves out
+-- of its table now (the debugger without nvim-dap) says why when it is chosen.
 function M.find_id(id)
-  for _, row in ipairs(M.offered()) do
+  for _, row in ipairs(session.state.commands) do
     if row.id == id then
       return row
     end

@@ -66,13 +66,13 @@ class McppSession(private val project: Project) : Disposable {
     /**
      * The servers to ask first: MCPPLS_SERVER, then the payload the mcppls CLion plugin carries
      * (`<plugins>/mcppls-clion/payload`, whose payload.json's `server` the backend starts: the runner
-     * and the okb; looking a plugin up by its id is the platform's internal API). PATH and xlings are
-     * the backend's own to look at.
+     * and the okb, the runner made executable again; looking a plugin up by its id is the platform's
+     * internal API). PATH and xlings are the backend's own to look at.
      */
     private fun mcpplsCandidates(): JsonArray = JsonArray().apply {
         System.getenv("MCPPLS_SERVER")?.let { add(it) }
         runCatching { PathManager.getPluginsDir().resolve("mcppls-clion/payload").toFile() }.getOrNull()
-            ?.takeIf { it.resolve("payload.json").isFile }?.let { add(it.path) }
+            ?.takeIf { it.resolve("payload.json").isFile }?.let { add(Locate.runnablePayload(it).path) }
     }
 
     fun start(): CompletableFuture<JsonObject> {

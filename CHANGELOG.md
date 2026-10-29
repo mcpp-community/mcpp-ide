@@ -9,11 +9,14 @@ mcpp-vscode 1.0.1, mcpp-clion 0.1.1 and the first mcpp-nvim (0.1.1), with mcppls
   backend ran the okb itself for `--version`, so the VS Code extension's mcppls was reported as not
   reporting its version (`permission denied`), and the payload in the user data directory was looked
   for as `bin/mcppls`. A candidate is now a payload directory, whose `server` is started as it says,
-  or a program; `languageService/status` reports the `command` beside the `program`.
+  or a program; `languageService/status` reports the `command` beside the `program`. What
+  `server` names is followed only inside the payload (a relative path with no `..` part), as mcppls
+  reads it.
 - **VS Code**: the candidate is the mcppls extension's payload directory (`MCPPLS_PAYLOAD`, else
   `<extension>/payload`), and `MCPPLS_SERVER`.
 - **CLion**: the candidate is the payload the mcppls CLion plugin carries (mcppls 0.0.19 ships one
-  package per system, each with its server), and `MCPPLS_SERVER`. *Install mcppls* and *Update
+  package per system, each with its server), with its runner made executable again when the
+  plugin's install dropped the bit, and `MCPPLS_SERVER`. *Install mcppls* and *Update
   mcppls* open Settings | Plugins, where the Marketplace gives this system's package.
 - **CLion 2026.1 and later** (since-build 261), as the mcppls plugin mcpp-clion depends on; the
   Plugin Verifier checks 2026.1 and 2026.2.3, and the build loads this machine's mcppls 0.0.19
@@ -33,8 +36,10 @@ mcpp-vscode 1.0.1, mcpp-clion 0.1.1 and the first mcpp-nvim (0.1.1), with mcppls
   no language service: mcppls comes with mcppls-nvim (`xlings install mcppls-nvim`), which the plugin
   names when mcppls is missing or older. The backend is `mcpp-ide` on PATH
   (`xlings install mcpp-ide`) or setup()'s `backend`; `xlings install mcpp-ide-nvim` installs the
-  plugin with the backend and sets it up at Neovim's start (`vim.g.mcpp_auto_start = false` opts out). A headless suite runs it against the backend on Neovim 0.10.4 and 0.12.5, over the mock
-  mcpp and over the real one.
+  plugin with the backend and sets it up at Neovim's start (`vim.g.mcpp_auto_start = false` opts
+  out). A backend that ends is said; the requests and jobs waiting on it fail, and the next command
+  starts another, which watches the same projects. A headless suite runs it against the backend on
+  Neovim 0.10.4 and 0.12.5, over the mock mcpp and over the real one.
 - **The protocol's editor `nvim`**, and each row of `commands/list` names its `subcommand` (the id
   after `mcpp.`, or the row's own: `mcpp.cancelJob` is `cancel`). `spec/commands.json` says why an
   editor is left out of a row (`omitted`); Neovim's table has `mcpp.problems` (the action `problems`)

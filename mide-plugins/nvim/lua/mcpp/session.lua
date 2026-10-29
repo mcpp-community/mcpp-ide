@@ -33,6 +33,7 @@ local state = {
   commands = {},
   values = {},
   listeners = {},
+  pending = {},
   claimed = {},
   unclaimed = {},
   running = {},
@@ -134,9 +135,13 @@ function M.mcppls_candidates()
     local image = vim.tbl_filter(function(part)
       return type(part) == 'string' and part:match('%.okb$') ~= nil
     end, cmd)[1]
-    local payload = image and vim.fs.dirname(vim.fs.dirname(image))
-    if payload and uv.fs_stat(payload .. '/payload.json') then
-      out[#out + 1] = payload
+    if image then
+      -- An image is its payload's (payload.json says what starts it); one outside a payload is left
+      -- to the backend's own search, since its runner is not mcppls.
+      local payload = vim.fs.dirname(vim.fs.dirname(image))
+      if uv.fs_stat(payload .. '/payload.json') then
+        out[#out + 1] = payload
+      end
     elseif type(cmd[1]) == 'string' then
       out[#out + 1] = vim.fn.exepath(cmd[1]) ~= '' and vim.fn.exepath(cmd[1]) or cmd[1]
     end
@@ -150,6 +155,9 @@ function M.mcppls_candidates()
   return out
 end
 
+-- A listener for a notification of the backend (`job/output`, `manifest/diagnostics`, ...), or for
+-- the session's own events, whose names have no `/`: `started` once the backend is initialized,
+-- `ended` when it has ended.
 function M.on(method, fn)
   state.listeners[method] = state.listeners[method] or {}
   state.listeners[method][fn] = true
@@ -264,18 +272,29 @@ end
 
 -- ── the wire ──────────────────────────────────────────────────────────────────────────────────
 
--- A request; `callback(err, result)` on the main loop.
+local function not_running()
+  return { code = -32099, message = t('the mcpp-ide backend is not running') }
+end
+
+-- A request; `callback(err, result)` on the main loop. A request still unanswered when the backend
+-- ends is answered with that error (vim.lsp.rpc drops it).
 function M.request(method, params, callback)
   local client = state.client
   if not client or client.is_closing() then
-    callback({ code = -32099, message = t('the mcpp-ide backend is not running') })
+    callback(not_running())
     return
   end
+  local entry = { callback = callback }
+  state.pending[entry] = true
   local ok = client.request(method, object(params), function(err, result)
-    callback(denull(err), denull(result))
+    if state.pending[entry] then
+      state.pending[entry] = nil
+      callback(denull(err), denull(result))
+    end
   end)
   if not ok then
-    callback({ code = -32099, message = t('the mcpp-ide backend is not running') })
+    state.pending[entry] = nil
+    callback(not_running())
   end
 end
 
@@ -325,6 +344,9 @@ local function finish_start(ok)
   state.failed = not ok
   local waiters = state.waiters
   state.waiters = {}
+  if ok then
+    emit('started', {})
+  end
   for _, waiter in ipairs(waiters) do
     waiter(ok)
   end
@@ -373,7 +395,8 @@ local function initialize()
       vim.notify('mcpp: ' .. check.message, vim.log.levels.ERROR)
     end
   end
-  finish_start(true)
+  -- A backend that ended while it was asked these has not started.
+  finish_start(state.client ~= nil)
 end
 
 local function on_exit(client, code, signal)
@@ -382,6 +405,20 @@ local function on_exit(client, code, signal)
       return
     end
     state.client, state.ready, state.running = nil, false, {}
+    -- What waits on it is answered: the requests in flight fail, every job followed ends as failed,
+    -- and a start still initializing fails.
+    local pending, claimed = state.pending, state.claimed
+    state.pending, state.claimed, state.unclaimed = {}, {}, {}
+    for entry in pairs(pending) do
+      entry.callback(not_running())
+    end
+    for id, owner in pairs(claimed) do
+      deliver(owner, 'job/finished', { jobId = id, status = 'failed' })
+    end
+    if state.starting then
+      finish_start(false)
+    end
+    emit('ended', {})
     changed()
     if not state.stopping then
       vim.notify(string.format('mcpp: %s (%s)', t('The mcpp-ide backend ended.'), signal ~= 0 and ('signal ' .. signal) or code),

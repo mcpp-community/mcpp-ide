@@ -50,8 +50,15 @@ local function on_started()
   end
 end
 
--- The projects the backend watches (their manifests' problems, their result records).
+-- The projects the backend watches (their manifests' problems, their result records). When it ends,
+-- the next backend, however it is started, learns them again once it is initialized.
 local known = {}
+local relearn = {}
+
+local function learn(root)
+  known[root] = true
+  session.request('projects/forFile', { path = root .. '/mcpp.toml' }, function() end)
+end
 
 -- A buffer of an mcpp project: the backend starts for its project, or learns of it. A backend that
 -- could not start is tried again by `:Mcpp`, not by every buffer entered.
@@ -61,8 +68,7 @@ local function enter()
     return
   end
   if session.state.ready then
-    known[root] = true
-    session.request('projects/forFile', { path = root .. '/mcpp.toml' }, function() end)
+    learn(root)
   elseif not session.state.starting and not session.state.failed then
     session.start(root, function(ok)
       known[root] = ok or nil
@@ -78,6 +84,22 @@ function M.setup(opts)
   if not attached then
     attached = true
     diagnostics.attach()
+    session.on('ended', function()
+      relearn = vim.tbl_extend('force', relearn, known)
+      known = {}
+    end)
+    session.on('started', function()
+      local folder = session.state.folder
+      if folder then
+        known[folder] = true
+      end
+      for root in pairs(relearn) do
+        if not known[root] then
+          learn(root)
+        end
+      end
+      relearn = {}
+    end)
   end
   vim.api.nvim_create_user_command('Mcpp', function(c)
     commands.run(c.fargs[1], vim.list_slice(c.fargs, 2))

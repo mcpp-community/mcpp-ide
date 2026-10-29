@@ -119,6 +119,15 @@ check('without a backend the plugin names `xlings install mcpp-ide`', heard('xli
 check('and starts nothing', not session.state.ready and session.state.client == nil)
 vim.env.PATH = path
 
+-- ── a backend that ends while it starts ───────────────────────────────────────────────────────
+-- mcpp, which answers `serve` by ending: the start fails, and nothing is left waiting on it.
+mcppide.setup({ backend = { mcpp }, settings = { ['mcpp.path'] = mcpp } })
+local started
+session.start(root, function(ok) started = ok end)
+vim.wait(10000, function() return started ~= nil end, 20)
+check('a backend that ends while it starts fails the start', started == false, started)
+check('and leaves no start in progress', not session.state.starting and session.state.client == nil and next(session.state.pending) == nil)
+
 -- ── start, initialize, the command table ──────────────────────────────────────────────────────
 mcppide.setup({ backend = backend, settings = { ['mcpp.path'] = mcpp, ['mcpp.task.focusTerminal'] = false } })
 vim.cmd.edit(vim.fn.fnameescape(root .. '/src/main.cpp'))
@@ -308,6 +317,26 @@ if mock then
   vim.cmd('Mcpp pack')
   done = finished('pack', before)
   check(':Mcpp pack runs mcpp pack as a job', done ~= nil and done.kind == 'pack', done and done.status)
+
+  -- The backend ends during a build: the build ends as failed, and the next command starts another.
+  local function count(text)
+    local n = 0
+    for _ in output():gmatch(vim.pesc(text)) do
+      n = n + 1
+    end
+    return n
+  end
+  local failed_before = count('mcpp build: failed')
+  vim.cmd('Mcpp build')
+  vim.wait(10000, function() return next(session.state.running) ~= nil end, 20)
+  session.state.client.terminate()
+  vim.wait(10000, function() return count('mcpp build: failed') > failed_before end, 20)
+  check('a backend that ends mid-build ends the build as failed', count('mcpp build: failed') > failed_before, count('mcpp build: failed'))
+  check('and is said to have ended', heard('The mcpp-ide backend ended.') ~= nil)
+  before = session.state.last
+  vim.cmd('Mcpp build')
+  done = finished('build', before)
+  check('the next command starts another backend, which builds', session.state.ready and done ~= nil, done and done.status)
 end
 
 -- ── the target, last: a build after it would build for it ─────────────────────────────────────

@@ -7,6 +7,7 @@
 //   3. the mcpp-ide xlings installed, then PATH.
 package io.github.mcppcommunity.mcppclion.backend
 
+import com.google.gson.JsonParser
 import java.io.File
 
 object Locate {
@@ -42,6 +43,24 @@ object Locate {
     private fun runnable(f: File): File {
         if (!windows && !f.canExecute()) f.setExecutable(true)
         return f
+    }
+
+    /**
+     * A payload of mcppls (`payload.json` beside `bin/`), with the program its `server` starts made
+     * executable again: the runner, else a program server. A plugin's install may not keep the bit;
+     * mcppls-clion puts it back when it starts its server, and the backend may run that program
+     * before, to read mcppls's version. Only a relative path with no `..` part is followed.
+     */
+    fun runnablePayload(payload: File): File {
+        val server = runCatching {
+            JsonParser.parseString(File(payload, "payload.json").readText()).asJsonObject.getAsJsonObject("server")
+        }.getOrNull()
+        val named = listOf("runner", "path").firstNotNullOfOrNull { key ->
+            server?.get(key)?.takeIf { it.isJsonPrimitive }?.asString
+        }
+        named?.takeIf { !File(it).isAbsolute && it.split('/', '\\').none { part -> part == ".." } }
+            ?.let { File(payload, it) }?.takeIf { it.isFile }?.let(::runnable)
+        return payload
     }
 
     fun backend(configured: String, pluginRoot: File?, path: String? = System.getenv("PATH"),

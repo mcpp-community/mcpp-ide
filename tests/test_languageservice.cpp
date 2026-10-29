@@ -39,6 +39,14 @@ int main() {
     write(payload / "bin" / "mcppls", "program");
     write(payload / "payload.json", R"({"server": {"path": "bin/mcppls"}})");
     CHECK(ls::payload_command(payload) == std::vector<std::filesystem::path>{payload / "bin" / "mcppls"});
+    // What payload.json names stays inside the payload.
+    const std::filesystem::path outside = payload.string() + "-outside";
+    write(outside, "program");
+    write(payload / "payload.json", R"({"server": {"path": "bin/mcppls", "runner": "../)" + outside.filename().string() + R"("}})");
+    CHECK(ls::payload_command(payload).empty());
+    write(payload / "payload.json", R"({"server": {"path": ")" + (payload / "bin" / "mcppls").generic_string() + R"("}})");
+    CHECK(ls::payload_command(payload).empty());
+    std::filesystem::remove(outside);
     write(payload / "payload.json", "not json");
     CHECK(ls::payload_command(payload).empty());
     CHECK(ls::command_of(payload / "missing").empty());

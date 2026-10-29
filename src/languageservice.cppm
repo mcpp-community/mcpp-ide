@@ -99,6 +99,16 @@ std::string version_in(std::string_view output) {
     return {};
 }
 
+// A file payload.json names, inside the payload: a relative path with no `..` part, as mcppls's own
+// payload reader holds it. Empty when it would name something outside.
+std::filesystem::path within(const std::filesystem::path& payload, const std::string& named) {
+    const std::filesystem::path relative(named);
+    if (relative.empty() || relative.has_root_path() || relative.has_root_name()) return {};
+    for (const auto& part : relative)
+        if (part == "..") return {};
+    return payload / relative;
+}
+
 std::vector<std::filesystem::path> payload_command(const std::filesystem::path& payload) {
     std::error_code ec;
     std::ifstream in(payload / "payload.json", std::ios::binary);
@@ -108,10 +118,10 @@ std::vector<std::filesystem::path> payload_command(const std::filesystem::path& 
     const Json& server = manifest["server"];
     if (!server.contains("path") || !server["path"].is_string()) return {};
     std::vector<std::filesystem::path> command;
-    if (server.contains("runner") && server["runner"].is_string()) command.push_back(payload / server["runner"].get<std::string>());
-    command.push_back(payload / server["path"].get<std::string>());
+    if (server.contains("runner") && server["runner"].is_string()) command.push_back(within(payload, server["runner"].get<std::string>()));
+    command.push_back(within(payload, server["path"].get<std::string>()));
     for (const auto& part : command)
-        if (!std::filesystem::is_regular_file(part, ec)) return {};
+        if (part.empty() || !std::filesystem::is_regular_file(part, ec)) return {};
     return command;
 }
 

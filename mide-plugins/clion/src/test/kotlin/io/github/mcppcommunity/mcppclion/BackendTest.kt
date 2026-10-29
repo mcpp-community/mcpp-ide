@@ -49,6 +49,26 @@ class BackendTest {
     }
 
     @Test
+    fun aPayloadsRunnerIsMadeExecutableAgain() {
+        assumeTrue("the executable bit is a POSIX file mode", !Locate.windows)
+        val payload = Files.createTempDirectory("mcppclion-payload-").toFile()
+        File(payload, "bin").mkdirs()
+        val runner = File(payload, "bin/okrun").apply { writeText(""); setExecutable(false) }
+        val image = File(payload, "bin/mcppls.okb").apply { writeText(""); setExecutable(false) }
+        File(payload, "payload.json").writeText("""{"server": {"runner": "bin/okrun", "path": "bin/mcppls.okb"}}""")
+        assertEquals(payload, Locate.runnablePayload(payload))
+        assertTrue("the runner", runner.canExecute())
+        assertTrue("the image is not a program", !image.canExecute())
+        // A path that leaves the payload is not followed.
+        val outside = File(payload.path + "-outside").apply { writeText(""); setExecutable(false) }
+        File(payload, "payload.json").writeText("""{"server": {"runner": "../${outside.name}", "path": "bin/mcppls.okb"}}""")
+        Locate.runnablePayload(payload)
+        assertTrue("outside the payload", !outside.canExecute())
+        outside.delete()
+        payload.deleteRecursively()
+    }
+
+    @Test
     fun sessionOverTheMockMcpp() {
         val backend = System.getProperty("mcppide.backend")
         val mock = System.getProperty("mcppide.mockMcpp")
