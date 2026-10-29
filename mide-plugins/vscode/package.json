@@ -1364,16 +1364,21 @@
     "test:graphs-ui": "npm run compile && node tools/test-graphs-ui.mjs",
     "gen": "cd ../.. && mcpp run mcpp-ide-dev -- gen vscode",
     "stage:backend": "node tools/stage-backend.mjs",
-    "test:parity": "npm run compile && node --test \"dist/test/parity/*.test.js\""
+    "test:parity": "npm run compile && node --test \"dist/test/parity/*.test.js\"",
+    "bundle:webui": "node tools/bundle-webui.mjs",
+    "check:webui": "tsc -p ../../webui/tsconfig.json",
+    "test:webui": "npm run compile && node tools/bundle-webui.mjs --out .webui-test && node --test ../../webui/tests/workbench.test.mjs"
   },
   "devDependencies": {
     "@mermaid-js/tiny": "12.2.0",
+    "@noble/hashes": "^1.8.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.0.0",
     "@types/vscode": "^1.91.0",
     "@vscode/codicons": "0.0.46-24",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
+    "buffer": "^6.0.3",
     "esbuild": "^0.25.12",
     "mocha": "^11.8.0",
     "ovsx": "^1.2.0",

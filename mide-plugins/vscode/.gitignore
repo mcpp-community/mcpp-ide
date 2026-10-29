@@ -15,3 +15,4 @@ dist/
 
 # The backend the package carries (tools/stage-backend.mjs).
 /backend/
+.webui-test/

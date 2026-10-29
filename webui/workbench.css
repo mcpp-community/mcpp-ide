@@ -1,0 +1,38 @@
+/* The workbench's own chrome: a tab per view and panel, as the IDE's tool window shows tabs, in the
+   theme's colours (the --vscode-* variables the IDE sets on the root). */
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex; flex-direction: column; overflow: hidden;
+  color: var(--vscode-foreground); background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
+}
+.tabs {
+  display: flex; flex: none; gap: 2px; overflow-x: auto; padding: 0 4px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.tab {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 0; border-bottom: 2px solid transparent;
+  background: none; color: var(--vscode-descriptionForeground); font: inherit; cursor: pointer; white-space: nowrap;
+}
+.tab:hover { color: var(--vscode-foreground); }
+.tab.active { color: var(--vscode-foreground); border-bottom-color: var(--vscode-focusBorder); }
+.tab .close { font-size: 12px; opacity: 0.6; }
+.tab .close:hover { opacity: 1; }
+.stage { flex: 1; min-height: 0; position: relative; }
+.stage > section { position: absolute; inset: 0; overflow: auto; }
+.stage > section[hidden] { display: none; }
+iframe.webview { width: 100%; height: 100%; border: 0; display: block; background: var(--vscode-editor-background); }
+.tree { padding: 4px 0; }
+.tree .row {
+  display: flex; align-items: center; gap: 4px; height: 22px; padding-right: 8px; cursor: pointer; white-space: nowrap;
+}
+.tree .row:hover { background: var(--vscode-list-hoverBackground); }
+.tree .twistie { width: 16px; flex: none; }
+.tree .icon { flex: none; }
+.tree .label { overflow: hidden; text-overflow: ellipsis; }
+.tree .description { color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; margin-left: 4px; font-size: 0.92em; }
+.tree .action { margin-left: auto; opacity: 0; }
+.tree .row:hover .action { opacity: 0.8; }
+.tree .action:hover { opacity: 1; }
+/* The IDE's settings dialog shows the settings page alone. */
+body.settings-only .tabs { display: none; }

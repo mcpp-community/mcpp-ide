@@ -1,0 +1,2 @@
+# The bundled workbench (mide-plugins/vscode: npm run bundle:webui).
+dist/
