@@ -225,20 +225,25 @@ jobs:
               sleep 30
             done
           done
+      # Neovim runs outside the repository: inside it, xlings resolves tools through the project's
+      # own subos (.xlings.json), which holds mcpp only. The suite finds the backend by its own path.
       - name: The plugin on each Neovim, over the mock mcpp
+        working-directory: ${{ runner.temp }}
         run: |
           set -euo pipefail
           failed=''
           for version in $NVIM_VERSIONS; do
             xlings use nvim "$version"
-            nvim --version | head -1
+            nvim --version | head -1 | tee said.txt
+            grep -qF "v$version" said.txt
             echo "::group::Neovim $version"
-            nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua || failed="$failed $version"
+            nvim --headless --clean -l "$GITHUB_WORKSPACE/mide-plugins/nvim/tests/smoke.lua" || failed="$failed $version"
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then echo "::error::the Neovim plugin failed on:$failed"; exit 1; fi
       - name: The plugin over the real mcpp
-        run: MCPP_NVIM_MCPP="$(command -v mcpp)" nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua
+        working-directory: ${{ runner.temp }}
+        run: MCPP_NVIM_MCPP="$(command -v mcpp)" nvim --headless --clean -l "$GITHUB_WORKSPACE/mide-plugins/nvim/tests/smoke.lua"
 
   # The packages, opened on every system they serve: the one bundle each editor package carries,
   # started by the okrun it carries for that system (scripts/check-package.sh), and the backend's own
