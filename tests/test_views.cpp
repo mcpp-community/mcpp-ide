@@ -21,6 +21,8 @@ int main() {
     for (const auto& b : inv["ageBuckets"]) sum += b["entries"].get<std::int64_t>();
     CHECK(sum <= inv["totalEntries"].get<std::int64_t>());
     CHECK(inv["ageBuckets"].size() == 4);
+    for (const auto& k : inv["byKind"]) CHECK(k["bytesText"].is_string());
+    for (const auto& b : inv["ageBuckets"]) CHECK(b["bytesText"].is_string());
 
     policy::CleanOptions co;
     auto all = views::cache_preview(cache, *policy::plan("cacheAll", co), co);

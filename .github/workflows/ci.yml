@@ -197,6 +197,49 @@ jobs:
           name: mcpp-clion-zip
           path: mide-plugins/clion/build/distributions/*.zip
 
+  # The Neovim plugin (mide-plugins/nvim) in a headless Neovim, against the backend built here: over
+  # the mock mcpp on the oldest and the newest Neovim it supports, then over the real mcpp, which
+  # builds the test's project. Neovim comes from xlings (`nvim` in xim-pkgindex), each version
+  # installed and selected with `xlings use`, as mcppls's CI provisions it.
+  nvim:
+    name: Neovim plugin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NVIM_VERSIONS: 0.10.4 0.12.5
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+      - name: Build the backend and the mock mcpp
+        run: mcpp build
+      - name: Neovim from xlings
+        run: |
+          set -euo pipefail
+          for version in $NVIM_VERSIONS; do
+            for attempt in 1 2 3; do
+              if xlings install "nvim@$version" -y -g; then break; fi
+              [ "$attempt" = 3 ] && { echo "::error::nvim@$version could not be installed"; exit 1; }
+              sleep 30
+            done
+          done
+      - name: The plugin on each Neovim, over the mock mcpp
+        run: |
+          set -euo pipefail
+          failed=''
+          for version in $NVIM_VERSIONS; do
+            xlings use nvim "$version"
+            nvim --version | head -1
+            echo "::group::Neovim $version"
+            nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua || failed="$failed $version"
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then echo "::error::the Neovim plugin failed on:$failed"; exit 1; fi
+      - name: The plugin over the real mcpp
+        run: MCPP_NVIM_MCPP="$(command -v mcpp)" nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua
+
   # The packages, opened on every system they serve: the one bundle each editor package carries,
   # started by the okrun it carries for that system (scripts/check-package.sh), and the backend's own
   # universal package started by its launcher.

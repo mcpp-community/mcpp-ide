@@ -6,17 +6,36 @@
 |---|---|---|
 | mcpp | the machine contract: event streams, result records, launch descriptors, JSON queries, `--deny` (mcpp docs/50) | any IDE concept |
 | mcpp-ide backend (`src/`) | sessions and projects (which mcpp.toml a file belongs to), watching (result records, manifests), jobs (one at a time per project, cancellation, a newer job replacing a waiting one), view models (project, targets and platforms, cache, libraries, graphs), cleanup plans and their danger levels, settings validation and migration, the command table, runtime strings, the self-check, the handshakes with mcpp (`--protocol-version`) and mcppls (`--version`) | parsing mcpp.toml, resolving dependencies |
-| adapters (`mide-plugins/vscode`, `mide-plugins/clion`: the CLion plugin, editor id `jetbrains`, the IntelliJ platform's) | declarations generated from `spec/`, the protocol mapped onto native UI, the panels' host, the backend process, finding the backend, workspace trust | any decision |
+| adapters (`mide-plugins/`) | declarations generated from `spec/`, the protocol mapped onto native UI, the panels' host, the backend process, finding the backend, workspace trust | any decision |
 
-The panels (`webui/`) are one set of classic scripts that both editors load: a VS Code webview and a
-JCEF page. A panel speaks the backend's protocol through its host and asks the host only for what
-the editor does (open a file, confirm, store a setting).
+The panels (`webui/`) are one set of classic scripts that the VS Code extension and the CLion
+plugin load: a VS Code webview and a JCEF page. A panel speaks the backend's protocol through its
+host and asks the host only for what the editor does (open a file, confirm, store a setting).
+
+## The adapters
+
+| Directory | Plugin | `editor` | Declares | Holds |
+|---|---|---|---|---|
+| `mide-plugins/vscode` | mcpp-vscode | `vscode` | package.json's contributes, from `mcpp-ide-dev gen vscode` | tasks, the Testing view, debug configurations, Problems, the panels' webviews |
+| `mide-plugins/clion` | mcpp-clion | `jetbrains` (the IntelliJ platform) | actions and message bundles, from `mcpp-ide-dev gen jetbrains` | run configurations, the test tree, CLion's debugger, the panels in JCEF |
+| `mide-plugins/nvim` | mcpp-nvim | `nvim` | nothing: `:Mcpp` reads the command table from the backend | jobs in a buffer, a terminal for the program, `vim.diagnostic` and the quickfix list, the view models as text, nvim-dap |
+
+`spec/commands.json` says which editors offer a command (`editors`, every editor when absent; a
+forward to mcppls's commands only VS Code) and, where an editor is left out, why (`omitted`). The
+backend answers each editor's table (`commands/list`) with the rows it offers, their titles in the
+session's language and their subcommands, the names Neovim types.
+
+The Neovim plugin is Lua over Neovim's own JSON-RPC client (`vim.lsp.rpc`, the LSP base protocol's
+framing). It carries no backend and no web view: a panel's view model is text in a floating window
+or a choice in `vim.ui.select`, and a panel with no textual equivalent (the settings, edited in
+`setup()`) is left out of its table.
 
 ## Language features
 
 mcppls provides every language feature of C++ files; mcpp-ide registers no language service. The
 VS Code extension installs mcppls as an extension pack (it can be removed); the CLion plugin depends
-on the mcppls CLion plugin. The backend reads `mcppls --version`: 0.0.18 and later refresh after any
+on the mcppls CLion plugin; in Neovim mcppls has its own plugin (`xlings install mcppls-nvim`), whose
+client's server the Neovim plugin names to the backend. The backend reads `mcppls --version`: 0.0.18 and later refresh after any
 build through mcpp's result record, and an older or missing mcppls is reported with what to do.
 
 ## A build, end to end
@@ -27,7 +46,8 @@ build through mcpp's result record, and an older or missing mcppls is reported w
 3. mcpp's narration becomes `job/output`; each event becomes `job/plan`, `job/progress`,
    `job/diagnostic` or `job/artifact`; the closing envelope arrives in `job/finished`.
 4. VS Code shows the narration in a pseudoterminal and the diagnostics in Problems; CLion shows the
-   narration in a console and its locations as links.
+   narration in a console and its locations as links; Neovim streams it into `mcpp://output` and
+   the diagnostics into the namespace `mcpp`.
 5. mcpp writes the result record; the backend's watcher sends `result/changed`; mcppls reads the
    same record and refreshes.
 
@@ -44,7 +64,9 @@ editor package carries that bundle and the runner that starts it on each system:
 | `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`mcpp pack --mode self-contained --systems linux,macos,windows`: each okrun built over the platform's hosted arrangement) | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
 
 Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after it, an
-installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. CI packs the
+installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. The Neovim
+plugin carries no package of the backend: it starts setup()'s `backend`, else `mcpp-ide` on PATH,
+and `xlings install mcpp-ide-nvim` installs it from the release's source tree. CI packs the
 bundle and the universal package (`mcpp-ide-<version>-openkal.tar.gz`, a release asset) once, on
 Linux, takes okrun from that package, opens both editor packages and the universal package on every
 system and starts what they carry for it (`.github/scripts/check-package.sh`).
@@ -52,13 +74,16 @@ system and starts what they carry for it (`.github/scripts/check-package.sh`).
 ## Generated declarations
 
 `spec/` is the source of everything the editors declare statically. `mcpp-ide-dev gen vscode` writes
-the extension's package.json (commands, keybindings, menus, configuration) and its message bundles;
-`mcpp-ide-dev gen jetbrains` writes the plugin's actions and message bundles. The backend embeds the
-same files (build.mcpp), so the commands an editor registers at run time are the ones it declared.
+the extension's package.json (commands, keybindings, menus, configuration) and its message bundles
+into `mide-plugins/vscode/dist`; `mcpp-ide-dev gen jetbrains` writes the CLion plugin's actions and
+message bundles into `mide-plugins/clion/build`. The backend embeds the same files (build.mcpp), so
+the commands an editor registers at run time are the ones it declared; which rows an editor offers
+is one rule (`spec::offered_in`) for both. The Neovim plugin declares nothing and offers what the
+backend's table holds.
 
 ## Fixtures
 
 `protocol/fixtures` holds mcpp's real output, captured by `mcpp-ide-dev capture`. The backend's tests
 check each fixture against `protocol/mcpp-contract.schema.json`, replay them through the mock mcpp,
 and check the backend's answers against `protocol/protocol.schema.json`; the adapters' tests run on
-the same mock.
+the same mock (the Neovim plugin's headless suite also over a real mcpp).

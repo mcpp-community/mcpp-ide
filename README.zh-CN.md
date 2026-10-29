@@ -1,7 +1,7 @@
 # mcpp-ide - mcpp 的 IDE 层
 
-> 所有编辑器共用一个后端来对待 [mcpp](https://github.com/mcpp-community/mcpp) 工程：VS Code（mcpp-vscode）
-> 与 CLion（mcpp-clion）的构建、运行、测试、调试、打包行为一致
+> 所有编辑器共用一个后端来对待 [mcpp](https://github.com/mcpp-community/mcpp) 工程：VS Code（mcpp-vscode）、
+> CLion（mcpp-clion）与 Neovim（mcpp-nvim）的构建、运行、测试、调试、打包行为一致
 
 [English](README.md) | **简体中文**
 
@@ -13,20 +13,20 @@
 
 mcpp-ide 只做一次。它的后端 `mcpp-ide serve` 是一个 C++ 程序，只读取 mcpp 的机器契约（事件流、结果记录、启动描述、
 JSON 查询），通过 JSON-RPC 回答编辑器。VS Code 扩展与 CLion 插件把这些回答映射到各自的界面，并共用一套网页面板；
-二者位于本仓库的 `mide-plugins/`。
+Neovim 插件把它们映射到缓冲区、浮动窗口与 quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。
 C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-language-server)；mcpp-ide 不注册任何语言服务。
 
 ## 功能
 
-| | VS Code（mcpp-vscode） | CLion（mcpp-clion） |
-|---|---|---|
-| 构建、运行、测试 | 伪终端中的任务，显示 mcpp 自身的输出 | "mcpp" 运行配置、PTY 控制台、`main` 旁的 ▶ |
-| 测试树、单个测试重跑 | 测试视图 | IDE 测试运行器 |
-| 调试 | CodeLLDB、C/C++（gdb、lldb）、lldb-dap | CLion 的 GDB 或 LLDB |
-| 诊断 | 问题面板，来自 mcpp 带位置的诊断 | 控制台链接到报告的位置 |
-| mcpp.toml | 问题来自 mcpp；补全、悬停、大纲来自 mcpp 的键注册表 | 问题来自 mcpp |
-| 目标与平台、库、依赖图、缓存、打包、设置 | 共享网页面板 | 同一套面板（JCEF） |
-| 语言功能 | mcppls（随扩展一并安装） | mcppls CLion 插件（依赖） |
+| | VS Code（mcpp-vscode） | CLion（mcpp-clion） | Neovim（mcpp-nvim） |
+|---|---|---|---|
+| 构建、运行、测试 | 伪终端中的任务，显示 mcpp 自身的输出 | "mcpp" 运行配置、PTY 控制台、`main` 旁的 ▶ | `:Mcpp build`、`test`：任务输出流入缓冲区；`:Mcpp run` 在终端缓冲区中运行 |
+| 测试树、单个测试重跑 | 测试视图 | IDE 测试运行器 | `:Mcpp test <filter>` |
+| 调试 | CodeLLDB、C/C++（gdb、lldb）、lldb-dap | CLion 的 GDB 或 LLDB | nvim-dap（codelldb、lldb-dap、cppdbg、gdb） |
+| 诊断 | 问题面板，来自 mcpp 带位置的诊断 | 控制台链接到报告的位置 | `vim.diagnostic`，`:Mcpp problems` 填入 quickfix 列表 |
+| mcpp.toml | 问题来自 mcpp；补全、悬停、大纲来自 mcpp 的键注册表 | 问题来自 mcpp | 问题来自 mcpp |
+| 目标与平台、库、依赖图、缓存、打包、设置 | 共享网页面板 | 同一套面板（JCEF） | 浮动窗口中的文本、`vim.ui.select`；设置在 `setup()` 中 |
+| 语言功能 | mcppls（随扩展一并安装） | mcppls CLion 插件（依赖） | mcppls-nvim（`xlings install mcppls-nvim`） |
 
 - **处处同一答案**——构建运行什么、测试如何报告、清理的代价：都由后端决定
 - **只读 mcpp 的契约**——不自行解析清单，不自行解析依赖
@@ -39,7 +39,7 @@ C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-lan
 ### 让 Agent 安装
 
 ```
-阅读 https://github.com/mcpp-community/mcpp-ide 的 agents/README.md，为我使用的编辑器（VS Code 或 CLion）
+阅读 https://github.com/mcpp-community/mcpp-ide 的 agents/README.md，为我使用的编辑器（VS Code、CLion 或 Neovim）
 从最新发布安装 mcpp-ide，并在我的 mcpp 工程上用 `mcpp-ide self-check` 检查。
 ```
 
@@ -50,10 +50,12 @@ C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-lan
 | VS Code | Marketplace（`mcpp-community.mcpp-vscode`），或 `mcpp-vscode-<version>.vsix` | 搜索 *mcpp*，或 `code --install-extension mcpp-vscode-<version>.vsix` |
 | 兼容 VS Code 的编辑器 | Open VSX，或 `.vsix` | 在扩展视图中安装 `.vsix` |
 | CLion 2026.1+ | JetBrains Marketplace（`mcpp-clion`），或 `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk；先安装 mcppls CLion 插件（本系统的包自带服务端） |
+| Neovim 0.10+ | release 源码树中的 `mide-plugins/nvim` | `xlings install mcpp-ide-nvim` 与 `xlings install mcpp-ide`，再 `require('mcpp').setup()`；或把该目录加入 runtimepath（[其 README](mide-plugins/nvim/README.md)） |
 | Agent、其他客户端 | `mcpp-ide-<version>-openkal.tar.gz`（两个架构的映像；Linux x64/arm64、macOS arm64、Windows x64 的 okrun），携带 okrun 的 `mcpp-ide-<version>.okb`，或 `xlings install mcpp-ide` | 运行 `bin/mcpp-ide serve`（Windows 上为 `bin\mcpp-ide.cmd`），或 `okrun mcpp-ide-<version>.okb serve` |
 
 每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.17.3 上的
-x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 的 okrun 携带。
+x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 的 okrun 携带。Neovim 插件不携带后端：
+它启动 xlings 安装的 `mcpp-ide` 命令（由 okrun 运行同一个映像包）。
 
 ### 从源码构建
 
@@ -63,6 +65,7 @@ mcpp test                                      # 后端测试
 cd mide-plugins/vscode && npm ci && npm test   # 扩展与面板的测试
 npm run package                                # dist/mcpp-vscode-<version>.vsix
 cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
+cd ../.. && nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua   # Neovim 插件的测试
 ```
 
 `xlings install gradle` 会一并带来 Gradle 及其 JDK。
@@ -72,8 +75,9 @@ cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-
 - [docs/architecture.md](docs/architecture.md)——三层及其边界
 - [protocol/protocol.schema.json](protocol/protocol.schema.json)——后端的方法与通知
 - [protocol/mcpp-contract.schema.json](protocol/mcpp-contract.schema.json)——后端读取的 mcpp 契约部分
-- [spec/](spec)——设置、命令、翻译：两个编辑器声明的唯一来源
-- [mide-plugins/vscode/README.md](mide-plugins/vscode/README.md)、[mide-plugins/clion/README.md](mide-plugins/clion/README.md)
+- [spec/](spec)——设置、命令、翻译：各编辑器声明与命令表的唯一来源
+- [mide-plugins/vscode/README.md](mide-plugins/vscode/README.md)、[mide-plugins/clion/README.md](mide-plugins/clion/README.md)、
+  [mide-plugins/nvim/README.md](mide-plugins/nvim/README.md)
 
 ## 参与贡献
 

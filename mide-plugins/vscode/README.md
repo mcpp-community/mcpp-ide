@@ -8,7 +8,8 @@ mcpp's shared build cache.
 
 This extension is the VS Code adapter of [mcpp-ide](https://github.com/mcpp-community/mcpp-ide).
 Its decisions are made by the mcpp-ide backend (`mcpp-ide serve`), which reads only mcpp's
-machine contract; JetBrains CLion has the same features through mcpp-clion.
+machine contract; JetBrains CLion has the same features through mcpp-clion, and Neovim through
+mcpp-nvim.
 
 ## Language features come from mcppls
 

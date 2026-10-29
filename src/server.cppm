@@ -5,8 +5,11 @@
 // THE ADAPTER DECIDES NOTHING. Which argv a build runs, how much confirmation a
 // clean needs, what a cache panel shows, what a setting may hold, which
 // commands an editor offers and what a test record means: answered here, so VS
-// Code and CLion behave alike and an agent reading the backend's log sees the
-// same reasons a person sees in the editor.
+// Code, CLion and Neovim behave alike and an agent reading the backend's log
+// sees the same reasons a person sees in the editor.
+//
+// The editors (the protocol's `editor`): vscode (mcpp-vscode), jetbrains
+// (mcpp-clion: the IntelliJ platform's id), nvim (mcpp-nvim), cli (an agent).
 export module mcppide.server;
 
 import std;
@@ -145,15 +148,6 @@ std::vector<std::string> strings_of(const Json& v) {
     std::vector<std::string> out;
     if (v.is_array()) for (const auto& x : v) if (x.is_string()) out.push_back(x.get<std::string>());
     return out;
-}
-// A command's place in an editor: `editors` lists the editors that offer it (all, when absent); a
-// forward to mcppls's own commands exists only where mcppls has commands to forward to (VS Code).
-bool offered_in(const Json& c, std::string_view editor) {
-    if (c.contains("editors") && c["editors"].is_array())
-        return std::ranges::any_of(c["editors"], [&](const Json& e) { return e.is_string() && e.get<std::string>() == editor; });
-    const auto kind = c.contains("action") ? c["action"].value("kind", "") : std::string{};
-    if (kind == "forward" || kind == "editor") return editor == "vscode";
-    return true;
 }
 }  // namespace
 
@@ -829,7 +823,8 @@ std::expected<Json, rpc::Error> Session::targets(const Json& p) {
 }
 
 // The command table for one editor, in the user's language: what the adapter registers at run time
-// beside the declarations generated from the same table (spec/commands.json).
+// beside the declarations generated from the same table (spec/commands.json), or, in Neovim, which
+// declares nothing, all it offers. Each row names its subcommand, the name a command line types.
 std::expected<Json, rpc::Error> Session::commands(const Json& p) const {
     std::string editor, locale;
     {
@@ -845,10 +840,11 @@ std::expected<Json, rpc::Error> Session::commands(const Json& p) const {
     for (const auto& g : table["groups"]) groups[g.value("id", "")] = spec::manifest_string(g.value("title", ""), locale);
     Json out = Json::array();
     for (const auto& c : table["commands"]) {
-        if (!offered_in(c, editor)) continue;
+        if (!spec::offered_in(c, editor)) continue;
         Json row = c;
         const auto id = c.value("id", "");
         row["title"] = spec::manifest_string(std::format("command.{}.title", id), locale);
+        row["subcommand"] = spec::subcommand_of(c);
         row["groupTitle"] = groups.value(c.value("group", ""), "");
         out.push_back(std::move(row));
     }

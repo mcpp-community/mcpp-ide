@@ -2,7 +2,7 @@
 
 ## 0.1.1
 
-mcpp-vscode 1.0.1 and mcpp-clion 0.1.1, with mcppls 0.0.19.
+mcpp-vscode 1.0.1, mcpp-clion 0.1.1 and the first mcpp-nvim (0.1.1), with mcppls 0.0.19.
 
 - **mcppls is found as the command that starts it.** mcppls 0.0.18 and later carry the server as an
   okb that the platform's runner starts (`payload.json`'s `server`: `bin/okrun bin/mcppls.okb`). The
@@ -18,10 +18,30 @@ mcpp-vscode 1.0.1 and mcpp-clion 0.1.1, with mcppls 0.0.19.
 - **CLion 2026.1 and later** (since-build 261), as the mcppls plugin mcpp-clion depends on; the
   Plugin Verifier checks 2026.1 and 2026.2.3, and the build loads this machine's mcppls 0.0.19
   package.
-- **The editor plugins are `mide-plugins/`**: `mide-plugins/vscode` (mcpp-vscode) and
+- **The editor plugins are `mide-plugins/`**: `mide-plugins/vscode` (mcpp-vscode),
   `mide-plugins/clion` (mcpp-clion; the protocol's editor id stays `jetbrains`, the IntelliJ
-  platform's). The backend, the panels, `spec/`, `protocol/` and the tests stay at the root; both
-  adapters build and test as before.
+  platform's) and `mide-plugins/nvim` (mcpp-nvim). The backend, the panels, `spec/`, `protocol/` and
+  the tests stay at the root; both earlier adapters build and test as before.
+- **mcpp-nvim, mcpp's project features in Neovim 0.10 and later**, over the same backend through
+  Neovim's own JSON-RPC client: `:Mcpp <subcommand>` with completion, from the backend's command
+  table for the editor `nvim`; builds, tests, cleanups and packs as jobs streamed into
+  `mcpp://output`, cancelled with `:Mcpp cancel`; the program in a terminal buffer; debugging through
+  nvim-dap when it is present; targets, toolchains, new projects and libraries through
+  `vim.ui.select` and `vim.ui.input`; targets and platforms, the cache and the graphs as text in
+  floating windows; mcpp's diagnostics in the namespaces `mcpp` and `mcpp.toml`, and
+  `:Mcpp problems` in the quickfix list; `require('mcpp').status()` for the statusline. It registers
+  no language service: mcppls comes with mcppls-nvim (`xlings install mcppls-nvim`), which the plugin
+  names when mcppls is missing or older. The backend is `mcpp-ide` on PATH
+  (`xlings install mcpp-ide`) or setup()'s `backend`; `xlings install mcpp-ide-nvim` installs the
+  plugin. A headless suite runs it against the backend on Neovim 0.10.4 and 0.12.5, over the mock
+  mcpp and over the real one.
+- **The protocol's editor `nvim`**, and each row of `commands/list` names its `subcommand` (the id
+  after `mcpp.`, or the row's own: `mcpp.cancelJob` is `cancel`). `spec/commands.json` says why an
+  editor is left out of a row (`omitted`); Neovim's table has `mcpp.problems` (the action `problems`)
+  and the quick menu, and leaves out the settings panel and the panels' entry pages. Which rows an
+  editor offers is one function, shared by the backend and `mcpp-ide-dev gen`.
+- **The cache inventory's rows carry their size as text** (`bytesText`), for an editor that shows it
+  as text.
 
 ## 0.1.0
 

@@ -126,6 +126,29 @@ int main() {
     CHECK(!targets["rows"].empty());
     auto cmds = result_of("commands/list", Json{{"editor", "jetbrains"}});
     for (const auto& c : cmds["commands"]) CHECK(c["action"]["kind"] != "forward");
+    // Neovim's table: no forward to mcppls's commands (mcppls-nvim has its own), no panel it has no
+    // text for, its own quickfix command, and each row's subcommand (`:Mcpp <subcommand>`).
+    const Json nvimInit{{"editor", "nvim"}, {"locale", "en_US.UTF-8"}, {"trusted", true},
+                        {"workspaceFolders", Json::array({root.generic_string()})}, {"settings", Json::object()}};
+    CHECK(conforms(nvimInit, protocol["methods"]["initialize"]["params"], protocol, "initialize params (nvim)"));
+    std::map<std::string, std::string> nvim;
+    for (const auto& c : result_of("commands/list", Json{{"editor", "nvim"}})["commands"]) {
+        const auto kind = c["action"]["kind"].get<std::string>();
+        CHECK(kind != "forward" && kind != "editor");
+        CHECK(!(kind == "panel" && c["action"]["panel"] == "settings"));
+        nvim[c["subcommand"].get<std::string>()] = c["id"].get<std::string>();
+    }
+    CHECK(nvim["cancel"] == "mcpp.cancelJob" && nvim["build"] == "mcpp.build" && nvim["problems"] == "mcpp.problems");
+    CHECK(nvim.contains("showMenu") && nvim.contains("library.search") && !nvim.contains("openSettings"));
+    for (const auto& c : result_of("commands/list", Json{{"editor", "vscode"}})["commands"]) CHECK(c["id"] != "mcpp.problems");
+    // A row that leaves Neovim out says why.
+    for (const auto& c : load(testsupport::repo() / "spec" / "commands.json")["commands"]) {
+        if (!c.contains("editors") || std::ranges::find(c["editors"], Json("nvim")) != c["editors"].end()) continue;
+        if (c["action"]["kind"] == "editor") continue;
+        const auto reason = c.contains("omitted") ? c["omitted"].value("nvim", "") : std::string{};
+        if (reason.empty()) std::println(std::cerr, "{} leaves nvim out without saying why", c["id"].get<std::string>());
+        CHECK(!reason.empty());
+    }
     result_of("menu/quick", rooted);
     result_of("languageService/status", Json{{"candidates", Json::array()}});
     // The pack panel's choices: the closures SPEC-014 names, and linkages only where mcpp takes them.

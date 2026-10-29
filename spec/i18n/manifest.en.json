@@ -210,6 +210,7 @@
   "command.mcpp.debug.title": "Debug",
   "command.mcpp.pack.title": "Pack",
   "command.mcpp.cancelJob.title": "Cancel the Running Job",
+  "command.mcpp.problems.title": "Show the Problems in the Quickfix List",
   "command.mcpp.selectTarget.title": "Select the Build Target",
   "command.mcpp.showTargets.title": "Targets and Platforms",
   "group.project": "Project",

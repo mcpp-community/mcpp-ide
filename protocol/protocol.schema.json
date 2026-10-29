@@ -11,7 +11,7 @@
         "type": "object",
         "properties": {
           "client": { "type": "object", "properties": { "name": { "type": "string" }, "version": { "type": "string" } } },
-          "editor": { "enum": ["vscode", "jetbrains", "cli"] },
+          "editor": { "enum": ["vscode", "jetbrains", "nvim", "cli"], "description": "The adapter: mcpp-vscode, mcpp-clion (the IntelliJ platform's id), mcpp-nvim, or an agent" },
           "locale": { "type": "string" },
           "trusted": { "type": "boolean" },
           "settings": { "$ref": "#/$defs/settingValues" },
@@ -58,8 +58,8 @@
       "result": { "type": "object", "required": ["backend", "checks"], "properties": { "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } } } }
     },
     "commands/list": {
-      "description": "The command table (spec/commands.json) for one editor, with titles in the session's language.",
-      "params": { "type": "object", "properties": { "editor": { "enum": ["vscode", "jetbrains", "cli"] } } },
+      "description": "The command table (spec/commands.json) for one editor, with titles in the session's language and each command's subcommand.",
+      "params": { "type": "object", "properties": { "editor": { "enum": ["vscode", "jetbrains", "nvim", "cli"] } } },
       "result": { "type": "object", "required": ["commands"], "properties": { "commands": { "type": "array", "items": { "$ref": "#/$defs/command" } } } }
     },
     "menu/quick": {
@@ -335,7 +335,7 @@
     },
     "command": {
       "type": "object",
-      "required": ["id", "title", "action"],
+      "required": ["id", "title", "subcommand", "action"],
       "properties": {
         "id": { "type": "string" },
         "title": { "type": "string" },
@@ -343,7 +343,8 @@
         "groupTitle": { "type": "string" },
         "when": { "type": "string" },
         "quickMenu": { "type": "boolean" },
-        "action": { "type": "object", "required": ["kind"], "properties": { "kind": { "enum": ["job", "run", "debug", "cache", "panel", "cancel", "selectTarget", "installToolchain", "selectDefaultToolchain", "newProject", "quickMenu", "selfCheck", "rpc", "languageService", "forward", "editor"] } } }
+        "subcommand": { "type": "string", "description": "The name a command line types (`:Mcpp <subcommand>` in Neovim): the row's own, else the id after `mcpp.`" },
+        "action": { "type": "object", "required": ["kind"], "properties": { "kind": { "enum": ["job", "run", "debug", "cache", "panel", "cancel", "selectTarget", "installToolchain", "selectDefaultToolchain", "newProject", "quickMenu", "selfCheck", "rpc", "languageService", "forward", "editor", "problems"] } } }
       }
     },
     "launchParams": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "target": { "type": "string" }, "profile": { "type": "string" }, "bin": { "type": "string" }, "args": { "type": "array", "items": { "type": "string" } } } },

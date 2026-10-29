@@ -136,7 +136,8 @@ Json cache_inventory(const Json& envelope, const CacheOptions& options) {
             if (!e.value("complete", false)) incomplete.push_back(e);
         }
     Json kinds = Json::array();
-    for (const auto& [k, v] : byKind) kinds.push_back(Json{{"kind", k}, {"entries", v.first}, {"bytes", v.second}});
+    for (const auto& [k, v] : byKind)
+        kinds.push_back(Json{{"kind", k}, {"entries", v.first}, {"bytes", v.second}, {"bytesText", format_bytes(v.second)}});
     std::sort(kinds.begin(), kinds.end(), [](const Json& a, const Json& b) {
         return std::tuple(-a["bytes"].get<std::int64_t>(), -a["entries"].get<std::int64_t>(), a["kind"].get<std::string>()) <
                std::tuple(-b["bytes"].get<std::int64_t>(), -b["entries"].get<std::int64_t>(), b["kind"].get<std::string>());
@@ -147,10 +148,13 @@ Json cache_inventory(const Json& envelope, const CacheOptions& options) {
     });
     Json top = Json::array();
     for (std::size_t i = 0; i < ranked.size() && i < static_cast<std::size_t>(std::max(0, options.topN)); ++i) {
-        Json t{{"label", ranked[i].first}, {"entries", ranked[i].second.entries}, {"bytes", ranked[i].second.bytes}};
+        Json t{{"label", ranked[i].first}, {"entries", ranked[i].second.entries}, {"bytes", ranked[i].second.bytes},
+               {"bytesText", format_bytes(ranked[i].second.bytes)}};
         if (ranked[i].second.oldest) t["oldestAccessed"] = *ranked[i].second.oldest;
         top.push_back(t);
     }
+    // Each row's size as text too, for an editor that shows the inventory as text (Neovim).
+    for (auto& b : buckets) b["bytesText"] = format_bytes(b["bytes"].get<std::int64_t>());
     Json out{{"root", data.value("root", "")}, {"totalBytes", total}, {"totalEntries", count},
              {"totalText", format_bytes(total)}, {"byKind", kinds}, {"topLabels", top},
              {"incomplete", incomplete}, {"ageBuckets", buckets}};

@@ -16,14 +16,17 @@
 //       META-INF/mcpp-actions.xml (included by plugin.xml) and the message bundles
 //       messages/McppClionBundle[_zh_CN].properties.
 //   mcpp-ide-dev check-i18n
-//       Every runtime string the backend and the adapters pass to t(...) has a Chinese entry in
-//       spec/i18n/runtime.zh-cn.json; every editor string a Chinese one in manifest.zh-cn.json.
+//       Every runtime string the backend, the panels and the plugins pass to t(...) has a Chinese
+//       entry in spec/i18n/runtime.zh-cn.json; every editor string a Chinese one in
+//       manifest.zh-cn.json.
 //
 // Nothing generated is written into the repository: the outputs go where the adapters' builds put
-// them (mide-plugins/vscode/dist, mide-plugins/clion/build).
+// them (mide-plugins/vscode/dist, mide-plugins/clion/build). The Neovim plugin (mide-plugins/nvim)
+// declares nothing statically: it reads the command table from the backend at run time.
 import std;
 import nlohmann.json;
 import mcpplibs.os;
+import mcppide.spec;
 
 namespace {
 
@@ -63,7 +66,7 @@ fs::path repo() {
     throw std::runtime_error("run mcpp-ide-dev inside the mcpp-ide repository");
 }
 
-// An editor's plugin: mide-plugins/<editor> (vscode, clion).
+// An editor's plugin: mide-plugins/<editor> (vscode, clion, nvim).
 fs::path plugin(const fs::path& root, std::string_view editor) { return root / "mide-plugins" / editor; }
 
 std::optional<std::string> option(std::span<const std::string> args, std::string_view name) {
@@ -192,13 +195,9 @@ Spec load_spec(const fs::path& root) {
                 read_json(root / "spec" / "i18n" / "manifest.en.json"), read_json(root / "spec" / "i18n" / "manifest.zh-cn.json")};
 }
 
-bool offered_in(const Json& c, std::string_view editor) {
-    if (c.contains("editors") && c["editors"].is_array())
-        return std::ranges::any_of(c["editors"], [&](const Json& e) { return e.is_string() && e.get<std::string>() == editor; });
-    const auto kind = c.contains("action") ? c["action"].value("kind", "") : std::string{};
-    if (kind == "forward" || kind == "editor") return editor == "vscode";
-    return true;
-}
+// Which rows an editor declares is the backend's rule (spec::offered_in), the one its command table
+// answers at run time.
+using mcppide::spec::offered_in;
 
 // The `contributes` that come from spec/: commands, keybindings, menus, configuration.
 void vscode_contributes(const Spec& spec, Json& contributes) {
@@ -458,11 +457,12 @@ int check_i18n(std::span<const std::string>) {
     const auto zh = read_json(root / "spec" / "i18n" / "runtime.zh-cn.json");
     std::set<std::string> missing;
     std::size_t seen = 0;
-    const std::array<std::pair<fs::path, std::vector<std::string>>, 4> trees{{
+    const std::array<std::pair<fs::path, std::vector<std::string>>, 5> trees{{
         {root / "src", {".cppm", ".cpp"}},
         {plugin(root, "vscode") / "src", {".ts"}},
         {root / "webui", {".js"}},
         {plugin(root, "clion") / "src" / "main" / "kotlin", {".kt"}},
+        {plugin(root, "nvim") / "lua", {".lua"}},
     }};
     std::error_code ec;
     for (const auto& [dir, exts] : trees)

@@ -5,3 +5,4 @@
 - [../agents/README.md](../agents/README.md) -- driving the backend from an agent
 - [../mide-plugins/vscode/README.md](../mide-plugins/vscode/README.md) -- the VS Code extension
 - [../mide-plugins/clion/README.md](../mide-plugins/clion/README.md) -- the CLion plugin
+- [../mide-plugins/nvim/README.md](../mide-plugins/nvim/README.md) -- the Neovim plugin
