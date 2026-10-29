@@ -23,14 +23,15 @@ from mcppls through its own Neovim plugin (below).
 ## Install
 
 ```bash
-xlings install mcpp-ide-nvim     # the plugin, on Neovim's runtimepath
-xlings install mcpp-ide          # the backend: the `mcpp-ide` command
+xlings install mcpp-ide-nvim     # the plugin, on Neovim's runtimepath, and the backend mcpp-ide
 xlings install mcppls-nvim       # mcppls and its plugin, for C++ files
 ```
 
 `mcpp-ide-nvim` installs this directory from the source tree of the mcpp-ide release, as
-`mcppls-nvim` installs `editors/nvim` of mcppls's. Without xlings, put the directory on the
-runtimepath:
+`mcppls-nvim` installs `editors/nvim` of mcppls's, and depends on `mcpp-ide`, the package of the
+backend. It also sets the plugin up: `require('mcpp').setup()` runs at Neovim's start, unless the
+user's init.lua has loaded the module already (its own `setup()` keeps its options) or sets
+`vim.g.mcpp_auto_start = false`. Without xlings, put the directory on the runtimepath:
 
 ```lua
 -- lazy.nvim

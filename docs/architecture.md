@@ -66,7 +66,8 @@ editor package carries that bundle and the runner that starts it on each system:
 Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after it, an
 installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. The Neovim
 plugin carries no package of the backend: it starts setup()'s `backend`, else `mcpp-ide` on PATH,
-and `xlings install mcpp-ide-nvim` installs it from the release's source tree. CI packs the
+and `xlings install mcpp-ide-nvim` installs it from the release's source tree, with the backend's
+package as its dependency. CI packs the
 bundle and the universal package (`mcpp-ide-<version>-openkal.tar.gz`, a release asset) once, on
 Linux, takes okrun from that package, opens both editor packages and the universal package on every
 system and starts what they carry for it (`.github/scripts/check-package.sh`).

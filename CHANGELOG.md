@@ -33,7 +33,7 @@ mcpp-vscode 1.0.1, mcpp-clion 0.1.1 and the first mcpp-nvim (0.1.1), with mcppls
   no language service: mcppls comes with mcppls-nvim (`xlings install mcppls-nvim`), which the plugin
   names when mcppls is missing or older. The backend is `mcpp-ide` on PATH
   (`xlings install mcpp-ide`) or setup()'s `backend`; `xlings install mcpp-ide-nvim` installs the
-  plugin. A headless suite runs it against the backend on Neovim 0.10.4 and 0.12.5, over the mock
+  plugin with the backend and sets it up at Neovim's start (`vim.g.mcpp_auto_start = false` opts out). A headless suite runs it against the backend on Neovim 0.10.4 and 0.12.5, over the mock
   mcpp and over the real one.
 - **The protocol's editor `nvim`**, and each row of `commands/list` names its `subcommand` (the id
   after `mcpp.`, or the row's own: `mcpp.cancelJob` is `cancel`). `spec/commands.json` says why an
