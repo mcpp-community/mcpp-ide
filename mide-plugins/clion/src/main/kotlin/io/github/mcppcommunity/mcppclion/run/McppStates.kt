@@ -136,7 +136,10 @@ class TestJobProcessHandler(session: McppSession, params: JsonObject, private va
                     out.append("##teamcity[testSuiteStarted name='${escape(program)}'$hint]\n")
                 }
                 val name = escape(p["case"].asString)
-                out.append("##teamcity[testStarted name='$name']\n")
+                // The case's place in its source, for the editor's ▶ to show the last outcome (TestStateStorage).
+                val hint = caseUrl(session, p["root"]?.asString ?: "", program, p["case"].asString, mains[program])
+                    ?.let { " locationHint='${escape(it)}'" } ?: ""
+                out.append("##teamcity[testStarted name='$name'$hint]\n")
                 when (p["status"]?.asString) {
                     "passed" -> {}
                     "skipped" -> out.append("##teamcity[testIgnored name='$name']\n")
@@ -274,3 +277,13 @@ class LaunchingProcessHandler(private val c: McppRunConfiguration) : ProcessHand
 class McppProgramState(private val c: McppRunConfiguration, env: ExecutionEnvironment) : CommandLineState(env) {
     override fun startProcess(): ProcessHandler = LaunchingProcessHandler(c)
 }
+
+/** The URL of a case: its program's source and the line of its macro (`file://<path>:<line>`, 1-based). */
+internal fun caseUrl(session: McppSession, root: String, test: String, case: String, main: String?): String? {
+    val file = main?.takeIf { it.isNotEmpty() } ?: return null
+    val cases = session.casesFor(root, test) ?: return null
+    val line = cases.getAsJsonArray("cases")?.firstOrNull { it.asJsonObject["name"]?.asString == case }
+        ?.asJsonObject?.get("line")?.asInt ?: return null
+    return "file://$file:${line + 1}"
+}
+

@@ -104,8 +104,13 @@ class McppRunLineMarker : RunLineMarkerContributor() {
         if (text == "main" && entries.getAsJsonObject("main")?.get("line")?.asInt == line)
             return Info(AllIcons.RunConfigurations.TestState.Run, ExecutorAction.getActions(0)) { "mcpp" }
         // A case: the macro's name on the line the backend read the case from.
-        if (entries["kind"].asString == "test" && text.isNotEmpty() && text.all { it.isUpperCase() || it == '_' } && caseAt(session, entries, line) != null)
-            return Info(AllIcons.RunConfigurations.TestState.Run, ExecutorAction.getActions(0)) { "mcpp" }
+        if (entries["kind"].asString == "test" && text.isNotEmpty() && text.all { it.isUpperCase() || it == '_' }) {
+            val case = caseAt(session, entries, line) ?: return null
+            // The last outcome of the case, as the test tree recorded it (its locationHint).
+            val url = "file://${file.path}:${line + 1}"
+            val icon = getTestStateIcon(url, element.project, false) ?: AllIcons.RunConfigurations.TestState.Run
+            return Info(icon, ExecutorAction.getActions(0)) { "mcpp: ${case.first}" }
+        }
         return null
     }
 }
