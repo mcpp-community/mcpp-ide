@@ -113,7 +113,7 @@ jobs:
         run: npm test
 
   vscode-drift:
-    name: VS Code manifest and snapshots
+    name: VS Code manifest and settings documentation
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -121,11 +121,6 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/checkout@v5
-        with:
-          repository: mcpp-community/mcpp
-          path: .mcpp-source
-          fetch-depth: 1
       - uses: ./.github/actions/setup-mcpp
       - uses: actions/setup-node@v5
         with:
@@ -138,11 +133,6 @@ jobs:
           git diff --exit-code -- mide-plugins/vscode spec
       - run: npm ci
         working-directory: mide-plugins/vscode
-      - name: The committed snapshots match the current mcpp
-        working-directory: mide-plugins/vscode
-        env:
-          MCPP_REPO: ${{ github.workspace }}/.mcpp-source
-        run: npm run check:generated
       - name: The settings documentation matches the registry
         working-directory: mide-plugins/vscode
         run: |
@@ -199,7 +189,8 @@ jobs:
             const fail = (message) => { console.error(message); process.exit(1); };
             if (p.extensionDependencies?.[0] !== "sunrisepeak.mcpp-language-server") fail("the dependency moved");
             if (p.extensionDependencies.some((id) => id.includes("clangd"))) fail("clangd is back in the dependency list");
-            if (p.dependencies?.["vscode-languageclient"] || p.devDependencies?.["vscode-languageclient"]) fail("a second language client crept in");
+            // The backend's language client is bundled into dist/vendor; nothing is a runtime dependency.
+            if (Object.keys(p.dependencies ?? {}).length) fail("a runtime dependency crept in: the VSIX carries no node_modules");
             if ((p.activationEvents ?? []).some((event) => event.startsWith("onCommand:"))) fail("onCommand activations are derived since 1.74");
             if (!p.contributes?.viewsContainers?.activitybar?.length) fail("the view container disappeared");
             console.log("manifest ok");
@@ -243,11 +234,13 @@ jobs:
               exit 1
             fi
           done
-      - name: No second language client in the build output
+      - name: One language client, the backend's, bundled
         working-directory: mide-plugins/vscode
         run: |
           test ! -e dist/src/languageClient.js
           ! grep -rqsE "require\(['\"]vscode-languageclient['\"]\)|from ['\"]vscode-languageclient['\"]" dist/src package.json
+          test "$(grep -rlE "vendor/languageclient" dist/src)" = "dist/src/ide/session.js"
+          test -s dist/vendor/languageclient.js
       - uses: actions/upload-artifact@v5
         with:
           name: mcpp-vscode-vsix
@@ -291,6 +284,17 @@ jobs:
           path: mide-plugins/vscode/.vscode-test
           key: vscode-1.91.0-${{ runner.os }}-${{ runner.arch }}
       - name: Extension Host smoke tests against every mcppls variant
+        run: |
+          if [ "$(uname)" = "Linux" ]; then
+            xvfb-run -a npm run test:e2e:one
+          else
+            npm run test:e2e:one
+          fi
+      # The declared degraded mode (part 2 §8, F15): the bundle without a runner for this system,
+      # as on a platform okrun does not cover.
+      - name: Extension Host without its backend
+        env:
+          MCPP_E2E_NO_BACKEND: "1"
         run: |
           if [ "$(uname)" = "Linux" ]; then
             xvfb-run -a npm run test:e2e:one

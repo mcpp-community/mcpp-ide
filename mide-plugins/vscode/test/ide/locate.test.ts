@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { locateBackend, okrunDir, onPath } from "../../src/ide/backend/locate";
+import { backendUnavailableHere, locateBackend, okrunDir, onPath } from "../../src/ide/backend/locate";
 import { mcpplsCandidates } from "../../src/ide/backend/mcppls";
 
 // PATH is this host's (its separator, its suffix), so these use the host's own system.
@@ -38,6 +38,13 @@ test("the bundle runs under the okrun carried for this system, else okrun on PAT
   // No okrun at all: nothing in the package starts.
   const none = locateBackend({ extensionRoot: ext, platform: host, arch: "arm64", env: { PATH: "" }, home: "/nonexistent" });
   assert.equal(none, undefined);
+  // That is the declared degraded mode (part 2 §8, F15): the bundle is carried, no runner runs it here.
+  assert.equal(backendUnavailableHere({ extensionRoot: ext, platform: host, arch: "arm64", env: { PATH: "" } }), true);
+  assert.equal(backendUnavailableHere({ extensionRoot: ext, platform: host, arch: "x64", env: { PATH: "" } }), false);
+  assert.equal(backendUnavailableHere({ extensionRoot: ext, platform: host, arch: "arm64", env: { PATH: bin } }), false);
+  // Without the bundle the backend is not installed, which is another message.
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), "mcppide-bare-"));
+  assert.equal(backendUnavailableHere({ extensionRoot: bare, platform: host, arch: "arm64", env: { PATH: "" } }), false);
   assert.equal(okrunDir("linux", "x64"), "linux-x86_64");
   assert.equal(okrunDir("win32", "x64"), "windows-x86_64");
   assert.equal(okrunDir("darwin", "arm64"), "macos-aarch64");

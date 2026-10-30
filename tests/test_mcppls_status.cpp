@@ -86,13 +86,13 @@ int main() {
         return answer["result"];
     };
     const Json candidates = Json::array({payload.generic_string()});
-    result("initialize", Json{{"client", {{"name", "test"}}}, {"editor", "jetbrains"}, {"trusted", true},
-                              {"languageService", {{"candidates", candidates}}},
-                              {"workspaceFolders", Json::array({root.generic_string()})}});
+    result("initialize", Json{{"clientInfo", {{"name", "test"}}}, {"workspaceFolders", Json::array({Json{{"uri", testsupport::file_uri(root)}}})},
+                {"initializationOptions", Json{{"editor", "jetbrains"}, {"trusted", true},
+                              {"languageService", {{"candidates", candidates}}}}}});
 
     // 0.0.19: no `status`; the actions are the frozen table's, and the workspace is not known.
     std::ofstream(payload / "mock-version") << "0.0.19\n";
-    auto old = result("languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
+    auto old = result("mcpp-ide/languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
     CHECK(old["state"] == "ok" && old["version"] == "0.0.19");
     CHECK(old["statusSource"] == "frozen" && old["workspace"].is_null());
     CHECK(old["serverActions"] == ls::frozen_actions());
@@ -100,31 +100,31 @@ int main() {
     // 0.0.20: the status document.
     std::ofstream(payload / "mock-version") << "0.0.20\n";
     std::ofstream(root / ".mock-mcppls-state") << "starting\n";
-    auto now = result("languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
+    auto now = result("mcpp-ide/languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
     CHECK(now["statusSource"] == "status");
     CHECK(now["workspace"]["state"] == "starting");
     CHECK(now["capabilities"] == Json::array({"status"}));
     CHECK(now["serverActions"].size() == 3);
 
     // The commands each editor is offered: mcppls's action under that editor's id, or not at all.
-    auto jetbrains = result("commands/list", Json{{"editor", "jetbrains"}});
+    auto jetbrains = result("mcpp-ide/commands/list", Json{{"editor", "jetbrains"}});
     CHECK(command(jetbrains, "mcpp.languageServer.restart")["action"]["command"] == "community.mcpp.mcppls.RestartServer");
     CHECK(command(jetbrains, "mcpp.languageServer.restartEngine").is_null());
-    auto nvim = result("commands/list", Json{{"editor", "nvim"}});
+    auto nvim = result("mcpp-ide/commands/list", Json{{"editor", "nvim"}});
     CHECK(command(nvim, "mcpp.languageServer.restart")["action"]["command"] == "McpplsRestart");
-    auto vscode = result("commands/list", Json{{"editor", "vscode"}});
+    auto vscode = result("mcpp-ide/commands/list", Json{{"editor", "vscode"}});
     CHECK(command(vscode, "mcpp.languageServer.openLogFolder")["action"]["arguments"] == Json::array({"logs"}));
     CHECK(command(vscode, "mcpp.languageServer.restartEngine")["action"]["command"] == "mcppls.restartClangd");
-    auto cli = result("commands/list", Json{{"editor", "cli"}});
+    auto cli = result("mcpp-ide/commands/list", Json{{"editor", "cli"}});
     CHECK(std::ranges::none_of(cli["commands"], [](const Json& c) { return c["action"].value("kind", "") == "forward"; }));
 
     // A change of state is told once; asking again with nothing changed tells nothing.
-    const int before = wire.count("languageService/changed");
+    const int before = wire.count("mcpp-ide/languageService/changed");
     std::ofstream(root / ".mock-mcppls-state") << "ready\n";
-    auto ready = result("languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
+    auto ready = result("mcpp-ide/languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
     CHECK(ready["workspace"]["state"] == "ready");
-    (void)result("languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
-    CHECK(wire.count("languageService/changed") == before + 1);
+    (void)result("mcpp-ide/languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
+    CHECK(wire.count("mcpp-ide/languageService/changed") == before + 1);
 
     std::error_code ignored;
     std::filesystem::remove_all(base, ignored);

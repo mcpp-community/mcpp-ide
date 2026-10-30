@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -97,6 +97,7 @@ async function runVariant(repositoryRoot: string, fixtureRoot: string, variant: 
         MCPP_E2E_LOG: mcppLogPath,
         MCPP_E2E_MCPPLS_LOG: mcpplsLogPath,
         MCPP_E2E_STUB: variant,
+        MCPP_E2E_NO_BACKEND: process.env.MCPP_E2E_NO_BACKEND ?? "",
       },
     });
   } finally {
@@ -117,6 +118,22 @@ async function main(): Promise<void> {
     throw new Error(`MCPP_E2E_STUB=${requested} is not one of ${STUB_VARIANTS.join(", ")}`);
   }
 
+  // MCPP_E2E_NO_BACKEND=1: the bundle is carried, and its runners are not -- the platform okrun does
+  // not cover -- so the extension runs in its declared degraded mode (part 2 §8, F15).
+  if (process.env.MCPP_E2E_NO_BACKEND === "1") {
+    const runners = join(repositoryRoot, "backend", "okrun"), hidden = `${runners}.hidden`;
+    if (!existsSync(join(repositoryRoot, "backend", "mcpp-ide.okb")) || process.env.MCPP_IDE_BACKEND) {
+      throw new Error("the degraded run needs the staged bundle (npm run stage:backend) and no MCPP_IDE_BACKEND");
+    }
+    if (existsSync(runners)) renameSync(runners, hidden);
+    try {
+      console.log("e2e: running the extension host without its backend");
+      await runVariant(repositoryRoot, fixtureRoot, "full");
+    } finally {
+      if (existsSync(hidden)) renameSync(hidden, runners);
+    }
+    return;
+  }
   for (const variant of variants) {
     console.log(`e2e: running the extension host against the "${variant}" mcppls stub`);
     await runVariant(repositoryRoot, fixtureRoot, variant);

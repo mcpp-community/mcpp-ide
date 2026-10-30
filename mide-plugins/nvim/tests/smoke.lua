@@ -134,7 +134,7 @@ vim.cmd.edit(vim.fn.fnameescape(root .. '/src/main.cpp'))
 check('a buffer of the project starts the backend',
   vim.wait(30000, function() return session.state.ready end, 20), session.state.failed and 'failed' or nil)
 local info = session.state.info or {}
-check('initialize answers as mcpp-ide, protocol 1', (info.server or {}).name == 'mcpp-ide' and info.protocol == 1, vim.inspect(info.server))
+check('initialize answers as mcpp-ide, protocol 2', (info.serverInfo or {}).name == 'mcpp-ide' and info.protocol == 2, vim.inspect(info.serverInfo))
 check('the project is the nearest mcpp.toml upward', info.projects and info.projects[1] and vim.fs.normalize(info.projects[1].root) == root,
   info.projects and info.projects[1] and info.projects[1].root)
 check('mcpp is the one setup() names', info.mcpp and vim.fs.normalize(info.mcpp.path) == vim.fs.normalize(mcpp), info.mcpp and info.mcpp.path)
@@ -216,6 +216,32 @@ check('a broken mcpp.toml gets mcpp\'s problem in the `mcpp.toml` namespace',
 vim.api.nvim_buf_set_lines(0, 0, 1, false, { '[package]' })
 vim.cmd('silent write')
 os.remove(root .. '/.mock-mcpp-fail')
+-- The rules layer through the backend's LSP client (protocol 2): the buffer joined it, a rule is
+-- published as the text changes, and hover answers from the snapshot of mcpp's tables.
+local function lsp_attached()
+  local get = vim.lsp.get_clients or vim.lsp.get_active_clients
+  return #get({ name = 'mcpp-ide', bufnr = toml }) > 0
+end
+check('mcpp.toml joins the backend\'s LSP client', vim.wait(5000, lsp_attached, 20))
+vim.api.nvim_buf_set_lines(toml, 1, 1, false, { 'colour = 1' })
+local function rule_seen()
+  for _, d in ipairs(vim.diagnostic.get(toml)) do
+    if d.code == 'mcpp.manifest.unknownKey' and d.lnum == 1 and d.col == 0 then
+      return true
+    end
+  end
+  return false
+end
+check('a key [package] does not have is published as the text changes', vim.wait(5000, rule_seen, 20),
+  vim.inspect(vim.diagnostic.get(toml)))
+vim.api.nvim_buf_set_lines(toml, 1, 2, false, {})
+local replies = vim.lsp.buf_request_sync(toml, 'textDocument/hover',
+  { textDocument = { uri = vim.uri_from_bufnr(toml) }, position = { line = 0, character = 2 } }, 5000) or {}
+local _, answer = next(replies)
+local hovered = answer and answer.result and answer.result.contents and answer.result.contents.value or ''
+check('hover on [package] answers from the rules layer', hovered:find('plane', 1, true) ~= nil, hovered)
+-- The buffer is the file again; nothing is written (a write would build on save).
+vim.bo[toml].modified = false
 vim.cmd.edit(vim.fn.fnameescape(root .. '/src/main.cpp'))
 
 -- ── the backend's views as text ───────────────────────────────────────────────────────────────

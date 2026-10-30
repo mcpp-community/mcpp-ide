@@ -8,8 +8,9 @@ graphs, and a statusline component. It is the Neovim adapter of
 build runs, what a cleanup costs and which commands exist are the backend's answers, the same ones
 those editors receive.
 
-The plugin registers no language service. Completion, navigation and diagnostics of C++ files come
-from mcppls through its own Neovim plugin (below).
+Completion, navigation and diagnostics of C++ files come from mcppls through its own Neovim plugin
+(below). Those of `mcpp.toml` and `build.mcpp` come from the backend: the session's LSP client is
+attached to their buffers (completion, `K`, `gd`, `vim.diagnostic`; see mcpp-ide's `docs/rules.md`).
 
 | | |
 |---|---|
@@ -68,8 +69,8 @@ require('mcpp').setup({
 `xlings install mcpp-ide`, and starts nothing; `:Mcpp` looks again.
 
 **The session.** A buffer whose file lies under an `mcpp.toml` (the nearest one upward, else the
-working directory's) starts one backend for the Neovim instance, speaking the protocol through
-Neovim's own JSON-RPC client (`vim.lsp.rpc`). It is initialized as the editor `nvim` with Neovim's
+working directory's) starts one backend for the Neovim instance, an LSP server that Neovim's own LSP
+client (`vim.lsp`) starts and speaks to. It is initialized as the editor `nvim` with Neovim's
 language (`v:lang`, or `mcpp.ui.language` when that names one), the trust below, that project as
 its folder and the settings above; the projects of buffers entered later are added to it. The
 runtime strings and the command table are then read from it. The backend is ended with `shutdown`

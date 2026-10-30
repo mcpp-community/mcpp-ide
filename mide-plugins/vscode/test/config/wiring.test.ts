@@ -50,6 +50,87 @@ const READ_INDIRECTLY: ReadonlyArray<{ key: string; file: string; evidence: stri
     file: "src/ide/session.ts",
     evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
   },
+  // The rules layer of mcpp.toml and build.mcpp is the backend's (design 2026-10-30 part 2 §8).
+  {
+    key: "mcpp.toml.completion",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.hover",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.navigation",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.diagnostics.enabled",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.diagnostics.syntax",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.diagnostics.unknownSection",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.diagnostics.unknownKey",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.diagnostics.planeSeparation",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.diagnostics.legacyKeys",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.indexCompletion",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.toml.indexCompletionTimeoutSeconds",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.buildScript.intelligence",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.buildScript.diagnostics",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.buildScript.diagnostics.severity",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.buildScript.imports.knownModules",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
+    key: "mcpp.buildScript.snippets",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
   {
     key: "mcpp.task.buildArgs",
     file: "src/cli/tasks.ts",

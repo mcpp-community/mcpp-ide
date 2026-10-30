@@ -52,7 +52,28 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
   runs some of them with the framework's filter and reads its report, each outcome sent as
   `test/caseResult`. VS Code's Testing view has the cases under their program, located at their
   macros, and the program at its `main`; CLion has a ▶ on each case and runs cases in its test tree.
-  Debugging a test's program is offered where the project's mcpp describes its launch (`test-launch`).
+  Debugging a test's program is offered where the project's mcpp describes its launch (`test-launch`,
+  mcpp 2026.10.31.2).
+- **The rules layer of mcpp.toml and build.mcpp, in the backend (§8; docs/rules.md).** The session
+  is an LSP server, protocol 2: `initialize` in LSP's shape with mcpp-ide's parameters in
+  `initializationOptions`, mcpp.toml's and build.mcpp's completion, hover, jumps and diagnostics as
+  `textDocument/*` (full synchronisation, UTF-16 columns), and mcpp-ide's own methods and
+  notifications under `mcpp-ide/`. The tolerant scanner, the seven manifest rules and the SPEC-007
+  checks are ported from mcpp-vscode 0.9's TypeScript, whose answers over a corpus at every position
+  are the tests' goldens (`tests/rules`). A table is read through the schema (a workspace table as the
+  table it mirrors, a platform's table under a selector as the platform's); a selector-only table is
+  offered with its selector; the schema's own arrays of tables are allowed; a dependency's version is
+  completed from mcpp's catalogue (`mcpp search --format json`) when `mcpp.toml.indexCompletion` is
+  on. VS Code connects with its language client (bundled into `dist/vendor`); CLion over the
+  session's connection, through a completion contributor, an annotator, a documentation provider
+  and a go-to-declaration handler; Neovim with its LSP client, attached to mcpp.toml and build.mcpp
+  buffers. While C++ Modules serves build.mcpp (`mcpplsServes`) it is left the unknownSymbol rule
+  and the module names after `import`. One snapshot of each: `spec/toml-schema.json`,
+  `spec/buildscript-api.json` (mcpp 2026.10.29.1's directives).
+- **The declared degraded mode (§8, F15).** Where the package's okrun does not run (macOS x86_64,
+  Windows arm64, Linux armhf) VS Code says the backend does not run on this platform and goes on
+  with build, run, test and the project pages, running mcpp's queries itself; an Extension Host run
+  in CI holds it.
 - **mcpp-vscode 1.1.0 is mcpp-vscode 0.9.0 over the backend.** 0.9.0's extension is imported with
   its history (`mide-plugins/vscode`); every view, page, command, menu, setting and string a user
   sees is 0.9.0's. What 1.0 added stays, in 0.9.0's style: debugging (`mcpp.debug`, the `mcpp`

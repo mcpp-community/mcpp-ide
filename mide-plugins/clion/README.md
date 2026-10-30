@@ -14,8 +14,9 @@ mcpp's project features in CLion 2026.1 and later, over the mcpp-ide backend:
 - **Select the Build Target** (target sets among the rows) and **Pack** as popups, packing as a job;
 - the **Tools | mcpp** menu, generated from `spec/commands.json`.
 
-Language features of C++ files come from the mcppls CLion plugin, which this plugin depends on; it
-registers no language service.
+Language features of C++ files come from the mcppls CLion plugin, which this plugin depends on.
+Those of `mcpp.toml` and `build.mcpp` -- completion, documentation, the jumps and the diagnostics --
+come from the backend over the session's connection (mcpp-ide's `docs/rules.md`).
 
 ## Build
 

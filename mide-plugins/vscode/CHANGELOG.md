@@ -13,8 +13,13 @@
   sets (mcpp 2026.10.30.1 and later), **Pack**, build on save (`mcpp.build.onSave`), the build's
   profile and target (`mcpp.build.profile`, `mcpp.build.target`), and cancelling a running job.
 - A launch without a debugger extension is refused at once; the message offers to install CodeLLDB.
-- The build-script API and the `mcpp.toml` schema follow mcpp 2026.10.29.1, the platform plane
-  included.
+- mcpp.toml's and build.mcpp's completion, hover, jumps and diagnostics are the mcpp-ide backend's,
+  connected through VS Code's language client (`docs/rules.md` of mcpp-ide): every table and key of
+  mcpp 2026.10.27.1 and the build-script API of 2026.10.29.1, dependency versions from mcpp's
+  catalogue (`mcpp.toml.indexCompletion`), and diagnostics at the columns VS Code counts (0.9.0 placed
+  manifest diagnostics one column late).
+- Where the backend's runner does not run (macOS x86_64, Windows arm64, Linux armhf) the extension
+  says so and goes on with build, run, test and the project pages.
 - Releases are published to Open VSX beside the GitHub release.
 
 ## 0.9.0 - 2026-10-20

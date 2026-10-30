@@ -91,3 +91,21 @@ export function locateBackend(options: {
   const found = onPath("mcpp-ide", env, platform);
   return found ? { program: found, args: [], source: "PATH" } : undefined;
 }
+
+/**
+ * The extension carries the backend, but okrun runs on neither this system nor PATH (macOS x86_64,
+ * Windows arm64, Linux armhf): the backend does not run here, and the extension goes on in its
+ * declared degraded mode (design 2026-10-30 part 2 §8, F15).
+ */
+export function backendUnavailableHere(options: {
+  extensionRoot: string;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  arch?: string;
+}): boolean {
+  const platform = options.platform ?? process.platform;
+  const arch = options.arch ?? process.arch;
+  if (!isFile(path.join(options.extensionRoot, "backend", "mcpp-ide.okb"))) return false;
+  if (isFile(path.join(options.extensionRoot, "backend", "okrun", okrunDir(platform, arch), executable("okrun", platform)))) return false;
+  return onPath("okrun", options.env ?? process.env, platform) === undefined;
+}

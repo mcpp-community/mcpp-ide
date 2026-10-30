@@ -76,30 +76,30 @@ int main() {
         CHECK(answer.contains("result"));
         return answer["result"];
     };
-    result("initialize", Json{{"client", {{"name", "test"}}}, {"editor", "vscode"}, {"trusted", true},
-                              {"settings", {{"mcpp.path", mock.generic_string()}}},
-                              {"workspaceFolders", Json::array({base.generic_string()})}});
+    result("initialize", Json{{"clientInfo", {{"name", "test"}}}, {"workspaceFolders", Json::array({Json{{"uri", testsupport::file_uri(base)}}})},
+                {"initializationOptions", Json{{"editor", "vscode"}, {"trusted", true},
+                              {"settings", {{"mcpp.path", mock.generic_string()}}}}}});
 
     // Before features: the frozen table, by the version the project's mcpp answers.
-    auto a = result("project/mcpp", Json{{"root", old.generic_string()}});
+    auto a = result("mcpp-ide/project/mcpp", Json{{"root", old.generic_string()}});
     CHECK(a["state"] == "ok" && a["version"] == "2026.10.29.1");
     CHECK(a["features"].empty() && a["featuresFrozen"] == true);
     CHECK(a["fromSetting"] == true);
-    auto b = result("project/mcpp", Json{{"root", sets.generic_string()}});
+    auto b = result("mcpp-ide/project/mcpp", Json{{"root", sets.generic_string()}});
     CHECK(b["version"] == "2026.10.30.1" && b["featuresFrozen"] == true);
     CHECK(b["features"] == Json::array({"target-sets", "pkg-format-list"}));
     // Stated: taken at mcpp's word, a name the table does not hold included.
-    auto c = result("project/mcpp", Json{{"root", stated.generic_string()}});
+    auto c = result("mcpp-ide/project/mcpp", Json{{"root", stated.generic_string()}});
     CHECK(c["version"] == "2026.10.31.1" && c["featuresFrozen"] == false);
     CHECK(c["features"] == Json::array({"target-sets", "pkg-format-list", "polyglot"}));
     // A pinned version that is not installed: the shim's words and its install command.
-    auto d = result("project/mcpp", Json{{"root", missing.generic_string()}});
+    auto d = result("mcpp-ide/project/mcpp", Json{{"root", missing.generic_string()}});
     CHECK(d["state"] == "pinned-missing");
     CHECK(d["install"] == "xlings install mcpp@2026.8.17.1");
     CHECK(d["message"].get<std::string>().find("not found") != std::string::npos);
 
     // Why a feature is not offered: the party, the capability and the version that has it.
-    auto why = result("capabilities/explain", Json{{"root", old.generic_string()}});
+    auto why = result("mcpp-ide/capabilities/explain", Json{{"root", old.generic_string()}});
     bool explained = false;
     for (const auto& f : why["features"])
         if (f["id"] == "targets.sets") {
@@ -121,26 +121,26 @@ int main() {
 
     // A job's envelope names another version: the project is asked again, and the editor told.
     std::ofstream(old / ".mock-mcpp-version") << "2026.10.31.1\n";
-    auto job = result("job/start", Json{{"kind", "build"}, {"root", old.generic_string()}});
-    for (int i = 0; i < 2000 && !wire.saw("project/mcppChanged"); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    CHECK(wire.saw("project/mcppChanged"));
-    auto again = result("project/mcpp", Json{{"root", old.generic_string()}});
+    auto job = result("mcpp-ide/job/start", Json{{"kind", "build"}, {"root", old.generic_string()}});
+    for (int i = 0; i < 2000 && !wire.saw("mcpp-ide/project/mcppChanged"); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    CHECK(wire.saw("mcpp-ide/project/mcppChanged"));
+    auto again = result("mcpp-ide/project/mcpp", Json{{"root", old.generic_string()}});
     CHECK(again["version"] == "2026.10.31.1");
     (void)job;
 
     // The report names every project asked, with no secret in it.
-    auto report = result("report/collect", Json::object());
+    auto report = result("mcpp-ide/report/collect", Json::object());
     CHECK(report["kind"] == "mcpp-ide.report" && report["projects"].size() >= 4);
 
     // An untrusted workspace: the pinned program is not run.
     Wire untrusted;
     server::Session second(untrusted.server);
     second.install();
-    auto answer = untrusted.call("initialize", Json{{"client", {{"name", "test"}}}, {"editor", "vscode"}, {"trusted", false},
-                                                    {"settings", {{"mcpp.path", mock.generic_string()}}},
-                                                    {"workspaceFolders", Json::array({base.generic_string()})}});
+    auto answer = untrusted.call("initialize", Json{{"clientInfo", {{"name", "test"}}}, {"workspaceFolders", Json::array({Json{{"uri", testsupport::file_uri(base)}}})},
+                {"initializationOptions", Json{{"editor", "vscode"}, {"trusted", false},
+                                                    {"settings", {{"mcpp.path", mock.generic_string()}}}}}});
     CHECK(answer.contains("result"));
-    auto e = untrusted.call("project/mcpp", Json{{"root", missing.generic_string()}});
+    auto e = untrusted.call("mcpp-ide/project/mcpp", Json{{"root", missing.generic_string()}});
     CHECK(e.contains("result") && e["result"]["state"] == "not-probed");
 
     std::error_code ignored;

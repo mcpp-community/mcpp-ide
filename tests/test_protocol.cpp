@@ -113,26 +113,54 @@ int main() {
         CHECK(conforms(answer["result"], def, protocol, method));
         return answer["result"];
     };
-    auto init = result_of("initialize", Json{{"client", {{"name", "test"}}}, {"editor", "vscode"},
-                                             {"settings", {{"mcpp.path", mock.generic_string()}}},
-                                             {"workspaceFolders", Json::array({root.generic_string()})}});
+    auto init = result_of("initialize", Json{{"clientInfo", {{"name", "test"}}}, {"workspaceFolders", Json::array({Json{{"uri", testsupport::file_uri(root)}}})},
+                {"initializationOptions", Json{{"editor", "vscode"}, {"settings", {{"mcpp.path", mock.generic_string()}}}}}});
     CHECK(init["projects"].size() == 1);
     CHECK(init["mcpp"].is_object() && init["mcpp"]["contract"] == true);
+    CHECK(init["capabilities"]["textDocumentSync"]["change"] == 1 && init["capabilities"]["hoverProvider"] == true);
+
+    // The rules layer as LSP: a manifest opened has its diagnostics published (0-based, UTF-16), and
+    // completion, hover and the outline answer for it.
+    const auto tomlUri = testsupport::file_uri(root / "mcpp.toml");
+    const std::string toml = "[package]\nname = \"app\"\ncolour = 1\n[build]\nbmi_schedule = \"\"\n";
+    wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didOpen"},
+                              {"params", {{"textDocument", {{"uri", tomlUri}, {"languageId", "mcpp-toml"}, {"version", 1}, {"text", toml}}}}}}.dump());
+    auto published = wire.notifications("textDocument/publishDiagnostics");
+    CHECK(!published.empty() && published.back()["uri"] == tomlUri && published.back()["diagnostics"].size() == 1);
+    CHECK(published.back()["diagnostics"][0]["range"]["start"] == Json({{"line", 2}, {"character", 0}}));
+    CHECK(published.back()["diagnostics"][0]["code"] == "mcpp.manifest.unknownKey");
+    auto at = [&](int line, int character) {
+        return Json{{"textDocument", {{"uri", tomlUri}}}, {"position", {{"line", line}, {"character", character}}}};
+    };
+    auto list = result_of("textDocument/completion", at(4, 16));
+    std::set<std::string> labels;
+    for (const auto& i : list["items"]) labels.insert(i["label"].get<std::string>());
+    CHECK(labels.contains("auto") && labels.contains("on") && labels.contains("off"));
+    auto hover = result_of("textDocument/hover", at(4, 2));
+    CHECK(hover["contents"]["value"].get<std::string>().find("bmi_schedule") != std::string::npos);
+    auto outline = result_of("textDocument/documentSymbol", Json{{"textDocument", {{"uri", tomlUri}}}});
+    CHECK(outline.size() == 2 && outline[1]["name"] == "[build]" && outline[1]["children"].size() == 1);
+    // A change is the whole text; closing clears the document's diagnostics.
+    wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didChange"},
+                              {"params", {{"textDocument", {{"uri", tomlUri}, {"version", 2}}}, {"contentChanges", Json::array({{{"text", "[package]\n"}}})}}}}.dump());
+    CHECK(wire.notifications("textDocument/publishDiagnostics").back()["diagnostics"].empty());
+    wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didClose"}, {"params", {{"textDocument", {{"uri", tomlUri}}}}}}.dump());
+    CHECK(result_of("textDocument/hover", at(0, 2)).is_null());
     const Json rooted{{"root", root.generic_string()}};
-    result_of("project/summary", rooted);
-    auto tests = result_of("test/list", rooted);
+    result_of("mcpp-ide/project/summary", rooted);
+    auto tests = result_of("mcpp-ide/test/list", rooted);
     CHECK(tests["tests"].size() == 1 && tests["tests"][0]["test"] == "test_smoke");
-    auto targets = result_of("targets/list", rooted);
+    auto targets = result_of("mcpp-ide/targets/list", rooted);
     CHECK(!targets["rows"].empty());
-    auto cmds = result_of("commands/list", Json{{"editor", "jetbrains"}});
+    auto cmds = result_of("mcpp-ide/commands/list", Json{{"editor", "jetbrains"}});
     for (const auto& c : cmds["commands"]) CHECK(c["action"]["kind"] != "forward");
     // Neovim's table: no forward to mcppls's commands (mcppls-nvim has its own), no panel it has no
     // text for, its own quickfix command, and each row's subcommand (`:Mcpp <subcommand>`).
-    const Json nvimInit{{"editor", "nvim"}, {"locale", "en_US.UTF-8"}, {"trusted", true},
-                        {"workspaceFolders", Json::array({root.generic_string()})}, {"settings", Json::object()}};
+    const Json nvimInit{{"clientInfo", {{"name", "Neovim"}}}, {"workspaceFolders", Json::array({Json{{"uri", testsupport::file_uri(root)}}})},
+                        {"initializationOptions", Json{{"editor", "nvim"}, {"locale", "en_US.UTF-8"}, {"trusted", true}, {"settings", Json::object()}}}};
     CHECK(conforms(nvimInit, protocol["methods"]["initialize"]["params"], protocol, "initialize params (nvim)"));
     std::map<std::string, std::string> nvim;
-    for (const auto& c : result_of("commands/list", Json{{"editor", "nvim"}})["commands"]) {
+    for (const auto& c : result_of("mcpp-ide/commands/list", Json{{"editor", "nvim"}})["commands"]) {
         const auto kind = c["action"]["kind"].get<std::string>();
         CHECK(kind != "forward" && kind != "editor");
         CHECK(!(kind == "panel" && c["action"]["panel"] == "settings"));
@@ -140,7 +168,7 @@ int main() {
     }
     CHECK(nvim["cancel"] == "mcpp.cancelJob" && nvim["build"] == "mcpp.build" && nvim["problems"] == "mcpp.problems");
     CHECK(nvim.contains("showMenu") && nvim.contains("library.search") && !nvim.contains("openSettings"));
-    for (const auto& c : result_of("commands/list", Json{{"editor", "vscode"}})["commands"]) CHECK(c["id"] != "mcpp.problems");
+    for (const auto& c : result_of("mcpp-ide/commands/list", Json{{"editor", "vscode"}})["commands"]) CHECK(c["id"] != "mcpp.problems");
     // A row that leaves Neovim out says why.
     for (const auto& c : load(testsupport::repo() / "spec" / "commands.json")["commands"]) {
         if (!c.contains("editors") || std::ranges::find(c["editors"], Json("nvim")) != c["editors"].end()) continue;
@@ -149,58 +177,58 @@ int main() {
         if (reason.empty()) std::println(std::cerr, "{} leaves nvim out without saying why", c["id"].get<std::string>());
         CHECK(!reason.empty());
     }
-    result_of("menu/quick", rooted);
-    result_of("languageService/status", Json{{"candidates", Json::array()}});
+    result_of("mcpp-ide/menu/quick", rooted);
+    result_of("mcpp-ide/languageService/status", Json{{"candidates", Json::array()}});
     // The pack panel's choices: the closures SPEC-014 names, and linkages only where mcpp takes them.
-    auto pack = result_of("pack/formats", rooted);
+    auto pack = result_of("mcpp-ide/pack/formats", rooted);
     CHECK(pack["modes"].size() == 4);
     const bool helpNamesLinkage = testsupport::read(testsupport::fixtures() / "pack-help.txt").find("--linkage") != std::string::npos;
     CHECK(pack["linkages"].empty() != helpNamesLinkage);
-    result_of("graph/packages", rooted);
-    result_of("graph/modules", rooted);
-    result_of("manifest/check", rooted);
-    result_of("settings/registry", Json::object());
-    result_of("selfCheck", Json::object());
-    result_of("cache/inventory", Json::object());
-    auto launch = result_of("run/launch", rooted);
+    result_of("mcpp-ide/graph/packages", rooted);
+    result_of("mcpp-ide/graph/modules", rooted);
+    result_of("mcpp-ide/manifest/check", rooted);
+    result_of("mcpp-ide/settings/registry", Json::object());
+    result_of("mcpp-ide/selfCheck", Json::object());
+    result_of("mcpp-ide/cache/inventory", Json::object());
+    auto launch = result_of("mcpp-ide/run/launch", rooted);
     CHECK(!launch["argv"].empty());
-    result_of("debug/configuration", Json{{"root", root.generic_string()}, {"available", Json::array({"lldb"})}});
+    result_of("mcpp-ide/debug/configuration", Json{{"root", root.generic_string()}, {"available", Json::array({"lldb"})}});
     // What mcpp-vscode's own parsers read: one command's output as it printed it, and a project's
     // files with its source count.
-    auto exec = result_of("mcpp/exec", Json{{"args", Json::array({"--version"})}, {"cwd", root.generic_string()}});
+    auto exec = result_of("mcpp-ide/mcpp/exec", Json{{"args", Json::array({"--version"})}, {"cwd", root.generic_string()}});
     CHECK(exec["exitCode"] == 0 && exec["stdout"].get<std::string>().find("mcpp") != std::string::npos);
     CHECK(exec["timedOut"] == false && exec["truncated"] == false);
-    auto bounded = result_of("mcpp/exec", Json{{"args", Json::array({"--version"})}, {"maxOutputBytes", 3}});
+    auto bounded = result_of("mcpp-ide/mcpp/exec", Json{{"args", Json::array({"--version"})}, {"maxOutputBytes", 3}});
     CHECK(bounded["truncated"] == true && bounded["stdout"].get<std::string>().size() <= 3);
-    CHECK(wire.call("mcpp/exec", Json{{"args", "--version"}}).contains("error"));
+    CHECK(wire.call("mcpp-ide/mcpp/exec", Json{{"args", "--version"}}).contains("error"));
     // mcppls's own commands run as the command the status found (here a program that answers --version).
-    result_of("languageService/status", Json{{"candidates", Json::array({mock.generic_string()})}});
-    auto ls = result_of("languageService/exec", Json{{"args", Json::array({"--version"})}});
+    result_of("mcpp-ide/languageService/status", Json{{"candidates", Json::array({mock.generic_string()})}});
+    auto ls = result_of("mcpp-ide/languageService/exec", Json{{"args", Json::array({"--version"})}});
     CHECK(ls["exitCode"] == 0 && !ls["stdout"].get<std::string>().empty());
     std::ofstream(root / "src" / "main.cpp") << "int main() {}\n";
     std::ofstream(root / "src" / "notes.txt") << "not a source\n";
     std::filesystem::create_directories(root / "target" / "obj");
     std::ofstream(root / "target" / "obj" / "gen.cpp") << "// build output\n";
-    auto files = result_of("project/files", rooted);
+    auto files = result_of("mcpp-ide/project/files", rooted);
     CHECK(files["manifest"].get<std::string>().starts_with("[package]") && files["lock"].is_null());
     CHECK(files["sourceFiles"] == 1);
 
-    result_of("job/start", Json{{"kind", "build"}, {"root", root.generic_string()}});
-    result_of("job/start", Json{{"kind", "test"}, {"root", root.generic_string()}});
-    for (int i = 0; i < 2000 && wire.notifications("job/finished").size() < 2; ++i)
+    result_of("mcpp-ide/job/start", Json{{"kind", "build"}, {"root", root.generic_string()}});
+    result_of("mcpp-ide/job/start", Json{{"kind", "test"}, {"root", root.generic_string()}});
+    for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/job/finished").size() < 2; ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    CHECK(wire.notifications("job/finished").size() == 2);
+    CHECK(wire.notifications("mcpp-ide/job/finished").size() == 2);
     for (const auto& name : server::kNotifications) {
         const auto& def = protocol["notifications"][std::string(name)]["params"];
         for (const auto& n : wire.notifications(name)) CHECK(conforms(n, def, protocol, name));
     }
-    CHECK(!wire.notifications("job/plan").empty());
-    CHECK(!wire.notifications("job/artifact").empty());
-    const auto results = wire.notifications("test/result");
+    CHECK(!wire.notifications("mcpp-ide/job/plan").empty());
+    CHECK(!wire.notifications("mcpp-ide/job/artifact").empty());
+    const auto results = wire.notifications("mcpp-ide/test/result");
     CHECK(results.size() == 1 && results[0]["status"] == "passed");
-    CHECK(wire.notifications("test/summary").size() == 1);
+    CHECK(wire.notifications("mcpp-ide/test/summary").size() == 1);
     // The plan a build sent is the project's configuration from then on.
-    auto after = result_of("project/summary", rooted);
+    auto after = result_of("mcpp-ide/project/summary", rooted);
     CHECK(after.contains("configuration"));
     std::filesystem::remove_all(root);
     std::println("test_protocol: ok");

@@ -1,13 +1,15 @@
 // The rules layer answers what mcpp-vscode 0.9's TypeScript answered (design 2026-10-30 part 2 §8):
 // over each file of tests/rules/corpus, at every position of every line (and past them), the
-// completions, hovers, jumps, version contexts and diagnostics equal tests/rules/golden, which that
-// implementation wrote. A difference is printed with its file and position.
+// scanner's structure and cursor contexts, the completions, hovers, jumps, version contexts and
+// diagnostics equal tests/rules/golden, which that implementation wrote (with the documents of its
+// parser tests, golden/snippets.json). A difference is printed with its file and position.
 #include "support.hpp"
 import std;
 import nlohmann.json;
 import mcppide.text;
 import mcppide.manifest;
 import mcppide.buildscript;
+import mcppide.toml;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -18,14 +20,127 @@ int failures = 0;
 
 void expect(const Json& got, const Json& want, const std::string& where) {
     if (got == want) return;
-    if (++failures <= 25)
-        std::println(std::cerr, "MISMATCH {}\n  got:  {}\n  want: {}", where, got.dump().substr(0, 1500), want.dump().substr(0, 1500));
+    if (++failures > 25) return;
+    // Two lists: the first entry that differs.
+    if (got.is_array() && want.is_array())
+        for (std::size_t i = 0; i < std::max(got.size(), want.size()); ++i)
+            if (i >= got.size() || i >= want.size() || got[i] != want[i]) {
+                std::println(std::cerr, "MISMATCH {} [{} of {}/{}]\n  got:  {}\n  want: {}", where, i, got.size(), want.size(),
+                             i < got.size() ? got[i].dump() : "-", i < want.size() ? want[i].dump() : "-");
+                return;
+            }
+    std::println(std::cerr, "MISMATCH {}\n  got:  {}\n  want: {}", where, got.dump().substr(0, 1500), want.dump().substr(0, 1500));
 }
 
 Json opt(const std::optional<std::string>& s) { return s ? Json(*s) : Json(); }
 
 void put(Json& j, std::string_view key, const std::optional<std::string>& v) {
     if (v) j[std::string(key)] = *v;
+}
+
+// ── the scanner, in the shapes mcpp-vscode 0.9's parser answered ──
+
+std::vector<std::string> stripped(std::vector<std::string> lines) {
+    for (auto& l : lines)
+        if (!l.empty() && l.back() == '\r') l.pop_back();
+    if (lines.empty()) lines.emplace_back();
+    return lines;
+}
+
+int col16(const std::vector<std::string>& lines, int line, int byte) {
+    if (line < 0 || line >= static_cast<int>(lines.size())) return byte;
+    return text::utf16_column(lines[line], static_cast<std::size_t>(byte));
+}
+
+Json range_json(const std::vector<std::string>& lines, const toml::Range& r) {
+    return Json{{"startLine", r.startLine}, {"startCharacter", col16(lines, r.startLine, r.startCol)},
+                {"endLine", r.endLine}, {"endCharacter", col16(lines, r.endLine, r.endCol)}};
+}
+
+Json segments_json(const std::vector<std::string>& lines, const std::vector<toml::KeySegment>& segments) {
+    Json out = Json::array();
+    for (const auto& s : segments) out.push_back(Json{{"name", s.name}, {"quoted", s.quoted}, {"range", range_json(lines, s.range)}});
+    return out;
+}
+
+Json key_value_json(const std::vector<std::string>& lines, const toml::KeyValue& kv);
+
+Json value_json(const std::vector<std::string>& lines, const toml::Value& v) {
+    Json j{{"kind", toml::name_of(v.kind)}, {"range", range_json(lines, v.range)}, {"open", v.open}};
+    if (v.text) j["text"] = *v.text;
+    if (v.kind == toml::ValueKind::string) {
+        j["quote"] = std::string(1, v.quote);
+        j["multiline"] = v.multiline;
+        if (v.contentRange) j["contentRange"] = range_json(lines, *v.contentRange);
+    }
+    if (v.kind == toml::ValueKind::array) {
+        j["elements"] = Json::array();
+        for (const auto& e : v.elements) j["elements"].push_back(value_json(lines, e));
+    }
+    if (v.kind == toml::ValueKind::inlineTable) {
+        j["entries"] = Json::array();
+        for (const auto& e : v.entries) j["entries"].push_back(key_value_json(lines, e));
+    }
+    return j;
+}
+
+Json key_value_json(const std::vector<std::string>& lines, const toml::KeyValue& kv) {
+    Json j{{"type", "keyValue"}, {"keyPath", segments_json(lines, kv.keyPath)}, {"range", range_json(lines, kv.range)}};
+    if (kv.value) j["value"] = value_json(lines, *kv.value);
+    return j;
+}
+
+Json document_json(const std::vector<std::string>& lines) {
+    Json nodes = Json::array();
+    for (const auto& node : toml::parse(lines).nodes) {
+        if (const auto* s = std::get_if<toml::Section>(&node))
+            nodes.push_back(Json{{"type", "section"}, {"segments", segments_json(lines, s->segments)}, {"isArray", s->isArray},
+                                 {"open", s->open}, {"range", range_json(lines, s->range)}, {"line", s->line}});
+        else
+            nodes.push_back(key_value_json(lines, std::get<toml::KeyValue>(node)));
+    }
+    return Json{{"nodes", nodes}};
+}
+
+Json context_json(const std::vector<std::string>& lines, int line, int character) {
+    const auto c = toml::context_at(lines, line, character);
+    const int cl = std::clamp(line, 0, static_cast<int>(lines.size()) - 1);
+    const Json replace{{"startCharacter", col16(lines, cl, c.replace.start)}, {"endCharacter", col16(lines, cl, c.replace.end)}};
+    auto section = [&] {
+        switch (c.section.kind) {
+            case toml::Resolution::Kind::top: return Json{{"kind", "top"}};
+            case toml::Resolution::Kind::unknown: return Json{{"kind", "unknown"}, {"segments", c.section.segments}};
+            case toml::Resolution::Kind::known: return Json{{"kind", "known"}, {"group", c.section.group}};
+        }
+        return Json();
+    };
+    switch (c.kind) {
+        case toml::Context::Kind::header:
+            return Json{{"kind", "section-header"}, {"segments", c.segments}, {"isArray", c.isArray}, {"replaceRange", replace}};
+        case toml::Context::Kind::key:
+            return Json{{"kind", "key"}, {"section", section()}, {"containerPath", c.containerPath}, {"keyPrefix", c.keyPrefix},
+                        {"replaceRange", replace}};
+        case toml::Context::Kind::value: {
+            Json j{{"kind", "value"}, {"section", section()}, {"keyPath", c.keyPath}, {"insideString", c.insideString},
+                   {"stringOpen", c.stringOpen}, {"replaceRange", replace}};
+            if (c.valueKind) j["valueKind"] = toml::name_of(*c.valueKind);
+            return j;
+        }
+    }
+    return Json();
+}
+
+void check_scanner(const std::vector<std::string>& given, const Json& golden, const std::string& name) {
+    const auto lines = stripped(given);
+    expect(document_json(given), golden["document"], name + " document");
+    const int n = static_cast<int>(given.size());
+    for (int l = 0; l <= n; ++l) {
+        const int len = l < n ? text::utf16_length(lines[std::min(l, static_cast<int>(lines.size()) - 1)]) : 0;
+        for (int c = 0; c <= len + 2; ++c) {
+            const auto at = std::format("{}:{}", l, c);
+            expect(context_json(lines, l, c), golden["contexts"][golden["context"][at].get<std::size_t>()], std::format("{} {} context", name, at));
+        }
+    }
 }
 
 Json toml_diagnostics(const std::vector<manifest::Diagnostic>& ds) {
@@ -42,6 +157,7 @@ Json toml_diagnostics(const std::vector<manifest::Diagnostic>& ds) {
 void check_manifest(const std::filesystem::path& file, const Json& golden) {
     const auto name = file.filename().string();
     const auto lines = text::lines_of(testsupport::read(file));
+    check_scanner(lines, golden, name);
     manifest::DiagnosticSettings quiet;
     quiet.syntax = "info";
     quiet.unknownSection = "off";
@@ -170,6 +286,10 @@ int main() {
         else check_buildscript(f, golden);
     }
     check_catalogue(Json::parse(testsupport::read(root / "golden" / "catalogue.json")));
+    // The documents mcpp-vscode 0.9's parser tests read: their structure and every cursor's context.
+    int k = 0;
+    for (const auto& snippet : Json::parse(testsupport::read(root / "golden" / "snippets.json")))
+        check_scanner(snippet["lines"].get<std::vector<std::string>>(), snippet, std::format("snippet {}", k++));
 
     // Past the goldens: the catalogue's versions, newest first, a package's own only.
     const Json envelope{{"data", {{"packages", Json::array({

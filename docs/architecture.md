@@ -5,7 +5,7 @@
 | Layer | Holds | Does not hold |
 |---|---|---|
 | mcpp | the machine contract: event streams, result records, launch descriptors, JSON queries, `--deny` (mcpp docs/50) | any IDE concept |
-| mcpp-ide backend (`src/`) | sessions and projects (which mcpp.toml a file belongs to), watching (result records, manifests), jobs (one at a time per project, cancellation, a newer job replacing a waiting one), view models (project, targets and platforms, cache, libraries, graphs), cleanup plans and their danger levels, settings validation and migration, the command table, runtime strings, the self-check, the handshakes with mcpp (`--protocol-version`) and mcppls (`--version`) | parsing mcpp.toml, resolving dependencies |
+| mcpp-ide backend (`src/`) | sessions and projects (which mcpp.toml a file belongs to), watching (result records, manifests), jobs (one at a time per project, cancellation, a newer job replacing a waiting one), view models (project, targets and platforms, cache, libraries, graphs), cleanup plans and their danger levels, settings validation and migration, the command table, runtime strings, the self-check, the handshakes with mcpp (`--protocol-version`) and mcppls (`--version`), the rules layer of mcpp.toml and build.mcpp as an LSP server ([rules.md](rules.md)) | a manifest's meaning, resolving dependencies |
 | adapters (`mide-plugins/`) | declarations generated from `spec/`, the protocol mapped onto native UI, the pages' host, the backend process, finding the backend, workspace trust | any decision |
 
 ## The pages
@@ -51,22 +51,28 @@ forward to mcppls's commands only VS Code) and, where an editor is left out, why
 backend answers each editor's table (`commands/list`) with the rows it offers, their titles in the
 session's language and their subcommands, the names Neovim types.
 
-The Neovim plugin is Lua over Neovim's own JSON-RPC client (`vim.lsp.rpc`, the LSP base protocol's
-framing). It carries no backend and no web view: a panel's view model is text in a floating window
+The Neovim plugin is Lua over Neovim's own LSP client (`vim.lsp`), attached to mcpp.toml and
+build.mcpp buffers. It carries no backend and no web view: a panel's view model is text in a floating window
 or a choice in `vim.ui.select`, and a panel with no textual equivalent (the settings, edited in
 `setup()`) is left out of its table.
 
 ## Language features
 
-mcppls provides every language feature of C++ files; mcpp-ide registers no language service. The
-VS Code extension installs mcppls as an extension pack (it can be removed); the CLion plugin depends
-on the mcppls CLion plugin; in Neovim mcppls has its own plugin (`xlings install mcppls-nvim`), whose
-client's server the Neovim plugin names to the backend. The backend reads `mcppls --version`: 0.0.18 and later refresh after any
-build through mcpp's result record, and an older or missing mcppls is reported with what to do.
+mcppls provides every language feature of C++ files; mcpp-ide registers no C++ language service.
+The VS Code extension installs mcppls as an extension pack (it can be removed); the CLion plugin
+depends on the mcppls CLion plugin; in Neovim mcppls has its own plugin (`xlings install
+mcppls-nvim`), whose client's server the Neovim plugin names to the backend. The backend reads
+`mcppls --version`: 0.0.18 and later refresh after any build through mcpp's result record, and an
+older or missing mcppls is reported with what to do.
+
+mcpp.toml and build.mcpp are the backend's: the session is an LSP server (protocol 2), and its rules
+layer answers their completion, hover, jumps and diagnostics in every editor
+([rules.md](rules.md)). In build.mcpp, which mcppls compiles as a build program, the backend leaves
+mcppls what a compiler answers better.
 
 ## A build, end to end
 
-1. The user runs Build. The adapter sends `job/start {kind: "build", root}`.
+1. The user runs Build. The adapter sends `mcpp-ide/job/start {kind: "build", root}`.
 2. The backend queues it on the project's lane and runs `mcpp build --message-format json` with
    `MCPP_CLIENT`, colour for a terminal, and `MCPP_DENY_EFFECTS` in an untrusted workspace.
 3. mcpp's narration becomes `job/output`; each event becomes `job/plan`, `job/progress`,

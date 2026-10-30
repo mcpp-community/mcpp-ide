@@ -25,6 +25,19 @@ import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 
+/** A path as the `file:` URI the backend names a document by (`file:///C:/x` for a drive path). */
+fun uriOf(path: String): String {
+    val p = path.replace('\\', '/')
+    val out = StringBuilder("file://")
+    if (!p.startsWith("/")) out.append('/')
+    for (b in p.toByteArray(Charsets.UTF_8)) {
+        val c = b.toInt() and 0xff
+        val ch = c.toChar()
+        if (ch.isLetterOrDigit() && c < 0x80 || ch in "/-_.~:") out.append(ch) else out.append("%%%02X".format(c))
+    }
+    return out.toString()
+}
+
 @Service(Service.Level.PROJECT)
 class McppSession(private val project: Project) : Disposable {
     private val log = logger<McppSession>()
@@ -88,11 +101,28 @@ class McppSession(private val project: Project) : Disposable {
 
     val strings: Map<String, String> get() = bundle
 
+    private val startedListeners = CopyOnWriteArrayList<() -> Unit>()
+
+    /** Called each time a backend has started and answered `initialize`. */
+    fun whenStarted(listener: () -> Unit) {
+        startedListeners += listener
+    }
+
     fun on(method: String, listener: (JsonElement) -> Unit): () -> Unit {
         val entry = method to listener
         listeners += entry
         return { listeners -= entry }
     }
+
+    /**
+     * Whether C++ Modules serves build.mcpp here: the mcppls CLion plugin is installed and enabled,
+     * and the backend leaves it what it answers better (the unknownSymbol rule, the module names
+     * after `import`).
+     */
+    fun mcpplsServes(): Boolean = runCatching {
+        val id = com.intellij.openapi.extensions.PluginId.getId(MCPPLS_PLUGIN_ID)
+        com.intellij.ide.plugins.PluginManagerCore.getPlugin(id) != null && !com.intellij.ide.plugins.PluginManagerCore.isDisabled(id)
+    }.getOrDefault(false)
 
     /** The plugin's directory: the parent of the lib/ holding this class's jar. */
     private fun pluginRoot(): File? = pluginDirectory()
@@ -127,17 +157,26 @@ class McppSession(private val project: Project) : Disposable {
             runCatching { fn(if (m == "*") JsonObject().apply { addProperty("method", method); add("params", params) } else params) }
         } }
         b.exited.thenAccept { code -> if (backend === b) onExit(code) }
+        // LSP's `initialize`: the client and the folder in LSP's fields, mcpp-ide's own in initializationOptions.
         val params = JsonObject().apply {
-            add("client", JsonObject().apply { addProperty("name", ApplicationInfo.getInstance().versionName); addProperty("version", ApplicationInfo.getInstance().fullVersion) })
-            addProperty("editor", "jetbrains")
-            addProperty("locale", DynamicBundle.getLocale().toLanguageTag())
-            addProperty("trusted", TrustedProjects.isProjectTrusted(project))
-            add("settings", McppSettings.get().values())
-            add("workspaceFolders", JsonArray().apply { project.basePath?.let { add(it) } })
-            add("languageService", JsonObject().apply { add("candidates", mcpplsCandidates()) })
+            addProperty("processId", ProcessHandle.current().pid())
+            add("clientInfo", JsonObject().apply { addProperty("name", ApplicationInfo.getInstance().versionName); addProperty("version", ApplicationInfo.getInstance().fullVersion) })
+            add("workspaceFolders", JsonArray().apply {
+                project.basePath?.let { base -> add(JsonObject().apply { addProperty("uri", uriOf(base)); addProperty("name", project.name) }) }
+            })
+            add("capabilities", JsonObject())
+            add("initializationOptions", JsonObject().apply {
+                addProperty("editor", "jetbrains")
+                addProperty("locale", DynamicBundle.getLocale().toLanguageTag())
+                addProperty("trusted", TrustedProjects.isProjectTrusted(project))
+                add("settings", McppSettings.get().values())
+                add("languageService", JsonObject().apply { add("candidates", mcpplsCandidates()) })
+                addProperty("mcpplsServes", mcpplsServes())
+            })
         }
         b.request("initialize", params).thenCompose { init ->
             initialized = init.asJsonObject
+            b.notify("initialized", JsonObject())
             b.request("i18n/bundle")
         }.thenCompose { strings ->
             bundle = strings.asJsonObject.entrySet().associate { it.key to it.value.asString }
@@ -146,6 +185,7 @@ class McppSession(private val project: Project) : Disposable {
             if (error != null) { future.completeExceptionally(error); return@whenComplete }
             commands = table.asJsonObject.getAsJsonArray("commands").map { it.asJsonObject }
             future.complete(initialized!!)
+            startedListeners.forEach { runCatching { it() } }
         }
         return future
     }
@@ -262,8 +302,17 @@ class McppSession(private val project: Project) : Disposable {
             add("settings", McppSettings.get().values())
             addProperty("trusted", TrustedProjects.isProjectTrusted(project))
             addProperty("locale", DynamicBundle.getLocale().toLanguageTag())
+            addProperty("mcpplsServes", mcpplsServes())
         })
     }
+
+    /** A notification to the backend (LSP's document notifications), when it is running. */
+    fun notifyBackend(method: String, params: JsonObject) {
+        backend?.notify(method, params)
+    }
+
+    /** Whether the backend is running now (nothing is started to answer this). */
+    val running: Boolean get() = backend?.running == true
 
     /** What the pages write to their output channel: the IDE's log. */
     fun log(text: String) {

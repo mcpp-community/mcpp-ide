@@ -657,5 +657,6 @@
   "A feature as a table": "以表形式写出的特性",
   "Build settings for the targets a selector matches": "选择器匹配的目标的构建设置",
   "Dependencies for the targets a selector matches": "选择器匹配的目标的依赖",
-  "Dependencies of one index namespace": "一个索引命名空间的依赖"
+  "Dependencies of one index namespace": "一个索引命名空间的依赖",
+  "The mcpp-ide backend does not run on this platform ({0}); build, run, test and the project pages go on without it.": "mcpp-ide 后端不在本平台（{0}）上运行；构建、运行、测试与项目页面照常可用。"
 }

@@ -164,15 +164,15 @@ TEST(Math,
             CHECK(!answers.empty() && answers.back().contains("result"));
             return answers.back()["result"];
         };
-        (void)call("initialize", Json{{"client", {{"name", "test"}}}, {"editor", "vscode"}, {"trusted", false},
-                                      {"settings", {{"mcpp.path", "/no/such/mcpp"}}},
-                                      {"workspaceFolders", Json::array({base.generic_string()})}});
-        auto program = call("source/entries", Json{{"file", (base / "src" / "main.cpp").generic_string()}});
+        (void)call("initialize", Json{{"clientInfo", {{"name", "test"}}}, {"workspaceFolders", Json::array({Json{{"uri", testsupport::file_uri(base)}}})},
+                {"initializationOptions", Json{{"editor", "vscode"}, {"trusted", false},
+                                      {"settings", {{"mcpp.path", "/no/such/mcpp"}}}}}});
+        auto program = call("mcpp-ide/source/entries", Json{{"file", (base / "src" / "main.cpp").generic_string()}});
         CHECK(program["kind"] == "program" && program["main"]["line"] == 2 && program["main"]["approximate"] == true);
-        CHECK(call("source/entries", Json{{"file", (base / "src" / "lib.cpp").generic_string()}})["kind"] == "none");
-        auto test = call("source/entries", Json{{"file", (base / "tests" / "unit" / "math.cpp").generic_string()}});
+        CHECK(call("mcpp-ide/source/entries", Json{{"file", (base / "src" / "lib.cpp").generic_string()}})["kind"] == "none");
+        auto test = call("mcpp-ide/source/entries", Json{{"file", (base / "tests" / "unit" / "math.cpp").generic_string()}});
         CHECK(test["kind"] == "test" && test["test"] == "unit/math" && !test.contains("framework"));
-        auto cases = call("test/cases", Json{{"root", base.generic_string()}, {"test", "unit/math"}});
+        auto cases = call("mcpp-ide/test/cases", Json{{"root", base.generic_string()}, {"test", "unit/math"}});
         CHECK(cases["framework"].is_null() && cases["cases"].empty());
         std::error_code ignored;
         std::filesystem::remove_all(base, ignored);

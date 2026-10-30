@@ -1,20 +1,52 @@
 /**
  * The session with the mcpp-ide backend (`mcpp-ide serve`): started at activation, given the
  * editor's settings, trust, language and folders, kept current as they change, and restarted (once,
- * then on request) when it ends. The views' data adapters and the debugging, testing and packing
- * flows reach the backend through `session.request`; the strings are this extension's own (`t`).
+ * then on request) when it ends. The backend is an LSP server (design 2026-10-30 part 2 §8): VS
+ * Code's language client starts it and connects to it, which brings mcpp.toml's and build.mcpp's
+ * completion, hover, jumps and diagnostics; the views' data adapters and the debugging, testing and
+ * packing flows reach mcpp-ide's own methods through `session.request`; the strings are this
+ * extension's own (`t`).
  */
 import * as vscode from "vscode";
+import type * as lc from "vscode-languageclient/node";
 
 import { t } from "../i18n/t";
-import { Backend, BackendError } from "./backend/client";
-import { locateBackend, type Located } from "./backend/locate";
+import { languageServerServes } from "../mcppls/stateSource";
+import { backendUnavailableHere, locateBackend, okrunDir, type Located } from "./backend/locate";
 import { mcpplsCandidates } from "./backend/mcppls";
 import { MCPPLS_EXTENSION } from "./mapping";
 import type { CommandEntry, InitializeResult, LanguageServiceStatus } from "./protocol";
 
+// The language client, bundled into dist/vendor (tools/bundle-languageclient.mjs): the VSIX carries
+// no node_modules.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const lsp = require("../../vendor/languageclient") as typeof lc;
+
+/** mcpp-ide's own methods and notifications are under `mcpp-ide/` beside LSP's. */
+const NAMESPACE = "mcpp-ide/";
+
+export interface RpcError {
+  code: number;
+  message: string;
+  data?: unknown;
+}
+
+export class BackendError extends Error {
+  constructor(public readonly method: string, public readonly error: RpcError) {
+    super(error.message);
+  }
+}
+
+/** The documents the backend's rules layer reads: mcpp.toml, and build.mcpp (a `cpp` document). */
+export const DOCUMENT_SELECTOR = [
+  { scheme: "file", language: "mcpp-toml" },
+  { scheme: "file", language: "cpp", pattern: "**/build.mcpp" },
+];
+
 export class Session implements vscode.Disposable {
-  private backend: Backend | undefined;
+  private client: lc.LanguageClient | undefined;
+  /** The notifications the current client delivers to `listeners`. */
+  private subscribed = new Set<string>();
   private located: Located | undefined;
   private initResult: InitializeResult | undefined;
   private commandTable: CommandEntry[] = [];
@@ -37,17 +69,18 @@ export class Session implements vscode.Disposable {
       // The editor regained focus: a `xlings use` or a changed pin happened outside it (§4.2), or a
       // server started or stopped (§5.2).
       vscode.window.onDidChangeWindowState((state) => {
-        if (!state.focused || !this.backend?.running) return;
-        void this.backend.request("project/refresh", {}).then(() => this.onDidRefresh.fire(), () => undefined);
+        if (!state.focused || !this.running) return;
+        void this.request("project/refresh", {}).then(() => this.onDidRefresh.fire(), () => undefined);
         void this.refreshLanguageService();
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("mcpp.ide.backendPath")) { void this.restart(); return; }
-        if (e.affectsConfiguration("mcpp")) void this.pushSettings();
+        if (e.affectsConfiguration("mcpp") || e.affectsConfiguration("mcppls.enable")) void this.pushSettings();
       }),
       vscode.workspace.onDidGrantWorkspaceTrust(() => void this.pushSettings()),
       vscode.workspace.onDidChangeWorkspaceFolders(() => void this.restart()),
-      vscode.extensions.onDidChange(() => void this.refreshLanguageService()),
+      // Whether C++ Modules serves build.mcpp: installed, enabled, or switched off for the workspace.
+      vscode.extensions.onDidChange(() => { void this.refreshLanguageService(); void this.pushSettings(); }),
       this.onDidChangeLanguageService,
     );
     // mcppls answered differently, or a job ended (a build changes what the server serves).
@@ -68,12 +101,12 @@ export class Session implements vscode.Disposable {
    * time, and none while the backend is not running (nothing is started to answer it).
    */
   refreshLanguageService(root?: string): Promise<LanguageServiceStatus | undefined> {
-    if (!this.backend?.running) return Promise.resolve(this.languageServiceNow);
+    if (!this.running) return Promise.resolve(this.languageServiceNow);
     if (this.languageServiceAsking) return this.languageServiceAsking;
     const params: Record<string, unknown> = { candidates: this.mcpplsCandidates() };
     const folder = root ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (folder !== undefined) params.root = folder;
-    this.languageServiceAsking = this.backend
+    this.languageServiceAsking = this
       .request<LanguageServiceStatus>("languageService/status", params)
       .then((status) => {
         this.languageServiceNow = status;
@@ -121,7 +154,28 @@ export class Session implements vscode.Disposable {
   on(method: string, fn: (params: any) => void): vscode.Disposable {
     if (!this.listeners.has(method)) this.listeners.set(method, new Set());
     this.listeners.get(method)!.add(fn);
+    if (this.client) this.subscribe(this.client, method);
     return new vscode.Disposable(() => this.listeners.get(method)?.delete(fn));
+  }
+
+  private subscribe(client: lc.LanguageClient, method: string): void {
+    if (this.subscribed.has(method)) return;
+    this.subscribed.add(method);
+    client.onNotification(NAMESPACE + method, (params: unknown) => {
+      for (const fn of this.listeners.get(method) ?? []) {
+        try { fn(params); } catch (e) { this.output.appendLine(`mcpp: ${method}: ${String(e)}`); }
+      }
+    });
+  }
+
+  /** What the backend is told at the start and on each change. */
+  private sessionOptions(): Record<string, unknown> {
+    return {
+      locale: vscode.env.language,
+      trusted: vscode.workspace.isTrusted,
+      settings: this.settings(),
+      mcpplsServes: languageServerServes(),
+    };
   }
 
   async start(): Promise<boolean> {
@@ -133,6 +187,15 @@ export class Session implements vscode.Disposable {
   private async doStart(): Promise<boolean> {
     const configured = vscode.workspace.getConfiguration().get<string>("mcpp.ide.backendPath") ?? "";
     this.located = locateBackend({ configured: vscode.workspace.isTrusted ? configured : "", extensionRoot: this.context.extensionPath });
+    if (!this.located && backendUnavailableHere({ extensionRoot: this.context.extensionPath })) {
+      // The declared degraded mode: build, run, test and the project pages, without the backend.
+      this.degradedNow = true;
+      this.onDidDegrade.fire();
+      const message = t("The mcpp-ide backend does not run on this platform ({0}); build, run, test and the project pages go on without it.", okrunDir());
+      this.output.appendLine(`mcpp: ${message}`);
+      void vscode.window.showWarningMessage(`mcpp: ${message}`);
+      return false;
+    }
     if (!this.located) {
       const message = t("The mcpp-ide backend was not found. Install it with `xlings install mcpp-ide`, or set mcpp.ide.backendPath.");
       this.output.appendLine(`mcpp: ${message}`);
@@ -143,31 +206,38 @@ export class Session implements vscode.Disposable {
       return false;
     }
     this.output.appendLine(`mcpp-ide: starting ${[this.located.program, ...this.located.args].join(" ")} (${this.located.source})`);
-    const backend = new Backend({
-      program: this.located.program,
+    const client: lc.LanguageClient = new lsp.LanguageClient("mcpp-ide", "mcpp-ide", {
+      command: this.located.program,
       args: [...this.located.args, "serve"],
-      log: (line) => this.output.appendLine(`[backend] ${line}`),
-    });
-    this.backend = backend;
-    backend.notifications.on("*", (method: string, params: unknown) => {
-      for (const fn of this.listeners.get(method) ?? []) {
-        try { fn(params); } catch (e) { this.output.appendLine(`mcpp: ${method}: ${String(e)}`); }
-      }
-      for (const fn of this.listeners.get("*") ?? []) fn({ method, params });
-    });
-    void backend.exited.then((code) => this.onExit(backend, code));
-    try {
-      const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
-      this.initResult = await backend.request<InitializeResult>("initialize", {
-        client: { name: "VS Code", version: vscode.version },
+      transport: lsp.TransportKind.stdio,
+    }, {
+      documentSelector: DOCUMENT_SELECTOR,
+      initializationOptions: {
         editor: "vscode",
-        locale: vscode.env.language,
-        trusted: vscode.workspace.isTrusted,
-        settings: this.settings(),
-        workspaceFolders: folders,
+        ...this.sessionOptions(),
         languageService: { candidates: this.mcpplsCandidates() },
-      });
-      this.commandTable = (await backend.request<{ commands: CommandEntry[] }>("commands/list", { editor: "vscode" })).commands;
+      },
+      // The backend's log (its standard error) and the client's own lines share the mcpp channel.
+      outputChannel: this.output,
+      revealOutputChannelOn: lsp.RevealOutputChannelOn.Never,
+      diagnosticCollectionName: "mcpp",
+      initializationFailedHandler: () => false,
+      // The restarts are §3.1's, not the client's: 1, 4 and 16 seconds, then the degraded mode.
+      errorHandler: {
+        error: () => ({ action: lsp.ErrorAction.Continue }),
+        closed: () => {
+          this.onExit(client);
+          return { action: lsp.CloseAction.DoNotRestart, handled: true };
+        },
+      },
+    });
+    this.client = client;
+    this.subscribed = new Set();
+    for (const method of this.listeners.keys()) this.subscribe(client, method);
+    try {
+      await client.start();
+      this.initResult = client.initializeResult as unknown as InitializeResult;
+      this.commandTable = (await this.request<{ commands: CommandEntry[] }>("commands/list", { editor: "vscode" })).commands;
       if (this.initResult.languageService) {
         this.languageServiceNow = this.initResult.languageService;
         this.onDidChangeLanguageService.fire(this.initResult.languageService);
@@ -187,10 +257,10 @@ export class Session implements vscode.Disposable {
    * declared degraded mode (build, run, test and the project pages) with two actions: start the
    * backend again, and export the IDE report.
    */
-  private onExit(backend: Backend, code: number | null): void {
-    if (backend !== this.backend) return;
-    this.backend = undefined;
-    this.output.appendLine(`mcpp-ide: the backend ended (${code ?? "signal"})`);
+  private onExit(client: lc.LanguageClient): void {
+    if (client !== this.client) return;
+    this.client = undefined;
+    this.output.appendLine("mcpp-ide: the backend ended");
     const now = Date.now();
     this.exits = [...this.exits.filter((at) => now - at < 3 * 60_000), now];
     const delays = [1000, 4000, 16000];
@@ -214,37 +284,53 @@ export class Session implements vscode.Disposable {
   }
 
   async restart(): Promise<void> {
-    const old = this.backend;
-    this.backend = undefined;
-    if (old) await old.stop();
+    const old = this.client;
+    this.client = undefined;
+    if (old) await stopClient(old);
     this.exits = [];
     this.degradedNow = false;
     await this.start();
   }
 
   async request<T = unknown>(method: string, params: unknown = {}): Promise<T> {
-    if (this.degradedNow && !this.backend?.running) {
+    if (this.degradedNow && !this.running) {
       throw new BackendError(method, { code: -32099, message: t("the mcpp-ide backend is not running") });
     }
-    if (!this.backend?.running) {
+    if (!this.running && !this.starting) {
       if (!(await this.start())) throw new BackendError(method, { code: -32099, message: t("the mcpp-ide backend is not running") });
     }
-    return this.backend!.request<T>(method, params);
+    const client = this.client;
+    if (!client) throw new BackendError(method, { code: -32099, message: t("the mcpp-ide backend is not running") });
+    try {
+      return await client.sendRequest<T>(NAMESPACE + method, params);
+    } catch (e) {
+      if (e instanceof lsp.ResponseError) throw new BackendError(method, { code: e.code, message: e.message, data: e.data });
+      throw e;
+    }
   }
 
   async pushSettings(): Promise<void> {
-    if (!this.backend?.running) return;
-    await this.backend.request("settings/update", { settings: this.settings(), trusted: vscode.workspace.isTrusted, locale: vscode.env.language });
+    if (!this.running) return;
+    await this.request("settings/update", this.sessionOptions());
   }
 
   /** Whether a backend is running now (nothing is started to answer this). */
   get running(): boolean {
-    return this.backend?.running === true;
+    return this.client?.isRunning() === true;
   }
 
   dispose(): void {
     this.onDidRefresh.dispose();
     this.disposables.forEach((d) => d.dispose());
-    void this.backend?.stop();
+    if (this.client) void stopClient(this.client);
+  }
+}
+
+/** Shutdown and exit, or the process ended, within a few seconds either way. */
+async function stopClient(client: lc.LanguageClient): Promise<void> {
+  try {
+    await client.stop(3000);
+  } catch {
+    // it ended already
   }
 }

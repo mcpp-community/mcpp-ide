@@ -2,67 +2,82 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/mcpp-community/mcpp-ide/protocol/protocol.schema.json",
   "title": "The mcpp-ide protocol",
-  "description": "JSON-RPC 2.0 over the LSP base protocol (Content-Length framing) on the standard streams of `mcpp-ide serve`. Version 1. An adapter sends `initialize` first; every other request before it is refused (-32002). Requests run concurrently; `$/cancelRequest` cancels one. The backend's tests check that the methods it registers and the notifications it sends are exactly the ones listed here.",
-  "version": 1,
+  "description": "JSON-RPC 2.0 over the LSP base protocol (Content-Length framing) on the standard streams of `mcpp-ide serve`. Version 2: the session is an LSP server (design 2026-10-30 part 2 §8) -- `initialize` in LSP's shape with mcpp-ide's parameters in `initializationOptions`, the rules layer of mcpp.toml and build.mcpp as `textDocument/*`, mcpp-ide's own methods and notifications under `mcpp-ide/`. An adapter sends `initialize` first; every other request before it is refused (-32002). Requests run concurrently; `$/cancelRequest` cancels one. The backend's tests check that the methods it registers and the notifications it sends are exactly the ones listed here.",
+  "version": 2,
   "methods": {
     "initialize": {
-      "description": "Starts the session: finds mcpp and mcppls, resolves the settings, discovers the projects of the folders and watches them.",
+      "description": "Starts the session (LSP's `initialize`): finds mcpp and mcppls, resolves the settings, discovers the projects of the workspace folders and watches them, and answers the server's LSP capabilities with mcpp-ide's own answer beside them.",
       "params": {
         "type": "object",
         "properties": {
-          "client": { "type": "object", "properties": { "name": { "type": "string" }, "version": { "type": "string" } } },
-          "editor": { "enum": ["vscode", "jetbrains", "nvim", "cli"], "description": "The adapter: mcpp-vscode, mcpp-clion (the IntelliJ platform's id), mcpp-nvim, or an agent" },
+          "processId": { "type": ["integer", "null"] },
+          "clientInfo": { "type": "object", "properties": { "name": { "type": "string" }, "version": { "type": "string" } } },
           "locale": { "type": "string" },
-          "trusted": { "type": "boolean" },
-          "settings": { "$ref": "#/$defs/settingValues" },
-          "workspaceFolders": { "type": "array", "items": { "type": "string" } },
-          "languageService": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "string" }, "description": "Payload directories (payload.json's `server`) or programs, the adapter's mcppls first" } } }
+          "rootUri": { "type": ["string", "null"] },
+          "workspaceFolders": { "type": ["array", "null"], "items": { "type": "object", "required": ["uri"], "properties": { "uri": { "type": "string" }, "name": { "type": "string" } } } },
+          "capabilities": { "type": "object" },
+          "initializationOptions": {
+            "type": "object",
+            "properties": {
+              "editor": { "enum": ["vscode", "jetbrains", "nvim", "cli"], "description": "The adapter: mcpp-vscode, mcpp-clion (the IntelliJ platform's id), mcpp-nvim, or an agent" },
+              "locale": { "type": "string", "description": "The editor's display language, `auto` resolved by the adapter" },
+              "trusted": { "type": "boolean" },
+              "settings": { "$ref": "#/$defs/settingValues" },
+              "languageService": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "string" }, "description": "Payload directories (payload.json's `server`) or programs, the adapter's mcppls first" } } },
+              "mcpplsServes": { "type": "boolean", "description": "C++ Modules serves build.mcpp in this editor: the rules layer leaves it the unknownSymbol rule, the module names after `import` and their hover" }
+            }
+          }
         }
       },
       "result": {
         "type": "object",
-        "required": ["server", "protocol", "projects", "capabilities", "checks"],
+        "required": ["capabilities", "serverInfo", "protocol", "projects", "features", "checks"],
         "properties": {
-          "server": { "type": "object", "required": ["name", "version"] },
-          "protocol": { "const": 1 },
+          "capabilities": { "type": "object", "description": "LSP ServerCapabilities: full text synchronisation, completion, hover, definition, document symbols" },
+          "serverInfo": { "type": "object", "required": ["name", "version"] },
+          "protocol": { "const": 2 },
           "mcpp": { "type": ["object", "null"] },
           "languageService": { "$ref": "#/$defs/languageService" },
           "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } },
           "projects": { "type": "array", "items": { "$ref": "#/$defs/project" } },
-          "capabilities": { "type": "array", "items": { "type": "string" } }
+          "features": { "type": "array", "items": { "type": "string" } }
         }
       }
     },
-    "settings/update": {
+    "textDocument/completion": { "description": "Completion in mcpp.toml (tables, keys, enum values, the forms of a table whose keys the user names, dependency versions from mcpp's catalogue when mcpp.toml.indexCompletion is on and the workspace is trusted) and in build.mcpp (`mcpp::` names, the API's snippets, the modules after `import`).", "params": { "type": "object", "required": ["textDocument", "position"], "properties": { "textDocument": { "type": "object", "required": ["uri"], "properties": { "uri": { "type": "string" } } }, "position": { "type": "object", "required": ["line", "character"], "properties": { "line": { "type": "integer" }, "character": { "type": "integer", "description": "UTF-16 code units" } } } } }, "result": { "type": ["object", "null"], "required": ["isIncomplete", "items"] } },
+    "textDocument/hover": { "description": "A table's, a key's or an enum value's description in mcpp.toml; a directive's or a known module's in build.mcpp.", "params": { "type": "object", "required": ["textDocument", "position"], "properties": { "textDocument": { "type": "object", "required": ["uri"], "properties": { "uri": { "type": "string" } } }, "position": { "type": "object", "required": ["line", "character"], "properties": { "line": { "type": "integer" }, "character": { "type": "integer", "description": "UTF-16 code units" } } } } }, "result": { "type": ["object", "null"] } },
+    "textDocument/definition": { "description": "In mcpp.toml: `workspace = true` to [workspace.dependencies]'s entry, `features = [\"a\"]` to [features.a], `path = \"../x\"` to that manifest's [package].", "params": { "type": "object", "required": ["textDocument", "position"], "properties": { "textDocument": { "type": "object", "required": ["uri"], "properties": { "uri": { "type": "string" } } }, "position": { "type": "object", "required": ["line", "character"], "properties": { "line": { "type": "integer" }, "character": { "type": "integer", "description": "UTF-16 code units" } } } } }, "result": { "type": ["object", "null"] } },
+    "textDocument/documentSymbol": { "description": "mcpp.toml's tables and their keys.", "params": { "type": "object", "required": ["textDocument"] }, "result": { "type": ["array", "null"] } },
+    "mcpp-ide/settings/update": {
       "description": "The adapter's settings changed: they are validated, migrated from earlier keys and resolved.",
-      "params": { "type": "object", "properties": { "settings": { "$ref": "#/$defs/settingValues" }, "trusted": { "type": "boolean" }, "locale": { "type": "string" } } },
+      "params": { "type": "object", "properties": { "settings": { "$ref": "#/$defs/settingValues" }, "trusted": { "type": "boolean" }, "locale": { "type": "string" }, "mcpplsServes": { "type": "boolean" } } },
       "result": { "$ref": "#/$defs/resolvedSettings" }
     },
-    "settings/registry": {
+    "mcpp-ide/settings/registry": {
       "description": "Every setting with its type, default, bounds, group and texts, and the presets: what a settings panel renders.",
       "params": { "type": "object" },
       "result": { "type": "object", "required": ["settings", "presets"] }
     },
-    "settings/preset": {
+    "mcpp-ide/settings/preset": {
       "params": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } },
       "result": { "type": "object" }
     },
-    "i18n/bundle": {
+    "mcpp-ide/i18n/bundle": {
       "description": "The runtime strings in a language, keyed by their English text ({} for English).",
       "params": { "type": "object", "properties": { "locale": { "type": "string" } } },
       "result": { "type": "object", "additionalProperties": { "type": "string" } }
     },
-    "selfCheck": {
+    "mcpp-ide/selfCheck": {
       "description": "Finds mcpp again and reports what the backend finds: the backend, mcpp and its contract, mcppls, xlings, trust.",
       "params": { "type": "object" },
       "result": { "type": "object", "required": ["backend", "checks"], "properties": { "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } } } }
     },
-    "commands/list": {
+    "mcpp-ide/commands/list": {
       "description": "The command table (spec/commands.json) for one editor, with titles in the session's language and each command's subcommand.",
       "params": { "type": "object", "properties": { "editor": { "enum": ["vscode", "jetbrains", "nvim", "cli"] } } },
       "result": { "type": "object", "required": ["commands"], "properties": { "commands": { "type": "array", "items": { "$ref": "#/$defs/command" } } } }
     },
-    "menu/quick": {
+    "mcpp-ide/menu/quick": {
       "description": "The quick menu for a project: each item enabled or not, with the reason.",
       "params": { "type": "object", "properties": { "root": { "type": "string" }, "editor": { "type": "string" } } },
       "result": {
@@ -80,12 +95,12 @@
         }
       }
     },
-    "languageService/status": {
+    "mcpp-ide/languageService/status": {
       "description": "Which mcppls answers this editor's C++ files, whether it reads mcpp's result record (0.0.18 and later), and what it says about the workspace: `mcppls status` (0.0.20 and later) or the frozen table. Candidates are the servers the adapter knows of (the mcppls extension's or plugin's own); PATH, xlings and the plugin payload follow.",
       "params": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "string" } }, "root": { "type": "string", "description": "The workspace to ask mcppls about (default: the first folder)" } } },
       "result": { "$ref": "#/$defs/languageService" }
     },
-    "source/entries": {
+    "mcpp-ide/source/entries": {
       "description": "What a C++ file is to its project (part 2 §6.3): a test's main (tests/**, named as mcpp names it), a program's main, or neither, with the line of main read from the text (approximate) and, for a test, its framework. Nothing is built or run.",
       "params": { "type": "object", "required": ["file"], "properties": { "file": { "type": "string" }, "text": { "type": "string", "description": "The editor's unsaved text" }, "boundary": { "type": "string" } } },
       "result": {
@@ -94,7 +109,7 @@
                         "framework": { "type": "string" }, "main": { "type": "object", "required": ["line"], "properties": { "line": { "type": "integer" }, "approximate": { "type": "boolean" } } } }
       }
     },
-    "test/cases": {
+    "mcpp-ide/test/cases": {
       "description": "A test program's cases (part 2 §7.3): as its source names them (a framework's macros), and with `list` -- trusted, and only for a source that calls its framework's macros -- as the program lists them. Without a framework, no cases: the program is the unit.",
       "params": { "type": "object", "properties": { "root": { "type": "string" }, "test": { "type": "string" }, "file": { "type": "string" }, "list": { "type": "boolean" }, "target": { "type": "string" } } },
       "result": {
@@ -104,21 +119,21 @@
                         "cases": { "type": "array", "items": { "type": "object", "required": ["name", "source"], "properties": { "name": { "type": "string" }, "line": { "type": "integer" }, "source": { "enum": ["static", "listed"] } } } } }
       }
     },
-    "test/runCases": {
+    "mcpp-ide/test/runCases": {
       "description": "Runs some of a test program's cases (all of them when `cases` is empty): a test job whose program receives the framework's filter and report arguments after `--`. Each case's outcome is sent as test/caseResult when the job ends.",
       "params": { "type": "object", "required": ["root", "test", "framework"], "properties": { "root": { "type": "string" }, "test": { "type": "string" }, "framework": { "type": "string" }, "cases": { "type": "array", "items": { "type": "string" } }, "profile": { "type": "string" }, "target": { "type": "string" }, "color": { "type": "boolean" } } },
       "result": { "type": "object", "required": ["jobId"] }
     },
-    "projects/list": {
+    "mcpp-ide/projects/list": {
       "params": { "type": "object", "properties": { "folders": { "type": "array", "items": { "type": "string" } }, "depth": { "type": "integer" } } },
       "result": { "type": "array", "items": { "$ref": "#/$defs/project" } }
     },
-    "projects/forFile": {
+    "mcpp-ide/projects/forFile": {
       "description": "The project a file belongs to: the nearest mcpp.toml above it, no higher than the boundary.",
       "params": { "type": "object", "required": ["path"], "properties": { "path": { "type": "string" }, "boundary": { "type": "string" } } },
       "result": { "anyOf": [ { "$ref": "#/$defs/project" }, { "type": "null" } ] }
     },
-    "project/summary": {
+    "mcpp-ide/project/summary": {
       "description": "A project's executables, tests, libraries, toolchain, last build, and the platforms its last plan named.",
       "params": { "$ref": "#/$defs/rooted" },
       "result": {
@@ -141,17 +156,17 @@
         }
       }
     },
-    "project/new": {
+    "mcpp-ide/project/new": {
       "description": "`mcpp new <name>` in a parent directory, as a job; the result names the new project's root.",
       "params": { "type": "object", "required": ["parent", "name"], "properties": { "parent": { "type": "string" }, "name": { "type": "string" }, "template": { "type": "string" } } },
       "result": { "type": "object", "required": ["jobId", "root"] }
     },
-    "result/last": {
+    "mcpp-ide/result/last": {
       "description": "The result record target/.last-result.json names, or null.",
       "params": { "$ref": "#/$defs/rooted" },
       "result": { "type": ["object", "null"] }
     },
-    "job/start": {
+    "mcpp-ide/job/start": {
       "description": "Queues a job on its project's lane: one at a time per project, in order; a build or test asked for again replaces the waiting one, and `supersede` cancels the running one.",
       "params": {
         "type": "object",
@@ -174,20 +189,20 @@
       },
       "result": { "$ref": "#/$defs/jobRef" }
     },
-    "job/cancel": {
+    "mcpp-ide/job/cancel": {
       "params": { "type": "object", "required": ["jobId"], "properties": { "jobId": { "type": "string" } } },
       "result": { "type": "object", "required": ["cancelled"], "properties": { "cancelled": { "type": "boolean" } } }
     },
-    "job/list": {
+    "mcpp-ide/job/list": {
       "params": { "type": "object" },
       "result": { "type": "array", "items": { "type": "object", "required": ["id", "kind", "root", "state"] } }
     },
-    "run/launch": {
+    "mcpp-ide/run/launch": {
       "description": "Builds and returns how the program starts (mcpp run --print-launch): the adapter starts it in a terminal.",
       "params": { "$ref": "#/$defs/launchParams" },
       "result": { "type": "object", "required": ["argv", "cwd", "env"], "properties": { "argv": { "type": "array", "items": { "type": "string" } }, "cwd": { "type": "string" }, "env": { "type": "object" }, "program": { "type": "string" }, "via": { "type": ["string", "null"] } } }
     },
-    "debug/configuration": {
+    "mcpp-ide/debug/configuration": {
       "description": "Builds and returns a debug configuration for the adapter's debugger. A program that runs through another (an ok image under okrun) is debugged as that runner, its symbols read through the GDB JIT interface.",
       "params": {
         "allOf": [
@@ -197,7 +212,7 @@
       },
       "result": { "type": "object", "required": ["engine", "configuration", "launch"] }
     },
-    "test/list": {
+    "mcpp-ide/test/list": {
       "description": "The tests of a project without building them (mcpp test --list).",
       "params": { "$ref": "#/$defs/rooted" },
       "result": {
@@ -206,26 +221,26 @@
         "properties": { "tests": { "type": "array", "items": { "type": "object", "required": ["test"], "properties": { "test": { "type": "string" }, "member": { "type": "string" }, "main": { "type": "string" } } } } }
       }
     },
-    "library/search": {
+    "mcpp-ide/library/search": {
       "params": { "type": "object", "properties": { "keyword": { "type": "string" }, "index": { "type": "string" }, "sort": { "enum": ["name", "versions"] }, "limit": { "type": "integer" }, "id": { "type": "string" }, "refresh": { "type": "boolean" }, "root": { "type": "string" } } },
       "result": { "type": "object" }
     },
-    "library/indexes": { "params": { "type": "object" }, "result": { "type": ["object", "null"] } },
-    "library/add": {
+    "mcpp-ide/library/indexes": { "params": { "type": "object" }, "result": { "type": ["object", "null"] } },
+    "mcpp-ide/library/add": {
       "params": { "type": "object", "required": ["root", "dependency"], "properties": { "root": { "type": "string" }, "dependency": { "type": "string" }, "version": { "type": "string" } } },
       "result": { "$ref": "#/$defs/jobRef" }
     },
-    "library/updateIndex": { "params": { "type": "object" }, "result": { "$ref": "#/$defs/jobRef" } },
-    "toolchains/list": { "params": { "type": "object" }, "result": { "type": "object", "required": ["host", "rows", "defaults"] } },
-    "toolchains/install": {
+    "mcpp-ide/library/updateIndex": { "params": { "type": "object" }, "result": { "$ref": "#/$defs/jobRef" } },
+    "mcpp-ide/toolchains/list": { "params": { "type": "object" }, "result": { "type": "object", "required": ["host", "rows", "defaults"] } },
+    "mcpp-ide/toolchains/install": {
       "params": { "type": "object", "required": ["spec"], "properties": { "spec": { "type": "string" }, "target": { "type": "string" }, "root": { "type": "string" } } },
       "result": { "$ref": "#/$defs/jobRef" }
     },
-    "toolchains/setDefault": {
+    "mcpp-ide/toolchains/setDefault": {
       "params": { "type": "object", "required": ["spec"], "properties": { "spec": { "type": "string" } } },
       "result": { "type": "object", "required": ["spec"] }
     },
-    "targets/list": {
+    "mcpp-ide/targets/list": {
       "description": "One row per target mcpp knows: its toolchains, whether one is installed, and the platform that configures it (mcpp 2026-10-28 §9); the host platform when the host graph has one; the last plan of the project.",
       "params": { "type": "object", "properties": { "root": { "type": "string" }, "selected": { "type": "string" } } },
       "result": {
@@ -262,38 +277,34 @@
         }
       }
     },
-    "cache/inventory": { "params": { "type": "object", "properties": { "topN": { "type": "integer" } } }, "result": { "type": "object", "required": ["totalBytes", "byKind", "topLabels"] } },
-    "cache/plan": {
+    "mcpp-ide/cache/inventory": { "params": { "type": "object", "properties": { "topN": { "type": "integer" } } }, "result": { "type": "object", "required": ["totalBytes", "byKind", "topLabels"] } },
+    "mcpp-ide/cache/plan": {
       "description": "What a cleanup would run, how much confirmation it needs, and its preview.",
       "params": { "type": "object", "required": ["action"], "properties": { "action": { "type": "string" }, "root": { "type": "string" } } },
       "result": { "type": "object", "required": ["action", "argv", "level"] }
     },
-    "cache/apply": {
+    "mcpp-ide/cache/apply": {
       "params": { "type": "object", "required": ["action", "confirmation"], "properties": { "action": { "type": "string" }, "confirmation": { "type": "object" }, "root": { "type": "string" } } },
       "result": { "$ref": "#/$defs/jobRef" }
     },
-    "graph/packages": { "params": { "$ref": "#/$defs/rooted" }, "result": { "$ref": "#/$defs/graph" } },
-    "graph/modules": { "params": { "$ref": "#/$defs/rooted" }, "result": { "$ref": "#/$defs/graph" } },
-    "pack/formats": {
+    "mcpp-ide/graph/packages": { "params": { "$ref": "#/$defs/rooted" }, "result": { "$ref": "#/$defs/graph" } },
+    "mcpp-ide/graph/modules": { "params": { "$ref": "#/$defs/rooted" }, "result": { "$ref": "#/$defs/graph" } },
+    "mcpp-ide/pack/formats": {
       "description": "The package formats mcpp offers here (mcpp pack --list-formats), the closures it packs and the linkages it takes apart from them.",
       "params": { "type": "object" },
       "result": { "type": "object", "required": ["modes", "linkages"], "properties": { "formats": { "type": "array" }, "modes": { "type": "array", "items": { "type": "string" } }, "linkages": { "type": "array", "items": { "type": "string" } } } }
     },
-    "pack/start": {
+    "mcpp-ide/pack/start": {
       "description": "A pack job (`mcpp pack --message-format json`): its envelope arrives in job/finished.",
       "params": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "pkgFormat": { "type": "string" }, "mode": { "type": "string" }, "linkage": { "enum": ["static", "shared"] }, "target": { "type": "string" }, "profile": { "type": "string" } } },
       "result": { "$ref": "#/$defs/jobRef" }
     },
-    "manifest/check": {
+    "mcpp-ide/manifest/check": {
       "description": "The manifest's problems as mcpp reports them, located.",
       "params": { "$ref": "#/$defs/rooted" },
       "result": { "type": "object", "required": ["root", "diagnostics"], "properties": { "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } } } }
     },
-    "toml/complete": { "params": { "$ref": "#/$defs/textPosition" }, "result": { "type": "object", "required": ["items"] } },
-    "toml/hover": { "params": { "$ref": "#/$defs/textPosition" }, "result": { "type": ["object", "null"] } },
-    "toml/symbols": { "params": { "type": "object", "required": ["text"] }, "result": { "type": "array" } },
-    "buildscript/complete": { "params": { "$ref": "#/$defs/textPosition" }, "result": { "type": "object", "required": ["items"] } },
-    "mcpp/exec": {
+    "mcpp-ide/mcpp/exec": {
       "description": "One command of mcpp, as an editor's own parsers read it (mcpp-vscode's views): what it printed and how it ended. The backend runs it as every command it runs -- the mcpp it located, the session's client, the effects an untrusted workspace denies -- ended past timeoutMs (without one, after a day: an install runs as long as it needs) and keeping at most maxOutputBytes (default 16 MiB) of each output.",
       "params": {
         "type": "object",
@@ -317,7 +328,7 @@
         }
       }
     },
-    "languageService/exec": {
+    "mcpp-ide/languageService/exec": {
       "description": "One command of mcppls (`query module`, for the module graph), run as the command languageService/status found -- a payload's runner and image, or a program -- ended past timeoutMs (default 120000) and keeping at most maxOutputBytes (default 16 MiB) of each output.",
       "params": {
         "type": "object",
@@ -341,7 +352,7 @@
         }
       }
     },
-    "project/files": {
+    "mcpp-ide/project/files": {
       "description": "What an editor reads of a project to describe it: the text of mcpp.toml and mcpp.lock (null when absent) and the number of source files under the root, counted as mcpp-vscode 0.9.0 counted them.",
       "params": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" } } },
       "result": {
@@ -355,7 +366,7 @@
         }
       }
     },
-    "project/mcpp": {
+    "mcpp-ide/project/mcpp": {
       "description": "The project's mcpp, asked in the project through the shim (design 2026-10-30 part 2 §4.2): its version, the program that ran, what it states it can do, and whether mcpp.path decided it. `state` is ok, pinned-missing (a pinned version not installed; `install` is the command), failed, or not-probed (an untrusted workspace: the global mcpp's facts).",
       "params": { "type": "object", "properties": { "root": { "type": "string" } } },
       "result": {
@@ -374,12 +385,12 @@
         }
       }
     },
-    "project/refresh": {
+    "mcpp-ide/project/refresh": {
       "description": "Forgets what a project's mcpp is (every project's, without `root`), so its next use asks again: the editor regained focus.",
       "params": { "type": "object", "properties": { "root": { "type": "string" } } },
       "result": { "type": "object" }
     },
-    "capabilities/explain": {
+    "mcpp-ide/capabilities/explain": {
       "description": "Each feature the panels gate, whether it is available for the project, and if not which party lacks what and from which version (design 2026-10-30 part 2 §3.2).",
       "params": { "type": "object", "properties": { "root": { "type": "string" } } },
       "result": {
@@ -390,7 +401,7 @@
         }
       }
     },
-    "report/collect": {
+    "mcpp-ide/report/collect": {
       "description": "The IDE report: the backend, every project's mcpp, mcppls's status, the settings in effect, recent jobs and the backend's recent log. The editor writes it to a file the person chose.",
       "params": { "type": "object", "properties": { "root": { "type": "string" } } },
       "result": { "type": "object", "required": ["kind", "version", "backend", "projects", "settings", "jobs", "log"] }
@@ -399,14 +410,16 @@
     "exit": { "description": "A notification: the backend ends (status 0 after shutdown, 1 otherwise).", "params": { "type": "object" }, "result": { "type": "null" } }
   },
   "notifications": {
-    "job/started": { "params": { "type": "object", "required": ["jobId", "kind", "root", "argv"] } },
-    "job/output": { "description": "Narration (mcpp's standard error, coloured when the job asked for colour).", "params": { "type": "object", "required": ["jobId", "text"] } },
-    "job/plan": { "description": "The configuration a build plans, and the platforms mcpp names for the target and host graphs.", "params": { "type": "object", "required": ["jobId", "root", "configuration"], "properties": { "platform": { "$ref": "#/$defs/platform" }, "hostPlatform": { "$ref": "#/$defs/platform" }, "platformText": { "type": "string" }, "hostPlatformText": { "type": "string" } } } },
-    "job/progress": { "params": { "type": "object", "required": ["jobId", "finished", "total"] } },
-    "job/diagnostic": { "params": { "allOf": [ { "$ref": "#/$defs/diagnostic" }, { "required": ["jobId", "root"] } ] } },
-    "job/artifact": { "params": { "type": "object", "required": ["jobId", "artifact"] } },
-    "job/record": { "description": "A record of a job's stream with no meaning the backend names.", "params": { "type": "object", "required": ["jobId", "record"] } },
-    "job/finished": {
+    "textDocument/publishDiagnostics": { "description": "The seven rules of mcpp.toml and the SPEC-007 checks of build.mcpp for an open document, at the severities the settings give.", "params": { "type": "object", "required": ["uri", "diagnostics"], "properties": { "uri": { "type": "string" }, "version": { "type": "integer" }, "diagnostics": { "type": "array" } } } },
+    "window/showMessage": { "description": "Once a session: completing a dependency version runs `mcpp search`.", "params": { "type": "object", "required": ["type", "message"] } },
+    "mcpp-ide/job/started": { "params": { "type": "object", "required": ["jobId", "kind", "root", "argv"] } },
+    "mcpp-ide/job/output": { "description": "Narration (mcpp's standard error, coloured when the job asked for colour).", "params": { "type": "object", "required": ["jobId", "text"] } },
+    "mcpp-ide/job/plan": { "description": "The configuration a build plans, and the platforms mcpp names for the target and host graphs.", "params": { "type": "object", "required": ["jobId", "root", "configuration"], "properties": { "platform": { "$ref": "#/$defs/platform" }, "hostPlatform": { "$ref": "#/$defs/platform" }, "platformText": { "type": "string" }, "hostPlatformText": { "type": "string" } } } },
+    "mcpp-ide/job/progress": { "params": { "type": "object", "required": ["jobId", "finished", "total"] } },
+    "mcpp-ide/job/diagnostic": { "params": { "allOf": [ { "$ref": "#/$defs/diagnostic" }, { "required": ["jobId", "root"] } ] } },
+    "mcpp-ide/job/artifact": { "params": { "type": "object", "required": ["jobId", "artifact"] } },
+    "mcpp-ide/job/record": { "description": "A record of a job's stream with no meaning the backend names.", "params": { "type": "object", "required": ["jobId", "record"] } },
+    "mcpp-ide/job/finished": {
       "params": {
         "type": "object",
         "required": ["jobId", "status", "exitCode"],
@@ -422,7 +435,7 @@
         }
       }
     },
-    "test/result": {
+    "mcpp-ide/test/result": {
       "params": {
         "type": "object",
         "required": ["jobId", "test", "status"],
@@ -436,13 +449,13 @@
         }
       }
     },
-    "test/summary": { "params": { "type": "object", "required": ["jobId", "passed", "failed"] } },
-    "result/changed": { "description": "A project's result record changed: a build finished, whoever ran it.", "params": { "type": "object", "required": ["root", "result"] } },
-    "manifest/changed": { "params": { "type": "object", "required": ["root"] } },
-    "manifest/diagnostics": { "params": { "type": "object", "required": ["root", "diagnostics"] } },
-    "project/mcppChanged": { "description": "A job's envelope named another mcpp than the project's was asked as: it is asked again on its next use.", "params": { "type": "object", "required": ["root", "version"] } },
-    "test/caseResult": { "description": "One case's outcome, read from the framework's report when a test/runCases job ended.", "params": { "type": "object", "required": ["jobId", "root", "test", "case", "status"], "properties": { "status": { "enum": ["passed", "failed", "skipped"] }, "durationMs": { "type": "integer" }, "message": { "type": "string" } } } },
-    "languageService/changed": { "description": "mcppls answered differently from the last time it was asked: another program or version, other actions, or another state of the workspace. An editor that lists the commands asks for them again.", "params": { "type": "object", "required": ["root", "state", "workspaceState"] } }
+    "mcpp-ide/test/summary": { "params": { "type": "object", "required": ["jobId", "passed", "failed"] } },
+    "mcpp-ide/result/changed": { "description": "A project's result record changed: a build finished, whoever ran it.", "params": { "type": "object", "required": ["root", "result"] } },
+    "mcpp-ide/manifest/changed": { "params": { "type": "object", "required": ["root"] } },
+    "mcpp-ide/manifest/diagnostics": { "params": { "type": "object", "required": ["root", "diagnostics"] } },
+    "mcpp-ide/project/mcppChanged": { "description": "A job's envelope named another mcpp than the project's was asked as: it is asked again on its next use.", "params": { "type": "object", "required": ["root", "version"] } },
+    "mcpp-ide/test/caseResult": { "description": "One case's outcome, read from the framework's report when a test/runCases job ended.", "params": { "type": "object", "required": ["jobId", "root", "test", "case", "status"], "properties": { "status": { "enum": ["passed", "failed", "skipped"] }, "durationMs": { "type": "integer" }, "message": { "type": "string" } } } },
+    "mcpp-ide/languageService/changed": { "description": "mcppls answered differently from the last time it was asked: another program or version, other actions, or another state of the workspace. An editor that lists the commands asks for them again.", "params": { "type": "object", "required": ["root", "state", "workspaceState"] } }
   },
   "$defs": {
     "settingValues": { "type": "object", "additionalProperties": true },
@@ -500,7 +513,6 @@
       }
     },
     "launchParams": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "target": { "type": "string" }, "profile": { "type": "string" }, "bin": { "type": "string" }, "args": { "type": "array", "items": { "type": "string" } } } },
-    "textPosition": { "type": "object", "required": ["text", "line", "character"], "properties": { "text": { "type": "string" }, "line": { "type": "integer" }, "character": { "type": "integer" } } },
     "graph": { "type": "object", "required": ["nodes", "edges"], "properties": { "nodes": { "type": "array" }, "edges": { "type": "array" } } },
     "diagnostic": {
       "type": "object",

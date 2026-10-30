@@ -22,7 +22,7 @@ import mcppide.views;
 import mcppide.policy;
 import mcppide.settings;
 import mcppide.i18n;
-import mcppide.manifest;
+import mcppide.documents;
 import mcppide.spec;
 import mcppide.languageservice;
 import mcppide.scan;
@@ -34,27 +34,39 @@ export namespace mcppide::server {
 using Json = nlohmann::json;
 
 inline constexpr std::string_view kVersion = "0.2.0";
-inline constexpr int kProtocol = 1;
+inline constexpr int kProtocol = 2;
 
 // The methods `install` registers, for the protocol schema's test: a method
-// here and not in protocol/protocol.schema.json (or the other way) fails it.
+// here and not in protocol/protocol.schema.json (or the other way) fails it. The session is an LSP
+// server (protocol 2, design 2026-10-30 part 2 §8): LSP's own methods, and mcpp-ide's under
+// `mcpp-ide/`.
 inline constexpr std::array<std::string_view, 52> kMethods = {
-    "initialize", "settings/update", "settings/registry", "settings/preset", "i18n/bundle",
-    "selfCheck", "commands/list", "menu/quick", "languageService/status",
-    "projects/list", "projects/forFile", "project/summary", "project/new", "result/last",
-    "job/start", "job/cancel", "job/list", "run/launch", "debug/configuration", "test/list",
-    "library/search", "library/indexes", "library/add", "library/updateIndex",
-    "toolchains/list", "toolchains/install", "toolchains/setDefault", "targets/list",
-    "cache/inventory", "cache/plan", "cache/apply", "graph/packages", "graph/modules",
-    "pack/formats", "pack/start", "manifest/check", "toml/complete", "toml/hover", "toml/symbols",
-    "buildscript/complete", "mcpp/exec", "project/files", "languageService/exec", "project/mcpp", "project/refresh",
-    "capabilities/explain", "report/collect", "source/entries", "test/cases", "test/runCases", "shutdown", "exit"};
+    "initialize", "shutdown", "exit", "textDocument/completion", "textDocument/hover", "textDocument/definition",
+    "textDocument/documentSymbol", "mcpp-ide/settings/update", "mcpp-ide/settings/registry",
+    "mcpp-ide/settings/preset", "mcpp-ide/i18n/bundle", "mcpp-ide/selfCheck", "mcpp-ide/commands/list",
+    "mcpp-ide/menu/quick", "mcpp-ide/languageService/status", "mcpp-ide/projects/list", "mcpp-ide/projects/forFile",
+    "mcpp-ide/project/summary", "mcpp-ide/project/new", "mcpp-ide/result/last", "mcpp-ide/job/start",
+    "mcpp-ide/job/cancel", "mcpp-ide/job/list", "mcpp-ide/run/launch", "mcpp-ide/debug/configuration",
+    "mcpp-ide/test/list", "mcpp-ide/library/search", "mcpp-ide/library/indexes", "mcpp-ide/library/add",
+    "mcpp-ide/library/updateIndex", "mcpp-ide/toolchains/list", "mcpp-ide/toolchains/install",
+    "mcpp-ide/toolchains/setDefault", "mcpp-ide/targets/list", "mcpp-ide/cache/inventory", "mcpp-ide/cache/plan",
+    "mcpp-ide/cache/apply", "mcpp-ide/graph/packages", "mcpp-ide/graph/modules", "mcpp-ide/pack/formats",
+    "mcpp-ide/pack/start", "mcpp-ide/manifest/check", "mcpp-ide/mcpp/exec", "mcpp-ide/project/files",
+    "mcpp-ide/languageService/exec", "mcpp-ide/project/mcpp", "mcpp-ide/project/refresh",
+    "mcpp-ide/capabilities/explain", "mcpp-ide/report/collect", "mcpp-ide/source/entries", "mcpp-ide/test/cases",
+    "mcpp-ide/test/runCases"};
+
+// The notifications the backend reads.
+inline constexpr std::array<std::string_view, 5> kReceived = {
+    "initialized", "textDocument/didOpen", "textDocument/didChange", "textDocument/didClose", "$/cancelRequest"};
 
 // The notifications the backend sends.
-inline constexpr std::array<std::string_view, 16> kNotifications = {
-    "job/started", "job/output", "job/plan", "job/progress", "job/diagnostic", "job/artifact", "job/record",
-    "job/finished", "test/result", "test/summary", "result/changed", "manifest/changed",
-    "manifest/diagnostics", "project/mcppChanged", "languageService/changed", "test/caseResult"};
+inline constexpr std::array<std::string_view, 18> kNotifications = {
+    "textDocument/publishDiagnostics", "window/showMessage", "mcpp-ide/job/started", "mcpp-ide/job/output",
+    "mcpp-ide/job/plan", "mcpp-ide/job/progress", "mcpp-ide/job/diagnostic", "mcpp-ide/job/artifact",
+    "mcpp-ide/job/record", "mcpp-ide/job/finished", "mcpp-ide/test/result", "mcpp-ide/test/summary",
+    "mcpp-ide/result/changed", "mcpp-ide/manifest/changed", "mcpp-ide/manifest/diagnostics",
+    "mcpp-ide/project/mcppChanged", "mcpp-ide/languageService/changed", "mcpp-ide/test/caseResult"};
 
 class Session {
 public:
@@ -99,6 +111,14 @@ private:
     Result project_refresh(const Json& p);
     Result capabilities_explain(const Json& p);
     Result report_collect(const Json& p);
+    // The rules layer's switches for the documents, from the settings.
+    documents::Options document_options() const;
+    // A document's diagnostics, to the editor.
+    void publish(const documents::Document& d);
+    // mcpp's catalogue for version completion, when it was read; asked in the background otherwise.
+    std::optional<Json> catalogue(const std::filesystem::path& cwd);
+    // LSP's document methods and notifications.
+    void install_documents();
 
     // THE PROJECT'S mcpp (design 2026-10-30 part 2 §4.2): asked in the project, once, and asked again
     // when its manifest changes, when the editor regains focus, or when a job's envelope names
@@ -137,6 +157,13 @@ private:
     std::string clientName_ = "mcpp-ide";
     std::string editor_ = "vscode";
     std::vector<std::string> mcpplsCandidates_;
+    // Whether C++ Modules serves build.mcpp in the editor (it then answers what it answers better).
+    bool mcpplsServes_ = false;
+    // The documents the editor keeps open (mcpp.toml, build.mcpp), and the catalogue a dependency
+    // version is completed from: asked once in the background, the editor told once that it was.
+    documents::Store documents_;
+    bool catalogueAsked_ = false;
+    bool catalogueNoticed_ = false;
     // mcppls's actions as its last report named them (null until one was asked), and what the editors
     // were last told about it, so that a change is sent once.
     Json mcpplsActions_;
@@ -191,7 +218,7 @@ std::vector<std::string> strings_of(const Json& v) {
 Session::Session(rpc::Server& server) : rpc_(server) {
     jobs_ = std::make_unique<jobs::Jobs>(mcpp::Client{}, jobs::Sink{
         .narration = [this](std::string_view id, std::string_view text) {
-            rpc_.notify("job/output", Json{{"jobId", id}, {"text", text}});
+            rpc_.notify("mcpp-ide/job/output", Json{{"jobId", id}, {"text", text}});
         },
         .record = [this](std::string_view id, const Json& record) { on_record(id, record); },
         .finished = [this](std::string_view id, const Json& summary) {
@@ -214,7 +241,7 @@ Session::Session(rpc::Server& server) : rpc_(server) {
                     jobOf_.erase(it);
                 }
             }
-            rpc_.notify("job/finished", s);
+            rpc_.notify("mcpp-ide/job/finished", s);
             // Every envelope names the mcpp that wrote it: another version than the one probed (a
             // `xlings use`, a pin changed) is asked again, and the editor is told (§4.2).
             const auto& env = summary.contains("envelope") ? summary["envelope"] : Json(nullptr);
@@ -228,7 +255,7 @@ Session::Session(rpc::Server& server) : rpc_(server) {
                         changed = true;
                     }
                 }
-                if (changed) rpc_.notify("project/mcppChanged", Json{{"root", root.generic_string()}, {"version", seen}});
+                if (changed) rpc_.notify("mcpp-ide/project/mcppChanged", Json{{"root", root.generic_string()}, {"version", seen}});
             }
         },
         .started = [this](std::string_view id, const Json& started) {
@@ -238,7 +265,7 @@ Session::Session(rpc::Server& server) : rpc_(server) {
             }
             Json s = started;
             s["jobId"] = id;
-            rpc_.notify("job/started", s);
+            rpc_.notify("mcpp-ide/job/started", s);
         },
     });
     watcher_ = std::make_unique<projects::Watcher>(
@@ -332,13 +359,13 @@ void Session::on_changed(const std::filesystem::path& root, std::string_view wha
         if (what != "result") probes_.erase(root);   // a manifest may state another mcpp floor or pin
     }
     if (what == "result") {
-        rpc_.notify("result/changed", Json{{"root", root.generic_string()}, {"result", detail}});
+        rpc_.notify("mcpp-ide/result/changed", Json{{"root", root.generic_string()}, {"result", detail}});
         return;
     }
-    rpc_.notify("manifest/changed", Json{{"root", root.generic_string()}});
+    rpc_.notify("mcpp-ide/manifest/changed", Json{{"root", root.generic_string()}});
     // The manifest's problems, from mcpp, located (mcpp docs/50 §2).
     auto checked = manifest_check(Json{{"root", root.generic_string()}});
-    if (checked) rpc_.notify("manifest/diagnostics", *checked);
+    if (checked) rpc_.notify("mcpp-ide/manifest/diagnostics", *checked);
 }
 
 // A record of a job's stream becomes the notification its meaning names: the plan (with the
@@ -359,20 +386,20 @@ void Session::on_record(std::string_view jobId, const Json& record) {
             std::lock_guard lock(mutex_);
             plans_[std::filesystem::path(root)] = n;
         }
-        rpc_.notify("job/plan", n);
+        rpc_.notify("mcpp-ide/job/plan", n);
     } else if (type == "progress") {
-        rpc_.notify("job/progress", n);
+        rpc_.notify("mcpp-ide/job/progress", n);
     } else if (type == "diagnostic") {
-        rpc_.notify("job/diagnostic", n);
+        rpc_.notify("mcpp-ide/job/diagnostic", n);
     } else if (type == "artifact") {
-        rpc_.notify("job/artifact", n);
+        rpc_.notify("mcpp-ide/job/artifact", n);
     } else if (type == "test") {
-        rpc_.notify("test/result", n);
+        rpc_.notify("mcpp-ide/test/result", n);
     } else if (type == "summary") {
-        rpc_.notify("test/summary", n);
+        rpc_.notify("mcpp-ide/test/summary", n);
     } else if (!(record.is_object() && record.contains("schemaVersion") && record.value("kind", "") != "mcpp.event")) {
         // The envelope that closes a stream reaches the adapter in `job/finished`.
-        rpc_.notify("job/record", n);
+        rpc_.notify("mcpp-ide/job/record", n);
     }
 }
 
@@ -523,24 +550,34 @@ Json Session::self_check() {
 }
 
 std::expected<Json, rpc::Error> Session::initialize(const Json& p) {
+    // LSP's `initialize`: the client and the workspace in LSP's fields, what mcpp-ide asks in
+    // `initializationOptions` (the editor, trust, the settings, mcppls's candidates).
+    const Json options = p.contains("initializationOptions") && p["initializationOptions"].is_object() ? p["initializationOptions"]
+                                                                                                         : Json::object();
     {
         std::lock_guard lock(mutex_);
-        if (p.contains("client") && p["client"].is_object()) {
-            const auto name = p["client"].value("name", "editor");
-            const auto version = p["client"].value("version", "");
+        if (p.contains("clientInfo") && p["clientInfo"].is_object()) {
+            const auto name = p["clientInfo"].value("name", "editor");
+            const auto version = p["clientInfo"].value("version", "");
             clientName_ = std::format("mcpp-ide/{} ({}{}{})", kVersion, name, version.empty() ? "" : " ", version);
         }
-        editor_ = p.value("editor", "vscode");
+        editor_ = options.value("editor", "vscode");
         {
             std::lock_guard localeLock(localeMutex_);
-            locale_ = i18n::normalize_locale(p.value("locale", "en"));
+            locale_ = i18n::normalize_locale(options.value("locale", p.value("locale", "en")));
         }
-        trusted_ = p.value("trusted", true);
-        settings_ = settings::resolve(p.contains("settings") ? p["settings"] : Json::object())["values"];
+        trusted_ = options.value("trusted", true);
+        mcpplsServes_ = options.value("mcpplsServes", false);
+        settings_ = settings::resolve(options.contains("settings") ? options["settings"] : Json::object())["values"];
         folders_.clear();
-        for (const auto& f : strings_of(p.value("workspaceFolders", Json::array()))) folders_.emplace_back(f);
-        if (p.contains("languageService") && p["languageService"].is_object())
-            mcpplsCandidates_ = strings_of(p["languageService"].value("candidates", Json::array()));
+        if (p.contains("workspaceFolders") && p["workspaceFolders"].is_array())
+            for (const auto& f : p["workspaceFolders"])
+                if (f.is_object() && f.contains("uri") && f["uri"].is_string())
+                    if (auto path = documents::path_of(f["uri"].get<std::string>()); !path.empty()) folders_.push_back(path);
+        if (folders_.empty() && p.contains("rootUri") && p["rootUri"].is_string())
+            if (auto path = documents::path_of(p["rootUri"].get<std::string>()); !path.empty()) folders_.push_back(path);
+        if (options.contains("languageService") && options["languageService"].is_object())
+            mcpplsCandidates_ = strings_of(options["languageService"].value("candidates", Json::array()));
     }
     locate_mcpp();
     Json found = Json::array();
@@ -551,15 +588,16 @@ std::expected<Json, rpc::Error> Session::initialize(const Json& p) {
         }
     rpc_.set_initialized(true);
     auto check = self_check();
-    return Json{{"server", Json{{"name", "mcpp-ide"}, {"version", kVersion}}},
+    return Json{{"capabilities", documents::server_capabilities()},
+                {"serverInfo", Json{{"name", "mcpp-ide"}, {"version", kVersion}}},
                 {"protocol", kProtocol},
                 {"mcpp", check["mcpp"]},
                 {"languageService", check["languageService"]},
                 {"checks", check["checks"]},
                 {"projects", found},
-                {"capabilities", Json::array({"jobs", "results", "launch", "debug", "tests", "library", "toolchains",
-                                              "targets", "platforms", "cache", "graphs", "pack", "settings", "i18n",
-                                              "commands", "manifest", "toml", "buildscript", "languageService"})}};
+                {"features", Json::array({"jobs", "results", "launch", "debug", "tests", "library", "toolchains",
+                                          "targets", "platforms", "cache", "graphs", "pack", "settings", "i18n",
+                                          "commands", "manifest", "toml", "buildscript", "languageService"})}};
 }
 
 std::expected<Json, rpc::Error> Session::update_settings(const Json& p) {
@@ -570,12 +608,15 @@ std::expected<Json, rpc::Error> Session::update_settings(const Json& p) {
         before = settings_.value("mcpp.path", "");
         settings_ = resolved["values"];
         if (p.contains("trusted")) trusted_ = p["trusted"].get<bool>();
+        if (p.contains("mcpplsServes") && p["mcpplsServes"].is_boolean()) mcpplsServes_ = p["mcpplsServes"].get<bool>();
         if (p.contains("locale")) {
             std::lock_guard localeLock(localeMutex_);
             locale_ = i18n::normalize_locale(p["locale"].get<std::string>());
         }
     }
     if (before != resolved["values"].value("mcpp.path", "")) locate_mcpp();
+    // A switch or a severity may have changed what each open document earns.
+    for (const auto& d : documents_.all()) publish(d);
     return resolved;
 }
 
@@ -962,7 +1003,7 @@ std::expected<Json, rpc::Error> Session::language_service(const Json& p) {
         mcpplsSeen_ = seen;
         mcpplsActions_ = report.actions;
     }
-    if (changed) rpc_.notify("languageService/changed", Json{{"root", out["root"]}, {"state", out["state"]},
+    if (changed) rpc_.notify("mcpp-ide/languageService/changed", Json{{"root", out["root"]}, {"state", out["state"]},
                                                              {"workspaceState", report.workspace.is_object() ? report.workspace.value("state", "none") : "none"}});
     return out;
 }
@@ -1082,7 +1123,7 @@ std::expected<Json, rpc::Error> Session::capabilities_explain(const Json& p) {
     static constexpr Gate kGates[] = {
         {"targets.sets", "target-sets", "2026.10.30.1"},
         {"pack.formatList", "pkg-format-list", "2026.10.30.1"},
-        {"tests.debug", "test-launch", "2026.11.1.1"},
+        {"tests.debug", "test-launch", "2026.10.31.2"},
     };
     Json features = Json::array();
     for (const auto& g : kGates) {
@@ -1442,7 +1483,7 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
         in.close();
         if (fw)
             for (const auto& o : testing::read_report(*fw, text))
-                rpc_.notify("test/caseResult", Json{{"jobId", jobId}, {"root", root.generic_string()}, {"test", test},
+                rpc_.notify("mcpp-ide/test/caseResult", Json{{"jobId", jobId}, {"root", root.generic_string()}, {"test", test},
                                                     {"case", o.name}, {"status", o.status}, {"durationMs", o.durationMs},
                                                     {"message", o.message}});
         std::error_code ignored;
@@ -1469,20 +1510,122 @@ Session::PackOptions Session::pack_options(const std::filesystem::path& cwd) {
     return o;
 }
 
+documents::Options Session::document_options() const {
+    std::lock_guard lock(mutex_);
+    std::string locale;
+    {
+        std::lock_guard localeLock(localeMutex_);
+        locale = locale_;
+    }
+    return documents::options_of(settings_, trusted_, mcpplsServes_, locale);
+}
+
+void Session::publish(const documents::Document& d) {
+    if (d.kind == documents::Kind::other) return;
+    rpc_.notify("textDocument/publishDiagnostics",
+                Json{{"uri", d.uri}, {"version", d.version}, {"diagnostics", documents::diagnostics(d, document_options())}});
+}
+
+std::optional<Json> Session::catalogue(const std::filesystem::path& cwd) {
+    {
+        std::lock_guard lock(mutex_);
+        if (!searchCache_.is_null() && std::chrono::steady_clock::now() - searchAt_ < std::chrono::minutes(10)) return searchCache_;
+        if (catalogueAsked_) return std::nullopt;
+        catalogueAsked_ = true;
+        if (!catalogueNoticed_) {
+            catalogueNoticed_ = true;
+            rpc_.notify("window/showMessage",
+                        Json{{"type", 3}, {"message", t("Completing dependency versions runs `mcpp search`, which may use the network.")}});
+        }
+    }
+    std::thread([this, cwd] {
+        auto r = query(cwd, {"search", "--format", "json"});
+        std::lock_guard lock(mutex_);
+        catalogueAsked_ = false;
+        if (r && r->envelope.is_object() && r->envelope.value("kind", "") == "mcpp.search") {
+            searchCache_ = r->envelope;
+            searchAt_ = std::chrono::steady_clock::now();
+        }
+    }).detach();
+    return std::nullopt;
+}
+
+void Session::install_documents() {
+    auto& s = rpc_;
+    s.on_notification("initialized", [](const Json&) {});
+    s.on_notification("textDocument/didOpen", [this](const Json& p) {
+        const auto& d = p.value("textDocument", Json::object());
+        const auto uri = d.value("uri", "");
+        documents_.open(uri, d.value("version", 0), d.value("text", ""));
+        if (auto doc = documents_.get(uri)) publish(*doc);
+    });
+    s.on_notification("textDocument/didChange", [this](const Json& p) {
+        const auto& d = p.value("textDocument", Json::object());
+        const auto uri = d.value("uri", "");
+        const auto changes = p.value("contentChanges", Json::array());
+        // Full synchronisation: the last change is the whole text.
+        if (changes.empty() || !changes.back().contains("text")) return;
+        documents_.change(uri, d.value("version", 0), changes.back()["text"].get<std::string>());
+        if (auto doc = documents_.get(uri)) publish(*doc);
+    });
+    s.on_notification("textDocument/didClose", [this](const Json& p) {
+        const auto uri = p.value("textDocument", Json::object()).value("uri", "");
+        documents_.close(uri);
+        rpc_.notify("textDocument/publishDiagnostics", Json{{"uri", uri}, {"diagnostics", Json::array()}});
+    });
+    // Answered on the reading thread: each sees the documents as the notifications before it left them.
+    auto at = [this](const Json& p) -> std::optional<std::tuple<documents::Document, int, int>> {
+        auto doc = documents_.get(p.value("textDocument", Json::object()).value("uri", ""));
+        if (!doc) return std::nullopt;
+        const auto& pos = p.value("position", Json::object());
+        return std::tuple{*doc, pos.value("line", 0), pos.value("character", 0)};
+    };
+    s.on_inline("textDocument/completion", [this, at](const Json& p, const rpc::Context&) -> Result {
+        auto a = at(p);
+        if (!a) return Json(nullptr);
+        const auto& [doc, line, character] = *a;
+        const auto options = document_options();
+        bool need = false;
+        auto list = documents::completion(doc, line, character, options, nullptr, need);
+        if (need) {
+            if (auto c = catalogue(doc.path.parent_path())) list = documents::completion(doc, line, character, options, &*c, need);
+        }
+        return list;
+    });
+    s.on_inline("textDocument/hover", [this, at](const Json& p, const rpc::Context&) -> Result {
+        auto a = at(p);
+        if (!a) return Json(nullptr);
+        const auto& [doc, line, character] = *a;
+        return documents::hover(doc, line, character, document_options());
+    });
+    s.on_inline("textDocument/definition", [this, at](const Json& p, const rpc::Context&) -> Result {
+        auto a = at(p);
+        if (!a) return Json(nullptr);
+        const auto& [doc, line, character] = *a;
+        return documents::definition(doc, line, character, document_options());
+    });
+    s.on_inline("textDocument/documentSymbol", [this](const Json& p, const rpc::Context&) -> Result {
+        auto doc = documents_.get(p.value("textDocument", Json::object()).value("uri", ""));
+        if (!doc) return Json(nullptr);
+        return documents::symbols(*doc);
+    });
+}
+
 void Session::install() {
     auto& s = rpc_;
+    install_documents();
     s.on("initialize", [this](const Json& p, const rpc::Context&) { return initialize(p); });
-    s.on("settings/update", [this](const Json& p, const rpc::Context&) { return update_settings(p); });
-    s.on("settings/registry", [this](const Json&, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/settings/update", [this](const Json& p, const rpc::Context&) { return update_settings(p); });
+    s.on("mcpp-ide/settings/registry", [this](const Json&, const rpc::Context&) -> Result {
         std::lock_guard lock(localeMutex_);
         return settings::registry(locale_);
     });
-    s.on("settings/preset", [](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/settings/preset", [](const Json& p, const rpc::Context&) -> Result {
         auto preset = settings::preset(p.value("id", ""));
         if (!preset) return std::unexpected(invalid("no such preset"));
         return *preset;
     });
-    s.on("i18n/bundle", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/i18n/bundle", [this](const Json& p, const rpc::Context&) -> Result {
         std::string locale;
         {
             std::lock_guard lock(localeMutex_);
@@ -1490,11 +1633,11 @@ void Session::install() {
         }
         return i18n::bundle(p.value("locale", locale));
     });
-    s.on("selfCheck", [this](const Json&, const rpc::Context&) -> Result { locate_mcpp(); return self_check(); });
-    s.on("commands/list", [this](const Json& p, const rpc::Context&) { return commands(p); });
-    s.on("menu/quick", [this](const Json& p, const rpc::Context&) { return quick_menu(p); });
-    s.on("languageService/status", [this](const Json& p, const rpc::Context&) { return language_service(p); });
-    s.on("projects/list", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/selfCheck", [this](const Json&, const rpc::Context&) -> Result { locate_mcpp(); return self_check(); });
+    s.on("mcpp-ide/commands/list", [this](const Json& p, const rpc::Context&) { return commands(p); });
+    s.on("mcpp-ide/menu/quick", [this](const Json& p, const rpc::Context&) { return quick_menu(p); });
+    s.on("mcpp-ide/languageService/status", [this](const Json& p, const rpc::Context&) { return language_service(p); });
+    s.on("mcpp-ide/projects/list", [this](const Json& p, const rpc::Context&) -> Result {
         Json out = Json::array();
         std::vector<std::filesystem::path> folders;
         {
@@ -1509,63 +1652,63 @@ void Session::install() {
             }
         return out;
     });
-    s.on("projects/forFile", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/projects/forFile", [this](const Json& p, const rpc::Context&) -> Result {
         auto proj = projects::project_for(p.value("path", ""), p.value("boundary", ""));
         if (!proj) return Json(nullptr);
         watcher_->watch(proj->root);
         return project_json(*proj);
     });
-    s.on("project/summary", [this](const Json& p, const rpc::Context&) { return project_summary(p); });
-    s.on("mcpp/exec", [this](const Json& p, const rpc::Context&) { return mcpp_exec(p); });
-    s.on("languageService/exec", [this](const Json& p, const rpc::Context&) { return language_service_exec(p); });
-    s.on("project/files", [](const Json& p, const rpc::Context&) -> Result { return projects::files(root_of(p)); });
-    s.on("project/new", [this](const Json& p, const rpc::Context&) { return project_new(p); });
-    s.on("result/last", [](const Json& p, const rpc::Context&) -> Result { return projects::last_result(root_of(p)); });
-    s.on("job/start", [this](const Json& p, const rpc::Context&) { return job_start(p); });
-    s.on("job/cancel", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/project/summary", [this](const Json& p, const rpc::Context&) { return project_summary(p); });
+    s.on("mcpp-ide/mcpp/exec", [this](const Json& p, const rpc::Context&) { return mcpp_exec(p); });
+    s.on("mcpp-ide/languageService/exec", [this](const Json& p, const rpc::Context&) { return language_service_exec(p); });
+    s.on("mcpp-ide/project/files", [](const Json& p, const rpc::Context&) -> Result { return projects::files(root_of(p)); });
+    s.on("mcpp-ide/project/new", [this](const Json& p, const rpc::Context&) { return project_new(p); });
+    s.on("mcpp-ide/result/last", [](const Json& p, const rpc::Context&) -> Result { return projects::last_result(root_of(p)); });
+    s.on("mcpp-ide/job/start", [this](const Json& p, const rpc::Context&) { return job_start(p); });
+    s.on("mcpp-ide/job/cancel", [this](const Json& p, const rpc::Context&) -> Result {
         return Json{{"cancelled", jobs_->cancel(p.value("jobId", ""))}};
     });
-    s.on("job/list", [this](const Json&, const rpc::Context&) -> Result { return jobs_->list(); });
-    s.on("run/launch", [this](const Json& p, const rpc::Context& c) { return run_launch(p, c); });
-    s.on("debug/configuration", [this](const Json& p, const rpc::Context& c) { return debug_configuration(p, c); });
-    s.on("test/list", [this](const Json& p, const rpc::Context&) { return test_list(p); });
-    s.on("source/entries", [this](const Json& p, const rpc::Context&) { return source_entries(p); });
-    s.on("test/cases", [this](const Json& p, const rpc::Context&) { return test_cases(p); });
-    s.on("test/runCases", [this](const Json& p, const rpc::Context&) { return test_run_cases(p); });
-    s.on("project/mcpp", [this](const Json& p, const rpc::Context&) { return project_mcpp(p); });
-    s.on("project/refresh", [this](const Json& p, const rpc::Context&) { return project_refresh(p); });
-    s.on("capabilities/explain", [this](const Json& p, const rpc::Context&) { return capabilities_explain(p); });
-    s.on("report/collect", [this](const Json& p, const rpc::Context&) { return report_collect(p); });
-    s.on("library/search", [this](const Json& p, const rpc::Context&) { return library_search(p); });
-    s.on("library/indexes", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/job/list", [this](const Json&, const rpc::Context&) -> Result { return jobs_->list(); });
+    s.on("mcpp-ide/run/launch", [this](const Json& p, const rpc::Context& c) { return run_launch(p, c); });
+    s.on("mcpp-ide/debug/configuration", [this](const Json& p, const rpc::Context& c) { return debug_configuration(p, c); });
+    s.on("mcpp-ide/test/list", [this](const Json& p, const rpc::Context&) { return test_list(p); });
+    s.on("mcpp-ide/source/entries", [this](const Json& p, const rpc::Context&) { return source_entries(p); });
+    s.on("mcpp-ide/test/cases", [this](const Json& p, const rpc::Context&) { return test_cases(p); });
+    s.on("mcpp-ide/test/runCases", [this](const Json& p, const rpc::Context&) { return test_run_cases(p); });
+    s.on("mcpp-ide/project/mcpp", [this](const Json& p, const rpc::Context&) { return project_mcpp(p); });
+    s.on("mcpp-ide/project/refresh", [this](const Json& p, const rpc::Context&) { return project_refresh(p); });
+    s.on("mcpp-ide/capabilities/explain", [this](const Json& p, const rpc::Context&) { return capabilities_explain(p); });
+    s.on("mcpp-ide/report/collect", [this](const Json& p, const rpc::Context&) { return report_collect(p); });
+    s.on("mcpp-ide/library/search", [this](const Json& p, const rpc::Context&) { return library_search(p); });
+    s.on("mcpp-ide/library/indexes", [this](const Json& p, const rpc::Context&) -> Result {
         auto r = query(any_root(p), {"index", "list", "--format", "json"});
         if (!r) return std::unexpected(r.error());
         return r->envelope.is_object() ? r->envelope["data"] : Json(nullptr);
     });
-    s.on("library/add", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/library/add", [this](const Json& p, const rpc::Context&) -> Result {
         auto dep = p.value("dependency", "");
         if (p.contains("version") && p["version"].is_string() && !p["version"].get<std::string>().empty())
             dep += "@" + p["version"].get<std::string>();
         return job_start(Json{{"kind", "add"}, {"root", p.value("root", "")}, {"dependency", dep}});
     });
-    s.on("library/updateIndex", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/library/updateIndex", [this](const Json& p, const rpc::Context&) -> Result {
         {
             std::lock_guard lock(mutex_);
             searchCache_ = nullptr;
         }
         return job_start(Json{{"kind", "command"}, {"root", any_root(p).generic_string()}, {"args", Json::array({"index", "update"})}});
     });
-    s.on("toolchains/list", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/toolchains/list", [this](const Json& p, const rpc::Context&) -> Result {
         auto r = query(any_root(p), {"toolchain", "list", "--format", "json"});
         if (!r) return std::unexpected(r.error());
         return views::toolchains(r->envelope);
     });
-    s.on("toolchains/install", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/toolchains/install", [this](const Json& p, const rpc::Context&) -> Result {
         Json job{{"kind", "toolchain"}, {"root", any_root(p).generic_string()}, {"spec", p.value("spec", "")}};
         if (p.contains("target")) job["target"] = p["target"];
         return job_start(job);
     });
-    s.on("toolchains/setDefault", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/toolchains/setDefault", [this](const Json& p, const rpc::Context&) -> Result {
         auto spec = p.value("spec", "");
         if (spec.empty()) return std::unexpected(invalid("toolchains/setDefault names a spec"));
         auto r = query(any_root(p), {"toolchain", "default", spec});
@@ -1573,8 +1716,8 @@ void Session::install() {
         if (r->exitCode != 0) return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, r->narration});
         return Json{{"spec", spec}};
     });
-    s.on("targets/list", [this](const Json& p, const rpc::Context&) { return targets(p); });
-    s.on("cache/inventory", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/targets/list", [this](const Json& p, const rpc::Context&) { return targets(p); });
+    s.on("mcpp-ide/cache/inventory", [this](const Json& p, const rpc::Context&) -> Result {
         auto r = query(any_root(p), {"cache", "list", "--format", "json"});
         if (!r) return std::unexpected(r.error());
         views::CacheOptions o;
@@ -1582,11 +1725,11 @@ void Session::install() {
         o.topN = p.value("topN", topN.is_number() ? topN.get<int>() : 5);
         return views::cache_inventory(r->envelope, o);
     });
-    s.on("cache/plan", [this](const Json& p, const rpc::Context&) { return cache_plan(p); });
-    s.on("cache/apply", [this](const Json& p, const rpc::Context&) { return cache_apply(p); });
-    s.on("graph/packages", [this](const Json& p, const rpc::Context&) { return graph(p, false); });
-    s.on("graph/modules", [this](const Json& p, const rpc::Context&) { return graph(p, true); });
-    s.on("pack/formats", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/cache/plan", [this](const Json& p, const rpc::Context&) { return cache_plan(p); });
+    s.on("mcpp-ide/cache/apply", [this](const Json& p, const rpc::Context&) { return cache_apply(p); });
+    s.on("mcpp-ide/graph/packages", [this](const Json& p, const rpc::Context&) { return graph(p, false); });
+    s.on("mcpp-ide/graph/modules", [this](const Json& p, const rpc::Context&) { return graph(p, true); });
+    s.on("mcpp-ide/pack/formats", [this](const Json& p, const rpc::Context&) -> Result {
         auto r = query(any_root(p), {"pack", "--list-formats"});
         if (!r) return std::unexpected(r.error());
         Json out = r->envelope.is_object() && r->envelope.contains("data") ? r->envelope["data"] : Json::object();
@@ -1597,12 +1740,12 @@ void Session::install() {
         out["linkages"] = options.linkage ? Json::array({"static", "shared"}) : Json::array();
         return out;
     });
-    s.on("pack/start", [this](const Json& p, const rpc::Context&) -> Result {
+    s.on("mcpp-ide/pack/start", [this](const Json& p, const rpc::Context&) -> Result {
         Json job = p;
         job["kind"] = "pack";
         return job_start(job);
     });
-    s.on("manifest/check", [this](const Json& p, const rpc::Context&) { return manifest_check(p); });
+    s.on("mcpp-ide/manifest/check", [this](const Json& p, const rpc::Context&) { return manifest_check(p); });
 }
 
 }  // namespace mcppide::server

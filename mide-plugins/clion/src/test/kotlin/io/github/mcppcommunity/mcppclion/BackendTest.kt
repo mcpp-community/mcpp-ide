@@ -1,5 +1,6 @@
 // The wire and the backend, without an IDE: frames reassemble whatever the chunking; a session over
-// the mock mcpp finds the project, runs a build to `ok`, and lists the commands this editor offers
+// the mock mcpp (protocol 2, an LSP server) finds the project, publishes mcpp.toml's diagnostics and
+// completes it, runs a build to `ok`, and lists the commands this editor offers
 // (a forward to one of mcppls's actions only under the JetBrains id mcppls states). The session test runs when the build passes
 // the backend and the mock mcpp (MCPP_IDE_BACKEND, MCPP_IDE_MOCK_MCPP).
 package io.github.mcppcommunity.mcppclion
@@ -78,11 +79,32 @@ class BackendTest {
         File(root, "mcpp.toml").writeText("[package]\nname = \"app\"\nversion = \"0.1.0\"\n")
         Backend(listOf(backend!!, "serve")).use { b ->
             val init = b.request("initialize", JsonObject().apply {
-                addProperty("editor", "jetbrains")
-                add("settings", JsonObject().apply { addProperty("mcpp.path", mock) })
-                add("workspaceFolders", JsonArray().apply { add(root.path) })
+                add("workspaceFolders", JsonArray().apply { add(JsonObject().apply { addProperty("uri", uriOf(root.path)) }) })
+                add("initializationOptions", JsonObject().apply {
+                    addProperty("editor", "jetbrains")
+                    add("settings", JsonObject().apply { addProperty("mcpp.path", mock) })
+                })
             }).get(30, TimeUnit.SECONDS).asJsonObject
             assertEquals(1, init.getAsJsonArray("projects").size())
+            assertEquals(2, init["protocol"].asInt)
+            // mcpp.toml through LSP: opened, its diagnostics published (0-based, UTF-16), completion answers.
+            val uri = uriOf(File(root, "mcpp.toml").path)
+            val published = CompletableFuture<JsonElement>()
+            b.on("textDocument/publishDiagnostics") { _, p -> published.complete(p) }
+            b.notify("textDocument/didOpen", JsonObject().apply {
+                add("textDocument", JsonObject().apply {
+                    addProperty("uri", uri); addProperty("languageId", "mcpp-toml"); addProperty("version", 1)
+                    addProperty("text", "[package]\nname = \"名字\"\ncolour = 1\n")
+                })
+            })
+            val diagnostic = published.get(30, TimeUnit.SECONDS).asJsonObject.getAsJsonArray("diagnostics")[0].asJsonObject
+            assertEquals("mcpp.manifest.unknownKey", diagnostic["code"].asString)
+            assertEquals(2, diagnostic.getAsJsonObject("range").getAsJsonObject("start")["line"].asInt)
+            val list = b.request("textDocument/completion", JsonObject().apply {
+                add("textDocument", JsonObject().apply { addProperty("uri", uri) })
+                add("position", JsonObject().apply { addProperty("line", 0); addProperty("character", 1) })
+            }).get(30, TimeUnit.SECONDS).asJsonObject
+            assertTrue(list.getAsJsonArray("items").any { it.asJsonObject["label"].asString == "[build]" })
             val finished = CompletableFuture<JsonElement>()
             b.on("job/finished") { _, p -> finished.complete(p) }
             b.request("job/start", JsonObject().apply { addProperty("kind", "build"); addProperty("root", root.path) }).get(30, TimeUnit.SECONDS)
@@ -94,6 +116,17 @@ class BackendTest {
                 .all { it["action"].asJsonObject["command"]?.asString?.startsWith("community.mcpp.mcppls.") == true })
         }
         root.deleteRecursively()
+    }
+
+    @Test
+    fun snippetsAndMarkdownAsCLionShowsThem() {
+        assertEquals("name = \"1.0.0\"" to 0, io.github.mcppcommunity.mcppclion.editor.expandSnippet("\${1:name} = \"\${2:1.0.0}\""))
+        assertEquals("role = source;" to 7, io.github.mcppcommunity.mcppclion.editor.expandSnippet("role = \${3|source,check|};"))
+        assertEquals("x()" to 2, io.github.mcppcommunity.mcppclion.editor.expandSnippet("x($1)"))
+        assertEquals("<p><b>[package]</b></p><p>plane: <code>identity</code> <a href=\"u\">r</a></p>",
+            io.github.mcppcommunity.mcppclion.editor.markdownToHtml("**[package]**\n\nplane: `identity` [r](u)"))
+        assertEquals("file:///C:/a%20b/mcpp.toml", uriOf("C:\\a b\\mcpp.toml"))
+        assertEquals("C:/a b/mcpp.toml", io.github.mcppcommunity.mcppclion.editor.pathOf("file:///C:/a%20b/mcpp.toml"))
     }
 
     @Test

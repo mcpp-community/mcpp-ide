@@ -66,7 +66,7 @@ test("the scan still inspects every source file", () => {
   for (const expected of [
     path.join("src", "cli", "controller.ts"),
     path.join("src", "extension.ts"),
-    path.join("src", "toml", "completion.ts"),
+    path.join("src", "toml", "parser.ts"),
     path.join("src", "views", "languageServerView.ts"),
   ]) {
     assert.ok(files.includes(path.join(process.cwd(), expected)), `the scan skipped ${expected}`);

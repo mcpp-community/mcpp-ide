@@ -16,8 +16,8 @@ without an Extension Host, and the parts that cannot are small.
 | `src/config/` | Settings registry access, validation, the settings panel, presets | `access.ts`, `panel.ts`, `migrate.ts` |
 | `src/cli/` | mcpp process runner, protocol probe, tasks, toolchain parsing, cache/cleanup plans, artifacts walk, self-check text | `controller.ts` |
 | `src/projects/` | `mcpp.toml` discovery, the `mcpp.inProject` context key, the manifest summary | no |
-| `src/toml/` | Tolerant TOML parser, snapshot reader, structural completion, diagnostics | `providers.ts` |
-| `src/buildscript/` | `build.mcpp` API snapshot, known modules, static analysis | `providers.ts` |
+| `src/toml/` | The tolerant structure reader the project and library views read a manifest with | no |
+| `src/ide/` | The session with the mcpp-ide backend (its language client: mcpp.toml's and build.mcpp's rules layer, [../../../docs/rules.md](../../../docs/rules.md)), jobs, debugging, the Testing view | `session.ts` and the views' adapters |
 | `src/mcppls/` | The mcppls contract, capability probe, state normaliser, bridge | `stateSource.ts` |
 | `src/views/` | Tree models as data, the shared tree provider, the three views | `treeProvider.ts`, `projectView.ts`, `cacheView.ts`, `languageServerView.ts` |
 | `src/i18n/` | Runtime string resolution (`t.ts`) and the pure resolver (`translate.ts`) | `t.ts` |
@@ -32,8 +32,8 @@ A module that does not import `vscode` runs under plain `node --test`, cannot to
 by accident, and is the place to put a decision. The `vscode`-touching modules are exactly:
 
 `src/extension.ts`, `src/cli/controller.ts`, `src/config/{access,panel,migrate}.ts`,
-`src/i18n/t.ts`, `src/mcppls/stateSource.ts`, `src/toml/providers.ts`,
-`src/buildscript/providers.ts`, `src/views/{treeProvider,projectView,cacheView,languageServerView}.ts`.
+`src/i18n/t.ts`, `src/mcppls/stateSource.ts`, `src/ide/*` (but `protocol.ts` and `mapping.ts`),
+`src/views/{treeProvider,projectView,cacheView,languageServerView}.ts`.
 
 Two rules follow from that:
 
@@ -42,9 +42,10 @@ Two rules follow from that:
   quietly add a sixth level of danger;
 - a `vscode`-touching module should only translate a decision into API calls, not make it.
 
-CI also asserts the boundary that matters most: the packaged extension contains no
-`vscode-languageclient` and no second language client (`test ! -e dist/src/languageClient.js`
-plus a `rg` check in `.github/workflows/ci.yml`).
+CI also asserts the boundary that matters most: the one language client is the session's, connected
+to the mcpp-ide backend for mcpp.toml and build.mcpp, and serves no other C++ source (C++ is C++
+Modules'); it is bundled into `dist/vendor/languageclient.js`, so the package carries no
+node_modules (`test/artifacts.test.ts` and `.github/workflows/ci.yml`).
 
 ## Single sources of truth
 
@@ -54,8 +55,7 @@ plus a `rg` check in `.github/workflows/ci.yml`).
 | Setting labels | `package.nls.json` / `package.nls.zh-cn.json` | VS Code, at startup |
 | Runtime strings (Chinese) | `data/i18n/zh-cn.json` | `src/i18n/t.ts`, `tools/generate-l10n.mjs` |
 | Runtime strings VS Code reads | `l10n/bundle.l10n*.json` (generated, do not edit) | `vscode.l10n.t` under `mcpp.ui.language: auto` |
-| `build.mcpp` API | `data/buildscript-api.json` (generated) | `src/buildscript/api.ts` |
-| `mcpp.toml` shape | `data/toml-schema.json` (generated) | `src/toml/schema.ts` |
+| `build.mcpp` API, `mcpp.toml` shape | the backend's `spec/buildscript-api.json`, `spec/toml-schema.json` | the backend's rules layer |
 | Command ids | `src/commands/ids.ts` | the manifest is held to it by `test/artifacts.test.ts` (command list, view ids, colour ids) and `test/commands/ids.test.ts` |
 
 The two generated snapshots come from an mcpp checkout and are committed, because the extension
@@ -105,7 +105,6 @@ A note on the two directory names, because they look like synonyms and are not:
 | --- | --- | --- |
 | Config | `npm run check:config` (`tools/check-config.mjs`) | registry shape; that `package.json` has exactly the registry's keys with the same type, default, enum, scope, bounds and `%key%` references; that `package.nls.json` carries `<key>.title`, `<key>.description` and any `deprecationMessage`, matching the registry text |
 | Localisation | `npm run check:l10n` (`tools/l10n-check.mjs`) | every `t("…")` literal in `src/**` has a `data/i18n/zh-cn.json` entry; `package.nls.json` and `package.nls.zh-cn.json` have identical key sets; every `%key%` in `package.json` resolves |
-| Snapshots | `npm run check:generated` (`tools/check-generators.mjs`) | regenerates `data/buildscript-api.json` and `data/toml-schema.json` and fails on any diff; **skips with a notice** when there is no mcpp checkout |
 | Docs | `npm run gen:docs` (`tools/generate-settings-docs.mjs`) | regenerates `docs/settings.md`; the stated drift check is `npm run gen:docs` then `git diff --exit-code` |
 | Tests | `npm test` | runs `npm run check`, compiles, then `node --test "dist/test/**/*.test.js"` |
 | Extension Host | `npm run test:e2e` | activates the extension against the `test/e2e` fixtures |

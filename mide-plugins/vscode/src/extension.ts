@@ -22,12 +22,9 @@ import { describeState } from "./mcppls/state";
 import {
   languageServerEnabled,
   languageServerInstalled,
-  languageServerServes,
   languageServerVersion,
   readLanguageServerState,
 } from "./mcppls/stateSource";
-import { registerBuildScriptProviders } from "./buildscript/providers";
-import { registerTomlProviders } from "./toml/providers";
 import {
   buildModuleSetupPlan,
   executeModuleSetup,
@@ -295,7 +292,9 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     cliController.refreshStatus();
   };
   // 0.9.0's one seam for running mcpp now runs it through the backend; the parsers are unchanged.
+  // Where the backend does not run (the declared degraded mode, part 2 §8 F15), mcpp runs here.
   useMcppExecutor(async (_executable, args, cwd, options = {}) => {
+    if (session.degraded) return undefined;
     try {
       const answer = await session.request<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }>("mcpp/exec", {
         args,
@@ -309,6 +308,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     }
   });
   useMcpplsExecutor(async (args, cwd, options = {}) => {
+    if (session.degraded) return undefined;
     try {
       const answer = await session.request<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }>("languageService/exec", {
         args,
@@ -380,28 +380,9 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     languageService,
   });
 
-  // Text analysis only: no mcpp process, so both stay available in a restricted
-  // workspace, which is exactly what the `limited` capability promises.
-  registerTomlProviders(
-    extensionContext,
-    () => read<boolean>("mcpp.toml.completion"),
-    () => ({
-      syntax: read("mcpp.toml.diagnostics.syntax"),
-      unknownSection: read("mcpp.toml.diagnostics.unknownSection"),
-      unknownKey: read("mcpp.toml.diagnostics.unknownKey"),
-      planeSeparation: read("mcpp.toml.diagnostics.planeSeparation"),
-      legacyKeys: read("mcpp.toml.diagnostics.legacyKeys"),
-    }),
-    () => read<boolean>("mcpp.toml.diagnostics.enabled"),
-    () => read<boolean>("mcpp.toml.hover"),
-    () => read<boolean>("mcpp.toml.navigation"),
-  );
-  registerBuildScriptProviders(extensionContext, () => {
-    if (!read<boolean>("mcpp.buildScript.intelligence") || !read<boolean>("mcpp.buildScript.diagnostics")) {
-      return "off";
-    }
-    return read<"warning" | "info" | "off">("mcpp.buildScript.diagnostics.severity");
-  }, languageServerServes);
+  // mcpp.toml's and build.mcpp's completion, hover, jumps and diagnostics are the backend's, which
+  // the language client of `session` connects (design 2026-10-30 part 2 §8): text analysis that runs
+  // nothing, so they serve a restricted workspace too, as the `limited` capability promises.
 
   extensionContext.subscriptions.push(
     output,

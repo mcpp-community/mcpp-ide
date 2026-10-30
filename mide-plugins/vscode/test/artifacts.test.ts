@@ -12,6 +12,7 @@ interface PackageManifest {
   icon?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
   repository?: { url?: string };
   homepage?: string;
   bugs?: { url?: string };
@@ -106,8 +107,11 @@ test("declares mcpp-language-server as the C++ modules language service", () => 
     assert.match(command.title ?? "", /^%command\.[^%]+\.title%$/, `command ${command.command} title must be an nls key`);
     assert.equal(command.category, "%category%");
   }
+  // The language client connects the backend (mcpp.toml, build.mcpp); it is bundled into dist/vendor,
+  // so the package carries no node_modules and the manifest names no runtime dependency.
   assert.equal(manifest.dependencies?.["vscode-languageclient"], undefined);
-  assert.equal(manifest.devDependencies?.["vscode-languageclient"], undefined);
+  assert.equal(manifest.devDependencies?.["vscode-languageclient"], "9.0.1");
+  assert.match(manifest.scripts?.compile ?? "", /node tools\/bundle-languageclient\.mjs/);
   assert.deepEqual(manifest.contributes?.configurationDefaults?.["files.associations"], {
     "*.ccm": "cpp",
     "*.cppm": "cpp",
@@ -270,25 +274,33 @@ test("every webview host holds its document through the kit", () => {
   assert.deepEqual(offenders, [], "a webview nonce is minted outside src/webview/document.ts");
 });
 
-test("no module drives a second language client", () => {
-  // The same rule the `package` job enforces, but runnable here: the CI grep used
-  // to match the bare name, and the compiled comments that explain why this
-  // extension does *not* use a language client made it fail on a clean build.
+test("the one language client is the backend's, and it serves no C++ source", () => {
+  // C++ is C++ Modules' (mcppls): a second client over C++ sources would answer every request
+  // twice. The backend's client (src/ide/session.ts) reads mcpp.toml and build.mcpp alone.
   const offenders: string[] = [];
   for (const [file, text] of sourceFiles()) {
+    if (file === path.join("src", "ide", "session.ts")) {
+      continue;
+    }
     const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    if (/from\s+["']vscode-languageclient["']|require\(["']vscode-languageclient["']\)/.test(code)) {
+    if (/vscode-languageclient|vendor\/languageclient/.test(code)) {
       offenders.push(file);
     }
   }
-  assert.deepEqual(offenders, [], "a language client is imported again");
+  assert.deepEqual(offenders, [], "a language client is driven outside the session");
+  const session = readFileSync(path.join(root, "src", "ide", "session.ts"), "utf8");
+  const selector = /export const DOCUMENT_SELECTOR = \[([\s\S]*?)\];/.exec(session)?.[1] ?? "";
+  assert.match(selector, /language: "mcpp-toml"/);
+  for (const entry of selector.split("\n").filter((line) => line.includes('language: "cpp"'))) {
+    assert.match(entry, /pattern: "\*\*\/build\.mcpp"/, `a C++ selector beyond build.mcpp: ${entry.trim()}`);
+  }
 });
 
 test("the committed snapshots record a clone-independent commit", () => {
   // `git rev-parse --short` shortens to the shortest unique prefix *for that
   // clone*, so the same mcpp produced a 7-character hash in a fresh CI checkout
   // and 8 in a developer's — and the drift gate went red on an unchanged API.
-  for (const file of ["data/buildscript-api.json", "data/toml-schema.json"]) {
+  for (const file of ["../../spec/buildscript-api.json", "../../spec/toml-schema.json"]) {
     const snapshot = JSON.parse(readFileSync(path.join(root, file), "utf8")) as {
       sourceVersion?: string;
       sourceCommit?: string;
@@ -677,10 +689,10 @@ test("CI runs the gates, the package checks, the drift check and every e2e varia
   assert.match(workflow, /npm run test:parity/);
   assert.match(workflow, /npm run package/);
   assert.match(workflow, /xvfb-run -a npm run test:e2e:one/);
-  // The manifest is spec/'s, and the snapshots are mcpp's.
+  // The manifest is spec/'s; the snapshots of mcpp are the backend's (spec/), read by its rules layer.
   assert.match(workflow, /mcpp-ide-dev -- gen vscode\n/);
-  assert.match(workflow, /repository: mcpp-community\/mcpp/);
-  assert.match(workflow, /MCPP_REPO: \$\{\{ github.workspace \}\}\/\.mcpp-source/);
+  // The declared degraded mode runs in the Extension Host too (part 2 §8, F15).
+  assert.match(workflow, /MCPP_E2E_NO_BACKEND: "1"/);
   assert.match(workflow, /npm run test:graphs-ui/);
   assert.match(workflow, /sunrisepeak.mcpp-language-server/);
   assert.match(workflow, /tools\/ci-vscode-cli\.mjs/);

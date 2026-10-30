@@ -61,30 +61,34 @@ export function quoteWindowsArgument(argument: string): string {
  * payload's runner and image, or a program). The output reaches the same parsers it reached when
  * the extension ran the programs itself. Any other program still runs here (`runProcess`).
  */
-let mcppExecutor: ProcessRunner | undefined;
-let mcpplsExecutor: ((args: string[], cwd?: string, options?: ProcessRunOptions) => Promise<ProcessResult>) | undefined;
+// An executor answers `undefined` where the backend does not run (the declared degraded mode,
+// design 2026-10-30 part 2 §8 F15): the program then runs here, as it did before the backend.
+type McppExecutor = (executable: string, args: string[], cwd?: string, options?: ProcessRunOptions) => Promise<ProcessResult | undefined>;
+type McpplsExecutor = (args: string[], cwd?: string, options?: ProcessRunOptions) => Promise<ProcessResult | undefined>;
+let mcppExecutor: McppExecutor | undefined;
+let mcpplsExecutor: McpplsExecutor | undefined;
 
-export function useMcppExecutor(executor: ProcessRunner | undefined): void {
+export function useMcppExecutor(executor: McppExecutor | undefined): void {
   mcppExecutor = executor;
 }
 
-export function useMcpplsExecutor(executor: typeof mcpplsExecutor): void {
+export function useMcpplsExecutor(executor: McpplsExecutor | undefined): void {
   mcpplsExecutor = executor;
 }
 
-/** Runs mcpp: through the backend when one is installed, else as `executable`. No trust check. */
-export function runMcppCommand(
+/** Runs mcpp: through the backend when one is installed and runs, else as `executable`. No trust check. */
+export async function runMcppCommand(
   executable: string,
   args: string[],
   cwd?: string,
   options: ProcessRunOptions = {},
 ): Promise<ProcessResult> {
-  return mcppExecutor !== undefined ? mcppExecutor(executable, args, cwd, options) : runProcess(executable, args, cwd, options);
+  return (await mcppExecutor?.(executable, args, cwd, options)) ?? runProcess(executable, args, cwd, options);
 }
 
-/** Runs mcppls: through the backend when one is installed, else `mcppls` from PATH. */
-export function runMcppls(args: string[], cwd?: string, options: ProcessRunOptions = {}): Promise<ProcessResult> {
-  return mcpplsExecutor !== undefined ? mcpplsExecutor(args, cwd, options) : runProcess("mcppls", args, cwd, options);
+/** Runs mcppls: through the backend when one is installed and runs, else `mcppls` from PATH. */
+export async function runMcppls(args: string[], cwd?: string, options: ProcessRunOptions = {}): Promise<ProcessResult> {
+  return (await mcpplsExecutor?.(args, cwd, options)) ?? runProcess("mcppls", args, cwd, options);
 }
 
 export async function runProcess(

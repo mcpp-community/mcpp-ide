@@ -52,5 +52,18 @@
         <!-- VS Code's chords (Ctrl+Alt+B/R/T) as keymaps of their own, generated from spec/commands.json. -->
         <bundledKeymap file="mcpp.xml"/>
         <bundledKeymap file="mcpp-macos.xml"/>
+
+        <!-- mcpp.toml (TOML, or plain text without the TOML plugin) and build.mcpp (C++ under either
+             engine, or plain text): the backend's rules layer (part 2 §8) over the session. -->
+        <completion.contributor language="any" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppCompletion"/>
+        <externalAnnotator language="TOML" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppAnnotator"/>
+        <externalAnnotator language="TEXT" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppAnnotator"/>
+        <externalAnnotator language="C++" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppAnnotator"/>
+        <externalAnnotator language="ObjectiveC" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppAnnotator"/>
+        <lang.documentationProvider language="TOML" order="first" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppDocumentation"/>
+        <lang.documentationProvider language="TEXT" order="first" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppDocumentation"/>
+        <lang.documentationProvider language="C++" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppDocumentation"/>
+        <lang.documentationProvider language="ObjectiveC" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppDocumentation"/>
+        <gotoDeclarationHandler implementation="io.github.mcppcommunity.mcppclion.editor.McppGotoDeclaration"/>
     </extensions>
 </idea-plugin>
