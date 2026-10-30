@@ -83,7 +83,9 @@ class LibraryView(private val project: Project, parent: Disposable) : McppView, 
     init {
         Disposer.register(parent, this)
         index.model = DefaultComboBoxModel(arrayOf(""))
-        index.renderer = com.intellij.ui.SimpleListCellRenderer.create("") { it.ifEmpty { session.t("All indexes") } }
+        index.renderer = com.intellij.ui.SimpleListCellRenderer.create<String> { label, value, _ ->
+            label.text = (value ?: "").ifEmpty { session.t("All indexes") }
+        }
         list.cellRenderer = object : ColoredListCellRenderer<JsonObject>() {
             override fun customizeCellRenderer(list: JList<out JsonObject>, value: JsonObject?, index: Int, selected: Boolean, hasFocus: Boolean) {
                 value ?: return

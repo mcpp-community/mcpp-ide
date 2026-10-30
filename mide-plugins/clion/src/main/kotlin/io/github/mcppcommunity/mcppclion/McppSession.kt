@@ -121,7 +121,7 @@ class McppSession(private val project: Project) : Disposable {
      */
     fun mcpplsServes(): Boolean = runCatching {
         val id = com.intellij.openapi.extensions.PluginId.getId(MCPPLS_PLUGIN_ID)
-        com.intellij.ide.plugins.PluginManagerCore.getPlugin(id) != null && !com.intellij.ide.plugins.PluginManagerCore.isDisabled(id)
+        com.intellij.ide.plugins.PluginManager.getInstance().findEnabledPlugin(id) != null
     }.getOrDefault(false)
 
     /** The plugin's directory: the parent of the lib/ holding this class's jar. */
