@@ -10,40 +10,30 @@
 
 ## The pages
 
-The views and pages a user sees -- the project tree, the libraries and a package's page, the cache,
-the settings page, the dependency and module graphs -- are mcpp-vscode's
-(`mide-plugins/vscode/src`), as mcpp-vscode 0.9.0 drew them; `registerPages` registers them. They
-read projects and the index from disk and run mcpp through the backend's `mcpp/exec` and mcppls
-through its `languageService/exec`; the extension starts no other process for either.
+The views and pages of VS Code -- the project tree, the libraries and a package's page, the cache,
+the settings page, the dependency and module graphs -- are mcpp-vscode's (`mide-plugins/vscode/src`),
+as mcpp-vscode 0.9.0 drew them; `registerPages` registers them. They read projects and the index
+from disk and run mcpp through the backend's `mcpp-ide/mcpp/exec` and mcppls through its
+`mcpp-ide/languageService/exec`; the extension starts no other process for either. The parity gates
+hold them to 0.9.0: the manifest's contributions and strings contain 0.9.0's exactly, and every
+page's document, rendered by the extension's generators, is byte-identical to the snapshot 0.9.0's
+generators render (`test/parity`).
 
-The workbench (`webui/`) runs the same modules in a browser host. `webui/src` answers what they ask
-of VS Code (the `vscode` module: settings, commands, dialogs, views, webviews) and of Node (`fs`,
-`path`, `os`, `crypto`) through a bridge to the IDE; `tools/bundle-webui.mjs` bundles them into one
-script. Views are tabs in the manifest's order and names; a webview is an iframe with the page's
-own document, its CSP and nonce, and the IDE's colours as the `--vscode-*` variables. The bridge
-carries requests through `mcppHostSend`/`mcppHostReceive`, and a synchronous file read as a
-`prompt` the host answers. mcpp-clion hosts the workbench in JCEF (`webui/Workbench.kt`).
-
-| Bridge action | What it stands for in VS Code | What mcpp-clion answers (Workbench.kt) |
-|---|---|---|
-| `rpc` | the backend's method | the backend's method |
-| `settings.read`, `settings.write` | the configuration | the plugin's settings store |
-| `message`, `input`, `pick`, `saveDialog`, `progress.*` | notifications, input box, quick pick, save dialog, progress | notifications or dialogs, input dialog, list popup, file saver, background task |
-| `openFile`, `openText`, `clipboard`, `openExternal` | editors, the clipboard, the browser | editors, the clipboard, the browser |
-| `command` | the command | the command table's action |
-| `fs.*`, `findFiles` | the file system | the file system |
-
-The parity gates hold the pages to 0.9.0: the manifest's contributions and strings contain 0.9.0's
-exactly; every page's document, rendered by the extension's generators, is byte-identical to the
-snapshot 0.9.0's generators render (`test/parity`); a Chromium test runs the workbench over a real
-backend (`webui/tests`).
+CLion has the same information in its own components (design 2026-10-30 part 2 §9): the "mcpp"
+tool window's Project, Libraries and Cache tabs are native trees and lists over the backend's view
+models (`projects/list`, `project/summary`, `project/mcpp`, `library/search`, `cache/inventory`),
+a package's page is HTML in the Libraries tab, the cleanups are the command table's with their
+confirmations, and Settings | Tools | mcpp is a form generated from `settings/registry`. A graph is
+the one page in JCEF: `webui/graph.html` draws the backend's `graph/packages` or `graph/modules`
+with mermaid and asks the IDE to open a module's source; a Chromium test runs it over a real
+backend (`webui/tests`). The strings are the backend's (`i18n/bundle`), the ones VS Code shows.
 
 ## The adapters
 
 | Directory | Plugin | `editor` | Declares | Holds |
 |---|---|---|---|---|
 | `mide-plugins/vscode` | mcpp-vscode | `vscode` | package.json's contributes, from `mcpp-ide-dev gen vscode` | the pages, tasks, the Testing view, debug configurations, Problems |
-| `mide-plugins/clion` | mcpp-clion | `jetbrains` (the IntelliJ platform) | actions and message bundles, from `mcpp-ide-dev gen jetbrains` | run configurations, the test tree, CLion's debugger, the workbench in JCEF |
+| `mide-plugins/clion` | mcpp-clion | `jetbrains` (the IntelliJ platform) | actions and message bundles, from `mcpp-ide-dev gen jetbrains` | run configurations, the test tree, CLion's debugger, the tool window's native views, the settings form, the graph page in JCEF |
 | `mide-plugins/nvim` | mcpp-nvim | `nvim` | nothing: `:Mcpp` reads the command table from the backend | jobs in a buffer, a terminal for the program, `vim.diagnostic` and the quickfix list, the view models as text, nvim-dap |
 
 `spec/commands.json` says which editors offer a command (`editors`, every editor when absent; a

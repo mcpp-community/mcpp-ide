@@ -70,6 +70,16 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
   buffers. While C++ Modules serves build.mcpp (`mcpplsServes`) it is left the unknownSymbol rule
   and the module names after `import`. One snapshot of each: `spec/toml-schema.json`,
   `spec/buildscript-api.json` (mcpp 2026.10.29.1's directives).
+- **CLion in its own components (§9).** The "mcpp" tool window's Project, Libraries and Cache tabs
+  are native trees and lists over the backend's view models (each project's mcpp, targets, tests,
+  libraries, last build, artifacts and platform, and what C++ Modules says; the indexes' packages, a
+  package's page and adding it to the project; what mcpp keeps and the command table's cleanups with
+  their confirmations). A graph of the packages or the modules is the one page in JCEF
+  (`webui/graph.html`, mermaid over `graph/packages` and `graph/modules`; a module opens its source),
+  tested in Chromium over a real backend. Settings | Tools | mcpp is a form generated from
+  `settings/registry`, with Apply, Reset and a search. The workbench that ran mcpp-vscode's pages in
+  JCEF, its `vscode` shim and its bridge are removed; the views' models and the settings form are
+  tested headless.
 - **The declared degraded mode (§8, F15).** Where the package's okrun does not run (macOS x86_64,
   Windows arm64, Linux armhf) VS Code says the backend does not run on this platform and goes on
   with build, run, test and the project pages, running mcpp's queries itself; an Extension Host run

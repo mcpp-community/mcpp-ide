@@ -32,7 +32,7 @@ import io.github.mcppcommunity.mcppclion.McppSession
 import io.github.mcppcommunity.mcppclion.run.McppRunConfiguration
 import io.github.mcppcommunity.mcppclion.run.McppRunConfigurationType
 import io.github.mcppcommunity.mcppclion.settings.McppSettings
-import io.github.mcppcommunity.mcppclion.webui.McppPanels
+import io.github.mcppcommunity.mcppclion.ui.McppPanels
 import java.io.File
 import java.nio.file.Paths
 
@@ -156,7 +156,7 @@ object Dispatch {
     }
 
     /** A job whose narration is not a console's: its end is a notification. */
-    private fun job(project: Project, method: String, params: JsonObject) {
+    fun job(project: Project, method: String, params: JsonObject) {
         val session = McppSession.get(project)
         session.request(method, params).thenAccept { r ->
             val id = r.asJsonObject["jobId"]?.asString ?: return@thenAccept

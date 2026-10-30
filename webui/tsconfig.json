@@ -3,32 +3,11 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": [
-      "ES2022",
-      "DOM"
-    ],
+    "lib": ["ES2022", "DOM"],
     "strict": true,
     "noEmit": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": [
-      "node"
-    ],
-    "baseUrl": ".",
-    "paths": {
-      "@noble/hashes/*": [
-        "../mide-plugins/vscode/node_modules/@noble/hashes/*"
-      ],
-      "buffer": [
-        "../mide-plugins/vscode/node_modules/buffer"
-      ]
-    },
-    "typeRoots": [
-      "../mide-plugins/vscode/node_modules/@types"
-    ]
+    "types": []
   },
-  "include": [
-    "src/**/*.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

@@ -1,8 +1,8 @@
 // mcpp-clion: mcpp's project features in CLion -- run configurations, the test tree, debugging, the
-// console's links, and mcpp-vscode's pages in a workbench (../../webui) -- over the mcpp-ide backend (`mcpp-ide serve`).
+// console's links, native views of the project, the libraries and the cache, the graphs in JCEF (../../webui),
+// and mcpp.toml's and build.mcpp's rules -- over the mcpp-ide backend (`mcpp-ide serve`).
 //
-// Language features are mcppls's: this plugin depends on the mcppls CLion plugin and registers no
-// language service. The declarations generated from ../../spec (actions, message bundles) are written
+// C++ language features are mcppls's: this plugin depends on the mcppls CLion plugin. The declarations generated from ../../spec (actions, message bundles) are written
 // by the backend's `mcpp-ide-dev gen jetbrains` before the resources are processed; nothing
 // generated is in the repository.
 //
@@ -89,21 +89,20 @@ val generateDeclarations = tasks.register<Exec>("generateDeclarations") {
     if (dev != null) commandLine(dev, "gen", "jetbrains", "--out", out.absolutePath)
     else commandLine("mcpp", "run", "mcpp-ide-dev", "--", "gen", "jetbrains", "--out", out.absolutePath)
 }
-// The workbench JCEF loads: mcpp-vscode's pages over ../../webui, bundled by the extension's
-// tools/bundle-webui.mjs (Node; `npm ci` in ../vscode first), with webui/files.txt naming its files.
+// The graph page JCEF loads (../../webui, mcpp design 2026-10-30 part 2 §9): webui/src/graph.ts and
+// mermaid, bundled by the extension's tools/bundle-webui.mjs (Node; `npm ci` in ../vscode first),
+// with webui/files.txt naming its files.
 val webuiOut = layout.buildDirectory.dir("generated/webui/webui")
 val bundleWebui = tasks.register<Exec>("bundleWebui") {
     val extension = repositoryRoot.resolve("mide-plugins/vscode")
     inputs.dir(repositoryRoot.resolve("webui/src"))
-    inputs.files(repositoryRoot.resolve("webui/index.html"), repositoryRoot.resolve("webui/workbench.css"))
-    inputs.dir(extension.resolve("src"))
-    inputs.dir(extension.resolve("media"))
-    inputs.file(extension.resolve("package.json"))
+    inputs.file(repositoryRoot.resolve("webui/graph.html"))
+    inputs.file(extension.resolve("tools/bundle-webui.mjs"))
     outputs.dir(webuiOut)
     workingDir = extension
     doFirst {
         if (!extension.resolve("node_modules/esbuild").isDirectory)
-            throw GradleException("the workbench is bundled with the extension's dependencies: run `npm ci` in ${extension}")
+            throw GradleException("the graph page is bundled with the extension's dependencies: run `npm ci` in ${extension}")
     }
     commandLine("node", "tools/bundle-webui.mjs", "--out", webuiOut.get().asFile.absolutePath)
 }

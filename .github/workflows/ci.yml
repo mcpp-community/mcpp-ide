@@ -431,7 +431,7 @@ jobs:
             echo "MCPP_IDE_OKB=$GITHUB_WORKSPACE/backend/mcpp-ide.okb"
             echo "MCPP_IDE_OKRUN=$GITHUB_WORKSPACE/backend/okrun"
           } >> "$GITHUB_ENV"
-      - name: The workbench in Chromium, over the backend
+      - name: The graph page in Chromium, over the backend
         working-directory: mide-plugins/vscode
         run: |
           npx playwright install --with-deps chromium

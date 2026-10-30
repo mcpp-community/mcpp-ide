@@ -21,7 +21,7 @@
     <depends>com.intellij.modules.clion</depends>
     <depends>com.intellij.modules.cidr.debugger</depends>
     <depends>io.github.sunrisepeak.mcppls</depends>
-    <!-- The panels' browser is a module of its own (com.intellij.modules.jcef). The test tree is the
+    <!-- The graph page's browser is a module of its own (com.intellij.modules.jcef). The test tree is the
          platform's in CLion 2026.1 and a plugin of its own from 2026.2 on (intellij.testRunner.plugin);
          optional, so the classes are found either way. -->
     <depends optional="true" config-file="mcpp-jcef.xml">com.intellij.modules.jcef</depends>
@@ -37,7 +37,7 @@
         <notificationGroup id="mcpp" displayType="BALLOON"/>
 
         <toolWindow id="mcpp" anchor="right" icon="io.github.mcppcommunity.mcppclion.McppIcons.Logo"
-                    factoryClass="io.github.mcppcommunity.mcppclion.webui.McppPanels$Factory"/>
+                    factoryClass="io.github.mcppcommunity.mcppclion.ui.McppPanels$Factory"/>
 
         <configurationType implementation="io.github.mcppcommunity.mcppclion.run.McppRunConfigurationType"/>
         <runConfigurationProducer implementation="io.github.mcppcommunity.mcppclion.run.McppConfigurationProducer"/>
