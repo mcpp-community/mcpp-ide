@@ -3,7 +3,9 @@
 // does what the row's `action` says, in the IDE's own terms (run configurations, dialogs, panels).
 package io.github.mcppcommunity.mcppclion.actions
 
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import java.util.concurrent.CompletableFuture
 import com.intellij.execution.ProgramRunnerUtil
 import com.intellij.execution.RunManager
 import com.intellij.execution.executors.DefaultDebugExecutor
@@ -111,8 +113,31 @@ object Dispatch {
                 ApplicationManager.getApplication().invokeLater { Messages.showInfoMessage(project, text, t("Environment Self-check")) }
             }
             "languageService" -> languageService(project)
+            "report" -> exportReport(project)
             "rpc" -> job(project, action["method"].asString, JsonObject().apply { session.root?.let { addProperty("root", it) } })
             else -> session.notify(t("This command is not available in this IDE."), NotificationType.INFORMATION)
+        }
+    }
+
+    /**
+     * THE IDE REPORT (design 2026-10-30 part 2 §3.2): what a bug report needs, written where the
+     * person chooses. Without a backend (the degraded mode) it says so, and still writes.
+     */
+    fun exportReport(project: Project) {
+        val session = McppSession.get(project)
+        val collected = if (session.degraded) CompletableFuture.completedFuture<JsonElement>(JsonObject().apply {
+            addProperty("kind", "mcpp-ide.report"); addProperty("version", 1); addProperty("degraded", true)
+        }) else session.request("report/collect", JsonObject().apply { session.root?.let { addProperty("root", it) } })
+        collected.whenComplete { report, error ->
+            val document = report ?: JsonObject().apply { addProperty("kind", "mcpp-ide.report"); addProperty("version", 1); addProperty("error", error?.message ?: "") }
+            ApplicationManager.getApplication().invokeLater {
+                val stamp = java.time.Instant.now().toString().replace(':', '-').replace('.', '-')
+                val dialog = com.intellij.openapi.fileChooser.FileChooserFactory.getInstance().createSaveFileDialog(
+                    com.intellij.openapi.fileChooser.FileSaverDescriptor(session.t("Export IDE Report"), "", "json"), project)
+                val target = dialog.save(project.basePath?.let { java.nio.file.Path.of(it) }, "mcpp-ide-report-$stamp.json") ?: return@invokeLater
+                target.file.writeText(com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(document) + "\n")
+                session.notify(session.t("The IDE report is written to {0}", target.file.path))
+            }
         }
     }
 

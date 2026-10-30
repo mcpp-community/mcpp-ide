@@ -296,6 +296,15 @@ local report = heard('Self-check') or ''
 check(':Mcpp selfCheck reports the backend, mcpp and the checks', report:find('mcpp-nvim ', 1, true) and report:find('mcpp-ide ', 1, true)
   and report:find(vim.fs.basename(mcpp), 1, true) ~= nil, report:sub(1, 120))
 
+-- The IDE report (design 2026-10-30 part 2 §3.2), to a file named on the command line.
+said = {}
+local report_path = vim.fn.tempname() .. '-mcpp-ide-report.json'
+vim.cmd('Mcpp exportReport ' .. vim.fn.fnameescape(report_path))
+vim.wait(20000, function() return heard('IDE report') ~= nil end, 20)
+local written = vim.fn.filereadable(report_path) == 1 and vim.json.decode(table.concat(vim.fn.readfile(report_path), '\n')) or {}
+check(':Mcpp exportReport writes the report the backend collects', written.kind == 'mcpp-ide.report' and written.backend ~= nil,
+  vim.inspect(written):sub(1, 120))
+
 -- ── what only the mock plays ──────────────────────────────────────────────────────────────────
 if mock then
   before = session.state.last

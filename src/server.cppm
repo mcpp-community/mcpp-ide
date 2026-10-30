@@ -36,7 +36,7 @@ inline constexpr int kProtocol = 1;
 
 // The methods `install` registers, for the protocol schema's test: a method
 // here and not in protocol/protocol.schema.json (or the other way) fails it.
-inline constexpr std::array<std::string_view, 45> kMethods = {
+inline constexpr std::array<std::string_view, 49> kMethods = {
     "initialize", "settings/update", "settings/registry", "settings/preset", "i18n/bundle",
     "selfCheck", "commands/list", "menu/quick", "languageService/status",
     "projects/list", "projects/forFile", "project/summary", "project/new", "result/last",
@@ -45,13 +45,14 @@ inline constexpr std::array<std::string_view, 45> kMethods = {
     "toolchains/list", "toolchains/install", "toolchains/setDefault", "targets/list",
     "cache/inventory", "cache/plan", "cache/apply", "graph/packages", "graph/modules",
     "pack/formats", "pack/start", "manifest/check", "toml/complete", "toml/hover", "toml/symbols",
-    "buildscript/complete", "mcpp/exec", "project/files", "languageService/exec", "shutdown", "exit"};
+    "buildscript/complete", "mcpp/exec", "project/files", "languageService/exec", "project/mcpp", "project/refresh",
+    "capabilities/explain", "report/collect", "shutdown", "exit"};
 
 // The notifications the backend sends.
-inline constexpr std::array<std::string_view, 13> kNotifications = {
+inline constexpr std::array<std::string_view, 14> kNotifications = {
     "job/started", "job/output", "job/plan", "job/progress", "job/diagnostic", "job/artifact", "job/record",
     "job/finished", "test/result", "test/summary", "result/changed", "manifest/changed",
-    "manifest/diagnostics"};
+    "manifest/diagnostics", "project/mcppChanged"};
 
 class Session {
 public:
@@ -83,6 +84,21 @@ private:
     Result commands(const Json& p) const;
     Result quick_menu(const Json& p);
     Result test_list(const Json& p);
+    Result project_mcpp(const Json& p);
+    Result project_refresh(const Json& p);
+    Result capabilities_explain(const Json& p);
+    Result report_collect(const Json& p);
+
+    // THE PROJECT'S mcpp (design 2026-10-30 part 2 §4.2): asked in the project, once, and asked again
+    // when its manifest changes, when the editor regains focus, or when a job's envelope names
+    // another version. Never more than two asked at once.
+    mcpp::ProjectMcpp probe_of(const std::filesystem::path& root);
+    Json probe_json(const std::filesystem::path& root, const mcpp::ProjectMcpp& probe) const;
+    bool has_feature(const std::filesystem::path& root, std::string_view feature);
+    // A line of the backend's log, at a level (0 error, 1 warning, 2 info, 3 debug): written to
+    // standard error, which every editor keeps in its log, when mcpp.backend.logLevel lets it
+    // through, and kept for the IDE report either way (§3.2).
+    void log(int level, std::string_view text);
 
     std::expected<mcpp::Client::EnvelopeResult, rpc::Error> query(const std::filesystem::path& cwd,
                                                                     std::vector<std::string> args) const;
@@ -131,6 +147,10 @@ private:
     };
     std::optional<PackOptions> packOptions_;
     PackOptions pack_options(const std::filesystem::path& cwd);
+    std::map<std::filesystem::path, mcpp::ProjectMcpp> probes_;
+    std::counting_semaphore<2> probeSlots_{2};
+    // The backend's log level (mcpp.backend.logLevel): what reaches standard error.
+    std::deque<std::string> recentLog_;
 };
 
 }  // namespace mcppide::server
@@ -169,15 +189,32 @@ Session::Session(rpc::Server& server) : rpc_(server) {
                 if (env.is_object() && env.contains("data") && env["data"].is_object() && env["data"].contains("artifacts"))
                     s["artifacts"] = env["data"]["artifacts"];
             }
+            std::filesystem::path root;
             {
                 std::lock_guard lock(mutex_);
                 if (auto it = jobOf_.find(id); it != jobOf_.end()) {
                     s["root"] = it->second.first.generic_string();
                     s["kind"] = it->second.second;
+                    root = it->second.first;
                     jobOf_.erase(it);
                 }
             }
             rpc_.notify("job/finished", s);
+            // Every envelope names the mcpp that wrote it: another version than the one probed (a
+            // `xlings use`, a pin changed) is asked again, and the editor is told (§4.2).
+            const auto& env = summary.contains("envelope") ? summary["envelope"] : Json(nullptr);
+            if (!root.empty() && env.is_object() && env.contains("mcpp") && env["mcpp"].is_object()) {
+                const auto seen = env["mcpp"].value("version", "");
+                bool changed = false;
+                {
+                    std::lock_guard lock(mutex_);
+                    if (auto it = probes_.find(root); it != probes_.end() && !seen.empty() && it->second.version != seen) {
+                        probes_.erase(it);
+                        changed = true;
+                    }
+                }
+                if (changed) rpc_.notify("project/mcppChanged", Json{{"root", root.generic_string()}, {"version", seen}});
+            }
         },
         .started = [this](std::string_view id, const Json& started) {
             {
@@ -267,13 +304,17 @@ void Session::locate_mcpp() {
         located_ = *located;
         client_ = mcpp::Client(located->program, *protocol);
     }
+    probes_.clear();
     jobs_->set_client(client_);
+    if (located && protocol)
+        std::println(std::cerr, "[info] mcpp {} at {} ({})", protocol->version, located->program.generic_string(), located->source);
 }
 
 void Session::on_changed(const std::filesystem::path& root, std::string_view what, const Json& detail) {
     {
         std::lock_guard lock(mutex_);
         buildDatabases_.erase(root);
+        if (what != "result") probes_.erase(root);   // a manifest may state another mcpp floor or pin
     }
     if (what == "result") {
         rpc_.notify("result/changed", Json{{"root", root.generic_string()}, {"result", detail}});
@@ -875,6 +916,162 @@ std::expected<Json, rpc::Error> Session::language_service(const Json& p) {
     return out;
 }
 
+mcpp::ProjectMcpp Session::probe_of(const std::filesystem::path& rootIn) {
+    const auto root = rootIn.lexically_normal();
+    mcpp::Client client;
+    bool trusted, fromSetting;
+    {
+        std::lock_guard lock(mutex_);
+        if (auto it = probes_.find(root); it != probes_.end()) return it->second;
+        client = client_;
+        trusted = trusted_;
+        fromSetting = located_ && located_->source == "setting";
+    }
+    mcpp::ProjectMcpp probe;
+    if (!client.ready()) {
+        probe.state = "failed";
+        std::lock_guard lock(mutex_);
+        probe.message = mcppError_.empty() ? t("mcpp is not available") : mcppError_;
+        return probe;
+    }
+    if (!trusted) {
+        // A pinned program is not run in an untrusted workspace: the global mcpp's facts stand in,
+        // and are labelled as not asked in the project (§4.2).
+        probe.state = "not-probed";
+        probe.version = client.protocol().version;
+        probe.program = client.program().generic_string();
+        probe.features = client.protocol().features;
+        probe.message = t("the workspace is not trusted: the project's mcpp is not asked");
+    } else {
+        mcpp::RunOptions o;
+        o.deny = deny();
+        o.client = client_label();
+        probeSlots_.acquire();
+        probe = client.probe(root, o);
+        probeSlots_.release();
+    }
+    probe.fromSetting = fromSetting;
+    log(probe.state == "ok" || probe.state == "not-probed" ? 2 : 1,
+        std::format("project {}: mcpp {} ({}){}{}", root.generic_string(), probe.version.empty() ? "?" : probe.version,
+                    probe.state, probe.program.empty() ? "" : " at " + probe.program,
+                    probe.message.empty() ? "" : ": " + probe.message));
+    std::lock_guard lock(mutex_);
+    probes_[root] = probe;
+    return probe;
+}
+
+bool Session::has_feature(const std::filesystem::path& root, std::string_view feature) {
+    const auto probe = probe_of(root);
+    return std::ranges::find(probe.features, feature) != probe.features.end();
+}
+
+void Session::log(int level, std::string_view text) {
+    static constexpr std::string_view kNames[] = {"error", "warning", "info", "debug"};
+    const auto configured = setting("mcpp.backend.logLevel");
+    int limit = 2;
+    if (configured.is_string())
+        for (int i = 0; i < 4; ++i) if (configured.get<std::string>() == kNames[i]) limit = i;
+    const auto line = std::format("[{}] {}", kNames[std::clamp(level, 0, 3)], text);
+    {
+        std::lock_guard lock(mutex_);
+        recentLog_.push_back(line);
+        while (recentLog_.size() > 200) recentLog_.pop_front();
+    }
+    if (level <= limit) std::println(std::cerr, "{}", line);
+}
+
+Json Session::probe_json(const std::filesystem::path& root, const mcpp::ProjectMcpp& probe) const {
+    Json out{{"root", root.generic_string()},
+             {"state", probe.state},
+             {"version", probe.version},
+             {"program", probe.program},
+             {"features", probe.features},
+             {"featuresFrozen", probe.featuresFrozen},
+             {"fromSetting", probe.fromSetting}};
+    if (!probe.message.empty()) out["message"] = probe.message;
+    if (!probe.install.empty()) out["install"] = probe.install;
+    for (const auto* key : {"mcppHome", "defaultToolchain", "xlings", "registry"})
+        if (probe.env.contains(key)) out[key] = probe.env[key];
+    return out;
+}
+
+// What the project's mcpp is (§4.4): the version and the program that ran in the project, whether
+// mcpp.path decided it, what it states it can do, and the facts of `self env` the panels show.
+std::expected<Json, rpc::Error> Session::project_mcpp(const Json& p) {
+    const auto root = any_root(p).lexically_normal();
+    return probe_json(root, probe_of(root));
+}
+
+// The editor regained focus, or asks again: every project is asked again on its next use.
+std::expected<Json, rpc::Error> Session::project_refresh(const Json& p) {
+    std::lock_guard lock(mutex_);
+    if (const auto root = root_of(p); !root.empty()) probes_.erase(root.lexically_normal());
+    else probes_.clear();
+    return Json::object();
+}
+
+// WHY A FEATURE IS NOT OFFERED (§3.2): each feature the panels gate, whether it is available for
+// the project, and if not which party lacks what -- the project's mcpp, mcppls -- and from which
+// version. The panels' tooltips and selfCheck read this one answer.
+std::expected<Json, rpc::Error> Session::capabilities_explain(const Json& p) {
+    const auto root = any_root(p).lexically_normal();
+    const auto probe = probe_of(root);
+    struct Gate { const char* id; const char* feature; const char* since; };
+    static constexpr Gate kGates[] = {
+        {"targets.sets", "target-sets", "2026.10.30.1"},
+        {"pack.formatList", "pkg-format-list", "2026.10.30.1"},
+    };
+    Json features = Json::array();
+    for (const auto& g : kGates) {
+        const bool on = std::ranges::find(probe.features, g.feature) != probe.features.end();
+        Json f{{"id", g.id}, {"available", on}};
+        if (!on)
+            f["reason"] = Json{{"source", "mcpp"},
+                               {"capability", g.feature},
+                               {"need", g.since},
+                               {"have", probe.version},
+                               {"message", probe.state == "ok" || probe.state == "not-probed"
+                                               ? t("the project's mcpp {0} does not state {1}; mcpp {2} does",
+                                                   {probe.version, g.feature, g.since})
+                                               : probe.message}};
+        features.push_back(std::move(f));
+    }
+    return Json{{"root", root.generic_string()}, {"mcpp", probe_json(root, probe)}, {"features", features}};
+}
+
+// THE IDE REPORT (§3.2): what a bug report needs, with no secret in it -- the backend and its
+// protocol, every project's mcpp, mcppls's status, the settings that are in effect (paths shown,
+// nothing else), the recent jobs and the backend's recent log.
+std::expected<Json, rpc::Error> Session::report_collect(const Json& p) {
+    Json projects = Json::array();
+    std::vector<std::filesystem::path> roots;
+    {
+        std::lock_guard lock(mutex_);
+        for (const auto& [root, _] : probes_) roots.push_back(root);
+    }
+    if (const auto root = root_of(p); !root.empty() && std::ranges::find(roots, root.lexically_normal()) == roots.end())
+        roots.push_back(root.lexically_normal());
+    for (const auto& r : roots) projects.push_back(probe_json(r, probe_of(r)));
+    std::vector<std::string> candidates;
+    Json settings, log = Json::array();
+    {
+        std::lock_guard lock(mutex_);
+        candidates = mcpplsCandidates_;
+        settings = settings_;
+        for (const auto& line : recentLog_) log.push_back(line);
+    }
+    auto ls = language_service(Json{{"candidates", candidates}});
+    return Json{{"kind", "mcpp-ide.report"},
+                {"version", 1},
+                {"backend", Json{{"version", kVersion}, {"protocol", kProtocol}, {"windows", !std::string(mcpplibs::os::conventions().exe_suffix).empty()}}},
+                {"selfCheck", self_check()},
+                {"projects", projects},
+                {"languageService", ls ? *ls : Json(nullptr)},
+                {"settings", settings},
+                {"jobs", jobs_->list()},
+                {"log", log}};
+}
+
 std::expected<Json, rpc::Error> Session::targets(const Json& p) {
     auto r = query(any_root(p), {"toolchain", "list", "--format", "json"});
     if (!r) return std::unexpected(r.error());
@@ -884,8 +1081,10 @@ std::expected<Json, rpc::Error> Session::targets(const Json& p) {
     bool sets;
     {
         std::lock_guard lock(mutex_);
-        sets = client_.ready() && mcpp::compare_versions(client_.protocol().version, "2026.10.30.1") >= 0;
+        sets = client_.ready();
     }
+    // By what the project's mcpp states, not by its version (§4.3).
+    sets = sets && has_feature(any_root(p), "target-sets");
     Json out = views::targets(r->envelope, chosen, sets);
     if (const auto root = root_of(p); !root.empty()) {
         std::lock_guard lock(mutex_);
@@ -944,7 +1143,7 @@ std::expected<Json, rpc::Error> Session::quick_menu(const Json& p) {
         const auto when = c.value("when", "");
         std::string disabled;
         if (when.find("mcpp.inProject") != std::string::npos && root.empty()) disabled = t("No mcpp project in this workspace");
-        else if (!ready && c["action"].value("kind", "") != "panel" && c["action"].value("kind", "") != "selfCheck")
+        else if (!ready && c["action"].value("kind", "") != "panel" && c["action"].value("kind", "") != "selfCheck" && c["action"].value("kind", "") != "report")
             disabled = t("mcpp is not available");
         Json item{{"command", c["id"]}, {"title", c["title"]}, {"group", c["groupTitle"]}, {"enabled", disabled.empty()}};
         if (!disabled.empty()) item["reason"] = disabled;
@@ -1065,6 +1264,10 @@ void Session::install() {
     s.on("run/launch", [this](const Json& p, const rpc::Context& c) { return run_launch(p, c); });
     s.on("debug/configuration", [this](const Json& p, const rpc::Context& c) { return debug_configuration(p, c); });
     s.on("test/list", [this](const Json& p, const rpc::Context&) { return test_list(p); });
+    s.on("project/mcpp", [this](const Json& p, const rpc::Context&) { return project_mcpp(p); });
+    s.on("project/refresh", [this](const Json& p, const rpc::Context&) { return project_refresh(p); });
+    s.on("capabilities/explain", [this](const Json& p, const rpc::Context&) { return capabilities_explain(p); });
+    s.on("report/collect", [this](const Json& p, const rpc::Context&) { return report_collect(p); });
     s.on("library/search", [this](const Json& p, const rpc::Context&) { return library_search(p); });
     s.on("library/indexes", [this](const Json& p, const rpc::Context&) -> Result {
         auto r = query(any_root(p), {"index", "list", "--format", "json"});

@@ -1,6 +1,8 @@
 // The session with the backend for one project: started when an mcpp project opens, given the
 // IDE's settings, trust, language and the project's directory, kept current as they change, and
-// restarted once when it ends. Everything else in the plugin reaches the backend through it.
+// started again after 1, 4 and 16 seconds when it ends; a fourth end within three minutes leaves the
+// plugin in its degraded mode (design 2026-10-30 part 2 §3.1). Everything else in the plugin
+// reaches the backend through it.
 package io.github.mcppcommunity.mcppclion
 
 import com.google.gson.JsonArray
@@ -32,13 +34,23 @@ class McppSession(private val project: Project) : Disposable {
     @Volatile private var bundle: Map<String, String> = emptyMap()
     @Volatile var commands: List<JsonObject> = emptyList(); private set
     private val listeners = CopyOnWriteArrayList<Pair<String, (JsonElement) -> Unit>>()
-    private var restarts = 0
+    /** When the backend ended, within the last three minutes. */
+    private val exits = ArrayDeque<Long>()
+    @Volatile var degraded = false; private set
 
     init {
         project.messageBus.connect(this).subscribe(McppSettings.CHANGED, McppSettings.Listener { key ->
             if (key == "mcpp.ide.backendPath") restart() else pushSettings()
         })
         on("manifest/changed") { p -> p.asJsonObject["root"]?.asString?.let { refreshTests(it) } }
+        // The IDE regained focus: a `xlings use` or a changed pin happened outside it (§4.2).
+        com.intellij.openapi.application.ApplicationManager.getApplication().messageBus.connect(this).subscribe(
+            com.intellij.openapi.application.ApplicationActivationListener.TOPIC,
+            object : com.intellij.openapi.application.ApplicationActivationListener {
+                override fun applicationActivated(ideFrame: com.intellij.openapi.wm.IdeFrame) {
+                    if (backend?.running == true) backend?.request("project/refresh", JsonObject())
+                }
+            })
     }
 
     val root: String? get() = projects().firstOrNull()?.get("root")?.asString ?: project.basePath?.takeIf { File(it, "mcpp.toml").isFile }
@@ -119,21 +131,45 @@ class McppSession(private val project: Project) : Disposable {
     private fun onExit(code: Int) {
         log.info("mcpp-ide: the backend ended ($code)")
         backend = null
-        if (restarts++ < 1) { start(); return }
-        notify(t("The mcpp-ide backend ended."), NotificationType.ERROR)
+        val now = System.currentTimeMillis()
+        synchronized(exits) {
+            exits.addLast(now)
+            while (exits.isNotEmpty() && now - exits.first() >= 3 * 60_000) exits.removeFirst()
+        }
+        val delays = longArrayOf(1000, 4000, 16000)
+        val count = synchronized(exits) { exits.size }
+        if (count <= delays.size) {
+            log.info("mcpp-ide: starting it again in ${delays[count - 1] / 1000} s")
+            com.intellij.util.concurrency.AppExecutorUtil.getAppScheduledExecutorService()
+                .schedule({ started = null; start() }, delays[count - 1], java.util.concurrent.TimeUnit.MILLISECONDS)
+            return
+        }
+        degraded = true
+        val n = NotificationGroupManager.getInstance().getNotificationGroup("mcpp").createNotification("mcpp",
+            t("The mcpp-ide backend ended four times in three minutes; build, run, test and the project pages go on without it."),
+            NotificationType.ERROR)
+        n.addAction(com.intellij.notification.NotificationAction.createSimpleExpiring(t("Restart the backend")) { restart() })
+        n.addAction(com.intellij.notification.NotificationAction.createSimpleExpiring(t("Export IDE Report")) {
+            io.github.mcppcommunity.mcppclion.actions.Dispatch.exportReport(project)
+        })
+        n.notify(project)
     }
 
     fun restart() {
         val old = backend
         backend = null
         started = null
-        restarts = 0
+        synchronized(exits) { exits.clear() }
+        degraded = false
         old?.close()
         start()
     }
 
-    fun request(method: String, params: JsonElement = JsonObject()): CompletableFuture<JsonElement> =
-        start().thenCompose { backend?.request(method, params) ?: CompletableFuture.failedFuture(IllegalStateException(t("the mcpp-ide backend is not running"))) }
+    fun request(method: String, params: JsonElement = JsonObject()): CompletableFuture<JsonElement> {
+        if (degraded && backend?.running != true)
+            return CompletableFuture.failedFuture(IllegalStateException(t("the mcpp-ide backend is not running")))
+        return start().thenCompose { backend?.request(method, params) ?: CompletableFuture.failedFuture(IllegalStateException(t("the mcpp-ide backend is not running"))) }
+    }
 
     // The tests of each project by the file holding their `main` (mcpp test --list), for the gutter
     // and the run configurations from context, which must not wait for mcpp.

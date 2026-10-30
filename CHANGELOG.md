@@ -4,6 +4,25 @@
 
 mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 §10).
 
+- **The project's mcpp (mcpp design 2026-10-30 part 2 §4).** Each project is asked in its own
+  directory, `mcpp self env --format json` through the program a version manager's shim stands for
+  (or `mcpp.path`), with `XLINGS_PROJECT_DIR` removed from every run of mcpp, so a project pinned in
+  `.xlings.json` is described by the mcpp that builds it. A feature is turned on by what the project's
+  mcpp states (`features`, mcpp 2026.10.31.1) or, for an earlier mcpp, by a table frozen at that
+  release, never by comparing versions. A pinned version that is not installed is `pinned-missing`,
+  with the shim's words and its install command; an untrusted workspace's project is not asked. A
+  job whose envelope names another version, the editor regaining focus and a changed manifest each
+  make the project be asked again; never more than two at once. Methods `project/mcpp`,
+  `project/refresh`, `capabilities/explain` (why a feature is not offered: which party, which
+  capability, from which version) and `report/collect`; notification `project/mcppChanged`.
+- **The backend's lifecycle and what it says (§3).** VS Code and CLion start an ended backend again
+  after 1, 4 and 16 seconds; a fourth end within three minutes leaves them in the degraded mode with
+  two actions, restarting the backend and exporting the IDE report. **mcpp: Export IDE Report**
+  (every editor; Neovim `:Mcpp exportReport [path]`) writes the backend, every project's mcpp,
+  mcppls's status, the settings in effect, recent jobs and the backend's recent log to a file the
+  person names. `mcpp.backend.logLevel` decides what the backend writes to the editor's log. VS
+  Code's status item names the project's mcpp version, and its tooltip the program and whether
+  `mcpp.path` chose it.
 - **mcpp-vscode 1.1.0 is mcpp-vscode 0.9.0 over the backend.** 0.9.0's extension is imported with
   its history (`mide-plugins/vscode`); every view, page, command, menu, setting and string a user
   sees is 0.9.0's. What 1.0 added stays, in 0.9.0's style: debugging (`mcpp.debug`, the `mcpp`

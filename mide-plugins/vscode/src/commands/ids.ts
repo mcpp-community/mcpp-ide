@@ -93,6 +93,7 @@ export const TOOL_COMMANDS = {
   openSettings: "mcpp.openSettings",
   openLanguageServerSettings: "mcpp.openMcpplsSettings",
   selfCheck: "mcpp.selfCheck",
+  exportReport: "mcpp.exportReport",
 } as const;
 
 /**

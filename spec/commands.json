@@ -46,6 +46,8 @@
       "omitted": { "nvim": "Neovim's settings are setup()'s `settings` table, which the backend validates; no panel edits them." } },
     { "id": "mcpp.selfCheck", "group": "tools", "icon": { "jetbrains": "AllIcons.Actions.Checked" },
       "action": { "kind": "selfCheck" }, "quickMenu": true },
+    { "id": "mcpp.exportReport", "group": "tools", "icon": { "jetbrains": "AllIcons.ToolbarDecorator.Export" },
+      "action": { "kind": "report" }, "quickMenu": true },
     { "id": "mcpp.autoConfigureModules", "group": "languageService", "action": { "kind": "job", "job": "build", "then": "languageService" } },
     { "id": "mcpp.refreshCompilationDatabase", "group": "languageService", "action": { "kind": "job", "job": "build" } },
 

@@ -264,5 +264,8 @@
   "mcpp.toml.diagnostics.unknownSection.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。",
   "mcpp.toml.diagnostics.unknownKey.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。",
   "mcpp.toml.diagnostics.planeSeparation.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。",
-  "mcpp.toml.diagnostics.legacyKeys.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。"
+  "mcpp.toml.diagnostics.legacyKeys.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。",
+  "mcpp.backend.logLevel.title": "设置后端的日志级别",
+  "mcpp.backend.logLevel.description": "mcpp-ide 后端写入编辑器日志的内容：只写错误、写警告、写它所做的事（缺省），或写每一次运行 mcpp 与 mcppls 及其参数。",
+  "command.mcpp.exportReport.title": "导出 IDE 报告"
 }

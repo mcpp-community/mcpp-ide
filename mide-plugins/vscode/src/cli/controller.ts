@@ -1,3 +1,4 @@
+import type { ProjectMcpp } from "../ide/protocol";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
@@ -58,6 +59,11 @@ export interface McppCliControllerOptions {
    * the extension layer owns the bridge and passes it in.
    */
   languageServerSummary?: () => string | undefined;
+  /**
+   * The project's mcpp as the backend asked it in the project (design 2026-10-30 part 2 §4.4, §6.1):
+   * the status item names its version, and its tooltip the program and whether `mcpp.path` chose it.
+   */
+  projectMcpp?: () => ProjectMcpp | undefined;
 }
 
 interface ToolchainPickItem extends vscode.QuickPickItem {
@@ -1115,14 +1121,24 @@ export class McppCliController {
       clearTimeout(this.statusRevert);
       this.statusRevert = undefined;
     }
-    const tooltip = t("Open the mcpp project and toolchain quick menu");
+    const mcpp = this.options.projectMcpp?.();
+    const mcppLine = mcpp === undefined ? undefined
+      : mcpp.state === "pinned-missing" ? t("The project's mcpp is not installed: {0}", mcpp.install ?? mcpp.message ?? "")
+      : mcpp.state === "failed" ? t("The project's mcpp did not answer: {0}", mcpp.message ?? "")
+      : mcpp.fromSetting ? t("mcpp {0} at {1}, set by mcpp.path (the project's own version is not chosen)", mcpp.version, mcpp.program)
+      : mcpp.state === "not-probed" ? t("mcpp {0} (not asked in the project: the workspace is not trusted)", mcpp.version)
+      : t("mcpp {0} at {1}, the project's", mcpp.version, mcpp.program);
+    const base = mcpp !== undefined && mcpp.version !== "" && (mcpp.state === "ok" || mcpp.state === "not-probed")
+      ? `${quickMenuStatusText} ${mcpp.version}` : quickMenuStatusText;
+    const tooltip = mcppLine === undefined ? t("Open the mcpp project and toolchain quick menu")
+      : `${mcppLine}\n${t("Open the mcpp project and toolchain quick menu")}`;
     const languageServer = languageServerStatusSuffix(
       read<boolean>("mcpp.ui.statusBar.showLanguageServer"),
       this.options.languageServerSummary?.(),
     );
     this.status.text = languageServer === undefined
-      ? quickMenuStatusText
-      : `${quickMenuStatusText} · ${t("C++ Modules: {0}", languageServer)}`;
+      ? base
+      : `${base} · ${t("C++ Modules: {0}", languageServer)}`;
     this.status.tooltip = languageServer === undefined
       ? tooltip
       : `${tooltip}\n${t("C++ Modules (provided by the mcpp language server extension): {0}", languageServer)}`;

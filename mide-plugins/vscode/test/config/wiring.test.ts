@@ -41,6 +41,11 @@ const READ_INDIRECTLY: ReadonlyArray<{ key: string; file: string; evidence: stri
     evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
   },
   {
+    key: "mcpp.backend.logLevel",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
+  {
     key: "mcpp.task.buildArgs",
     file: "src/cli/tasks.ts",
     evidence: 'build: "mcpp.task.buildArgs"',

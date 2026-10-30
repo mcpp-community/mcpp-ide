@@ -123,6 +123,15 @@ function M.setup(opts)
   })
   vim.api.nvim_create_autocmd('User', { group = group, pattern = 'McppStatus', callback = on_started })
   vim.api.nvim_create_autocmd('VimLeavePre', { group = group, callback = session.stop })
+  -- The editor regained focus: a `xlings use` or a changed pin happened outside it (§4.2).
+  vim.api.nvim_create_autocmd('FocusGained', {
+    group = group,
+    callback = function()
+      if session.state.ready then
+        session.request('project/refresh', {}, function() end)
+      end
+    end,
+  })
   if session.state.ready then
     session.push_settings()
   elseif vim.v.vim_did_enter == 1 then

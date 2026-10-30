@@ -18,15 +18,24 @@ export class Session implements vscode.Disposable {
   private located: Located | undefined;
   private initResult: InitializeResult | undefined;
   private commandTable: CommandEntry[] = [];
-  private restarts = 0;
+  /** When the backend ended, within the last three minutes (§3.1). */
+  private exits: number[] = [];
+  private degradedNow = false;
   private starting: Promise<boolean> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly listeners = new Map<string, Set<(params: any) => void>>();
   readonly onDidStart = new vscode.EventEmitter<InitializeResult>();
+  /** The backend ended four times in three minutes and is no longer restarted (§3.1, §8). */
+  readonly onDidDegrade = new vscode.EventEmitter<void>();
 
   constructor(readonly context: vscode.ExtensionContext, readonly output: vscode.OutputChannel) {
     this.disposables.push(
       this.onDidStart,
+      this.onDidDegrade,
+      // The editor regained focus: a `xlings use` or a changed pin happened outside it (§4.2).
+      vscode.window.onDidChangeWindowState((state) => {
+        if (state.focused && this.backend?.running) void this.backend.request("project/refresh", {}).then(() => this.onDidRefresh.fire(), () => undefined);
+      }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("mcpp.ide.backendPath")) { void this.restart(); return; }
         if (e.affectsConfiguration("mcpp")) void this.pushSettings();
@@ -35,6 +44,14 @@ export class Session implements vscode.Disposable {
       vscode.workspace.onDidChangeWorkspaceFolders(() => void this.restart()),
       vscode.extensions.onDidChange(() => void this.request("languageService/status", { candidates: this.mcpplsCandidates() }).catch(() => undefined)),
     );
+  }
+
+  /** Fired after the projects' mcpp were forgotten, so a view asks again. */
+  readonly onDidRefresh = new vscode.EventEmitter<void>();
+
+  /** Whether the backend was given up on after ending too often (§3.1). */
+  get degraded(): boolean {
+    return this.degradedNow;
   }
 
   /** The backend's command and where it was found. */
@@ -122,18 +139,35 @@ export class Session implements vscode.Disposable {
     }
   }
 
+  /**
+   * THE BACKEND ENDED (design 2026-10-30 part 2 §3.1). It is started again after 1, 4 and 16
+   * seconds; a fourth end within three minutes stops the restarts, and the extension goes on in its
+   * declared degraded mode (build, run, test and the project pages) with two actions: start the
+   * backend again, and export the IDE report.
+   */
   private onExit(backend: Backend, code: number | null): void {
     if (backend !== this.backend) return;
     this.backend = undefined;
     this.output.appendLine(`mcpp-ide: the backend ended (${code ?? "signal"})`);
-    if (this.restarts < 1) {
-      ++this.restarts;
-      void this.start();
+    const now = Date.now();
+    this.exits = [...this.exits.filter((at) => now - at < 3 * 60_000), now];
+    const delays = [1000, 4000, 16000];
+    if (this.exits.length <= delays.length) {
+      const delay = delays[this.exits.length - 1];
+      this.output.appendLine(`mcpp-ide: starting it again in ${delay / 1000} s`);
+      setTimeout(() => void this.start(), delay);
       return;
     }
-    const again = t("Restart");
-    void vscode.window.showErrorMessage(`mcpp: ${t("The mcpp-ide backend ended.")}`, again).then((c) => {
-      if (c === again) { this.restarts = 0; void this.start(); }
+    this.degradedNow = true;
+    this.onDidDegrade.fire();
+    const again = t("Restart the backend");
+    const report = t("Export IDE Report");
+    void vscode.window.showErrorMessage(
+      `mcpp: ${t("The mcpp-ide backend ended four times in three minutes; build, run, test and the project pages go on without it.")}`,
+      again, report,
+    ).then((c) => {
+      if (c === again) void this.restart();
+      if (c === report) void vscode.commands.executeCommand("mcpp.exportReport");
     });
   }
 
@@ -141,11 +175,15 @@ export class Session implements vscode.Disposable {
     const old = this.backend;
     this.backend = undefined;
     if (old) await old.stop();
-    this.restarts = 0;
+    this.exits = [];
+    this.degradedNow = false;
     await this.start();
   }
 
   async request<T = unknown>(method: string, params: unknown = {}): Promise<T> {
+    if (this.degradedNow && !this.backend?.running) {
+      throw new BackendError(method, { code: -32099, message: t("the mcpp-ide backend is not running") });
+    }
     if (!this.backend?.running) {
       if (!(await this.start())) throw new BackendError(method, { code: -32099, message: t("the mcpp-ide backend is not running") });
     }
@@ -157,7 +195,13 @@ export class Session implements vscode.Disposable {
     await this.backend.request("settings/update", { settings: this.settings(), trusted: vscode.workspace.isTrusted, locale: vscode.env.language });
   }
 
+  /** Whether a backend is running now (nothing is started to answer this). */
+  get running(): boolean {
+    return this.backend?.running === true;
+  }
+
   dispose(): void {
+    this.onDidRefresh.dispose();
     this.disposables.forEach((d) => d.dispose());
     void this.backend?.stop();
   }

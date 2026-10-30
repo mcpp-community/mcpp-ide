@@ -628,12 +628,19 @@
   "No debugger extension is installed: install CodeLLDB, the C/C++ extension or lldb-dap.": "没有安装调试器扩展：请安装 CodeLLDB、C/C++ 扩展或 lldb-dap。",
   "No toolchain is installed for {0}.": "{0} 尚未安装工具链。",
   "Open Settings": "打开设置",
-  "Restart": "重新启动",
   "Select the build target": "选择构建目标",
-  "The mcpp-ide backend ended.": "mcpp-ide 后端已结束。",
   "the mcpp-ide backend is not running": "mcpp-ide 后端未运行",
   "The mcpp-ide backend was not found. Install it with `xlings install mcpp-ide`, or set mcpp.ide.backendPath.": "未找到 mcpp-ide 后端。请用 `xlings install mcpp-ide` 安装，或设置 mcpp.ide.backendPath。",
   "the project's default": "工程默认值",
   "The targets mcpp builds for": "mcpp 能构建的目标",
-  "this machine": "本机"
+  "this machine": "本机",
+  "The project's mcpp is not installed: {0}": "项目所需的 mcpp 未安装：{0}",
+  "The project's mcpp did not answer: {0}": "项目的 mcpp 没有回答：{0}",
+  "mcpp {0} at {1}, set by mcpp.path (the project's own version is not chosen)": "mcpp {0}（{1}），由 mcpp.path 指定（不经项目的版本选择）",
+  "mcpp {0} (not asked in the project: the workspace is not trusted)": "mcpp {0}（未在项目内探测：工作区不受信任）",
+  "mcpp {0} at {1}, the project's": "mcpp {0}（{1}），项目所用的版本",
+  "The IDE report is written to {0}": "IDE 报告已写入 {0}",
+  "Restart the backend": "重新启动后端",
+  "Export IDE Report": "导出 IDE 报告",
+  "The mcpp-ide backend ended four times in three minutes; build, run, test and the project pages go on without it.": "mcpp-ide 后端在三分钟内结束了四次；构建、运行、测试与项目页面在没有它的情况下继续工作。"
 }

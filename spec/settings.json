@@ -1176,6 +1176,25 @@
       "since": "1.0.0",
       "title": "Effects denied in an untrusted workspace",
       "description": "What mcpp may not do while the workspace is not trusted (mcpp --deny): a run that needs one of them stops before it and says so. Trusting the workspace lifts the list."
+    },
+    {
+      "key": "mcpp.backend.logLevel",
+      "type": "string",
+      "default": "info",
+      "enum": [
+        "error",
+        "warning",
+        "info",
+        "debug"
+      ],
+      "scope": "window",
+      "group": "advanced",
+      "order": 100,
+      "tier": "advanced",
+      "applies": "immediate",
+      "since": "1.1.0",
+      "title": "Set the backend's log level",
+      "description": "What the mcpp-ide backend writes to the editor's log: errors only, warnings, what it does (the default), or every run of mcpp and mcppls with its arguments."
     }
   ]
 }

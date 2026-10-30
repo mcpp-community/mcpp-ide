@@ -347,6 +347,27 @@ function actions.selfCheck()
   vim.notify(table.concat(lines, '\n'), level)
 end
 
+-- The IDE report (design 2026-10-30 part 2 §3.2): what a bug report needs, written to a file the
+-- person names (default: beside the project).
+function actions.report(_, args, root)
+  local r, err = session.call('report/collect', root and { root = root } or {})
+  if err then
+    r = { kind = 'mcpp-ide.report', version = 1, error = err.message or tostring(err) }
+  end
+  local default = (root or vim.fn.getcwd()) .. '/mcpp-ide-report-' .. os.date('!%Y%m%dT%H%M%SZ') .. '.json'
+  local path = (args and args[1]) or flow.input({ prompt = t('Export IDE Report') .. ': ', default = default })
+  if not path or path == '' then
+    return
+  end
+  local file = io.open(path, 'w')
+  if not file then
+    return vim.notify('mcpp: ' .. t('cannot write {0}', path), vim.log.levels.ERROR)
+  end
+  file:write(vim.json.encode(r), '\n')
+  file:close()
+  vim.notify('mcpp: ' .. t('The IDE report is written to {0}', path), vim.log.levels.INFO)
+end
+
 -- Which mcppls answers C++ files (languageService/status), said: in Neovim a missing or older mcppls
 -- comes with its own plugin, mcppls-nvim.
 function M.language_service(s)

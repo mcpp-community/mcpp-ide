@@ -97,6 +97,7 @@ export const quickMenuItems: readonly QuickMenuItem[] = [
 
   { labelKey: "Build and refresh the language service", command: CLI_COMMANDS.autoConfigureModules, icon: "refresh", iconColor: "blue", group: "settings" },
   { labelKey: "Environment self-check", command: TOOL_COMMANDS.selfCheck, icon: "heart", iconColor: "green", group: "settings" },
+  { labelKey: "Export IDE Report", command: TOOL_COMMANDS.exportReport, icon: "folder", iconColor: "neutral", group: "settings" },
   { labelKey: "mcpp settings", command: TOOL_COMMANDS.openSettings, icon: "settings-gear", iconColor: "neutral", group: "settings" },
 ];
 

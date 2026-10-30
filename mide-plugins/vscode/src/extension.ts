@@ -1,3 +1,6 @@
+import * as path from "node:path";
+import * as os from "node:os";
+import type { ProjectMcpp } from "./ide/protocol";
 import * as vscode from "vscode";
 
 import { McppCliController } from "./cli/controller";
@@ -261,6 +264,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     }
   };
 
+  const projectMcpp = new Map<string, ProjectMcpp>();
   const cliController = new McppCliController({
     output,
     extensionUri: extensionContext.extensionUri,
@@ -270,6 +274,10 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     languageServerSummary: () => {
       const view = readLanguageServerState();
       return view.available ? view.state : undefined;
+    },
+    projectMcpp: () => {
+      const project = findCurrentProject();
+      return project === undefined ? undefined : projectMcpp.get(project.root);
     },
   });
 
@@ -283,6 +291,18 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     all: () => session.info?.projects ?? [],
   };
   const jobs = new Jobs(session);
+  // The project's mcpp (§4.4): asked when the backend starts, when the current project changes,
+  // after the window regains focus, and when a job's envelope named another version.
+  const refreshProjectMcpp = async (): Promise<void> => {
+    const project = findCurrentProject();
+    if (project === undefined || !session.running) return;
+    try {
+      projectMcpp.set(project.root, await session.request<ProjectMcpp>("project/mcpp", { root: project.root }));
+    } catch {
+      projectMcpp.delete(project.root);
+    }
+    cliController.refreshStatus();
+  };
   // 0.9.0's one seam for running mcpp now runs it through the backend; the parsers are unchanged.
   useMcppExecutor(async (_executable, args, cwd, options = {}) => {
     try {
@@ -415,6 +435,29 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     })),
 
     vscode.workspace.onDidGrantWorkspaceTrust(() => cliController.refreshStatus()),
+
+    // The IDE report (§3.2): what a bug report needs, written where the person chooses.
+    vscode.commands.registerCommand(TOOL_COMMANDS.exportReport, runGuarded(async () => {
+      const project = findCurrentProject();
+      let report: unknown;
+      try {
+        report = await session.request("report/collect", project ? { root: project.root } : {});
+      } catch (error) {
+        report = { kind: "mcpp-ide.report", version: 1, backend: null, error: String(error), degraded: session.degraded };
+      }
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const target = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(path.join(project?.root ?? os.homedir(), `mcpp-ide-report-${stamp}.json`)),
+        filters: { JSON: ["json"] },
+      });
+      if (target === undefined) return;
+      await vscode.workspace.fs.writeFile(target, Buffer.from(`${JSON.stringify(report, null, 2)}\n`, "utf8"));
+      void vscode.window.showInformationMessage(t("The IDE report is written to {0}", target.fsPath));
+    })),
+    session.onDidStart.event(() => void refreshProjectMcpp()),
+    session.onDidRefresh.event(() => { projectMcpp.clear(); void refreshProjectMcpp(); }),
+    session.on("project/mcppChanged", (n: { root: string }) => { projectMcpp.delete(n.root); void refreshProjectMcpp(); }),
+    vscode.window.onDidChangeActiveTextEditor(() => void refreshProjectMcpp()),
   );
 
   void offerSettingRenames(extensionContext);

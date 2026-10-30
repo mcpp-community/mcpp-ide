@@ -33,7 +33,31 @@ struct Protocol {
     int envelopeMin = 0, envelopeMax = 0;
     std::map<std::string, int> kinds;                   // kind -> version
     std::map<std::string, std::vector<std::string>> commandEffects;
+    std::vector<std::string> features;                  // what a client gates on (mcpp docs/50 §4)
     bool contract = false;                              // the full control contract (>= kContractFloor)
+};
+
+// THE FEATURES OF AN mcpp THAT PREDATES `features` (design 2026-10-30 part 2 §4.3): a table frozen
+// at the release that added the list, read for those releases only. An mcpp that states
+// `features` is taken at its word.
+std::vector<std::string> frozen_features(std::string_view version);
+
+// What a project's mcpp is, asked in the project (design 2026-10-30 part 2 §4.2): `mcpp self env
+// --format json` run in its root, through the program found on PATH (a version manager's shim
+// chooses by the directory) or the one the settings name, with XLINGS_PROJECT_DIR removed.
+struct ProjectMcpp {
+    // ok: the project's mcpp answered. pinned-missing: the project pins a version that is not
+    // installed, and the shim refused. failed: anything else. not-probed: an untrusted workspace,
+    // whose pinned program is not run; the global mcpp's facts stand in.
+    std::string state = "not-probed";
+    std::string version;
+    std::string program;                 // the file that ran (`self env`'s `program`)
+    std::vector<std::string> features;
+    bool featuresFrozen = false;         // from the frozen table, not from mcpp
+    bool fromSetting = false;            // mcpp.path named the program
+    std::string message;                 // why it is not ok, in the shim's or mcpp's words
+    std::string install;                 // the command that installs the pinned version
+    Json env = Json::object();           // `self env`'s data
 };
 
 // `mcpp --version` and `mcpp --protocol-version`.
@@ -95,6 +119,9 @@ public:
     };
     std::expected<ExecResult, std::string> exec(const RunOptions& o, std::chrono::milliseconds timeout,
                                                 std::size_t outputLimit) const;
+
+    // What the project at `root` runs (ProjectMcpp).
+    ProjectMcpp probe(const std::filesystem::path& root, const RunOptions& base) const;
 
 private:
     std::filesystem::path program_;
@@ -164,6 +191,7 @@ std::expected<Protocol, std::string> handshake(const std::filesystem::path& prog
     o.args = {"--version"};
     o.in = mcpplibs::os::process::stdio::null;
     o.env = env;
+    o.env.push_back({"XLINGS_PROJECT_DIR", std::nullopt});   // mcpp docs/50: no other project's pin
     auto v = mcpplibs::os::process::run(o);
     if (!v) return std::unexpected(v.error().message());
     if (!v->status.success()) return std::unexpected(std::format("{} --version exited {}", program.string(), v->status.shell_code()));
@@ -186,6 +214,8 @@ std::expected<Protocol, std::string> handshake(const std::filesystem::path& prog
             if (doc.contains("kinds") && doc["kinds"].is_object())
                 for (auto it = doc["kinds"].begin(); it != doc["kinds"].end(); ++it)
                     if (it->is_number_integer()) p.kinds[it.key()] = it->get<int>();
+            if (doc.contains("features") && doc["features"].is_array())
+                for (const auto& f : doc["features"]) if (f.is_string()) p.features.push_back(f.get<std::string>());
             if (doc.contains("commands") && doc["commands"].is_object())
                 for (auto it = doc["commands"].begin(); it != doc["commands"].end(); ++it) {
                     std::vector<std::string> effects;
@@ -197,7 +227,14 @@ std::expected<Protocol, std::string> handshake(const std::filesystem::path& prog
     }
     p.contract = !p.version.empty() && compare_versions(p.version, kContractFloor) >= 0 &&
                  p.kinds.contains("mcpp.build");
+    if (p.features.empty()) p.features = frozen_features(p.version);
     return p;
+}
+
+std::vector<std::string> frozen_features(std::string_view version) {
+    // 2026.10.30.1 introduced both meanings; 2026.10.31.1 added the list that names them.
+    if (!version.empty() && compare_versions(version, "2026.10.30.1") >= 0) return {"target-sets", "pkg-format-list"};
+    return {};
 }
 
 // A run of mcpp: its output on pipes, its input the null device (the backend's own streams carry
@@ -210,6 +247,10 @@ mcpplibs::os::process::spawn_options Client::spawn_options(const RunOptions& o) 
     s.in = mcpplibs::os::process::stdio::null;
     s.own_unit = true;
     s.env.push_back({"MCPP_CLIENT", o.client});
+    // THE PROJECT'S DIRECTORY DECIDES WHICH mcpp RUNS (mcpp docs/50, "How a tool runs mcpp for a
+    // project"): a shim reads XLINGS_PROJECT_DIR only where the directory has no pin, and an editor
+    // started from another project's terminal hands it to everything it starts.
+    s.env.push_back({"XLINGS_PROJECT_DIR", std::nullopt});
     if (!o.deny.empty()) {
         std::string joined;
         for (const auto& d : o.deny) { if (!joined.empty()) joined += ','; joined += d; }
@@ -278,6 +319,51 @@ std::expected<Client::ExecResult, std::string> Client::exec(const RunOptions& o,
     if (!r) return std::unexpected(r.error().message());
     return ExecResult{r->status.shell_code(), std::move(r->out), std::move(r->err), r->timed_out,
                       r->out_truncated || r->err_truncated};
+}
+
+ProjectMcpp Client::probe(const std::filesystem::path& root, const RunOptions& base) const {
+    ProjectMcpp out;
+    out.program = program_.generic_string();
+    RunOptions o = base;
+    o.cwd = root;
+    o.args = {"self", "env", "--format", "json"};
+    auto r = envelope(o);
+    if (!r) {
+        out.state = "failed";
+        out.message = r.error();
+        return out;
+    }
+    const Json& e = r->envelope;
+    if (e.is_object() && e.contains("mcpp") && e["mcpp"].is_object()) {
+        out.state = "ok";
+        out.version = e["mcpp"].value("version", "");
+        if (e["mcpp"].contains("features") && e["mcpp"]["features"].is_array()) {
+            for (const auto& f : e["mcpp"]["features"]) if (f.is_string()) out.features.push_back(f.get<std::string>());
+        } else {
+            out.features = frozen_features(out.version);
+            out.featuresFrozen = true;
+        }
+        if (e.contains("data") && e["data"].is_object()) {
+            out.env = e["data"];
+            if (const auto program = out.env.value("program", ""); !program.empty()) out.program = program;
+        }
+        return out;
+    }
+    // No envelope: the shim refused (a pinned version that is not installed), or mcpp failed. The
+    // shim's own words are the message; its install hint, when it gave one, is the action.
+    out.message = r->narration.empty() ? r->output : r->narration;
+    while (!out.message.empty() && (out.message.back() == '\n' || out.message.back() == '\r')) out.message.pop_back();
+    const auto at = out.message.find("xlings install mcpp@");
+    if (at != std::string::npos) {
+        auto end = out.message.find_first_of(" \r\n'\"", at + 20);
+        out.install = out.message.substr(at, end == std::string::npos ? std::string::npos : end - at);
+        out.state = "pinned-missing";
+    } else if (out.message.find("not installed") != std::string::npos || out.message.find("not found for 'mcpp'") != std::string::npos) {
+        out.state = "pinned-missing";
+    } else {
+        out.state = "failed";
+    }
+    return out;
 }
 
 Json diagnostics_of(const Json& envelope) {

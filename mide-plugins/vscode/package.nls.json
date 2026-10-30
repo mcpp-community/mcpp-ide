@@ -264,5 +264,8 @@
   "mcpp.toml.diagnostics.unknownSection.deprecationMessage": "mcpp.toml's problems come from mcpp itself now, located where mcpp reports them; this check no longer exists. mcpp.toml.diagnostics.enabled turns them all off.",
   "mcpp.toml.diagnostics.unknownKey.deprecationMessage": "mcpp.toml's problems come from mcpp itself now, located where mcpp reports them; this check no longer exists. mcpp.toml.diagnostics.enabled turns them all off.",
   "mcpp.toml.diagnostics.planeSeparation.deprecationMessage": "mcpp.toml's problems come from mcpp itself now, located where mcpp reports them; this check no longer exists. mcpp.toml.diagnostics.enabled turns them all off.",
-  "mcpp.toml.diagnostics.legacyKeys.deprecationMessage": "mcpp.toml's problems come from mcpp itself now, located where mcpp reports them; this check no longer exists. mcpp.toml.diagnostics.enabled turns them all off."
+  "mcpp.toml.diagnostics.legacyKeys.deprecationMessage": "mcpp.toml's problems come from mcpp itself now, located where mcpp reports them; this check no longer exists. mcpp.toml.diagnostics.enabled turns them all off.",
+  "mcpp.backend.logLevel.title": "Set the backend's log level",
+  "mcpp.backend.logLevel.description": "What the mcpp-ide backend writes to the editor's log: errors only, warnings, what it does (the default), or every run of mcpp and mcppls with its arguments.",
+  "command.mcpp.exportReport.title": "Export IDE Report"
 }

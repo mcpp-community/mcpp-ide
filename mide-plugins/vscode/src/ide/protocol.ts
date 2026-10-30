@@ -24,6 +24,19 @@ export interface LanguageServiceStatus {
   actions: { id: "install" | "update"; title: string }[];
 }
 
+/** `project/mcpp` (design 2026-10-30 part 2 §4.4): the project's mcpp, asked in the project. */
+export interface ProjectMcpp {
+  root: string;
+  state: "ok" | "pinned-missing" | "failed" | "not-probed";
+  version: string;
+  program: string;
+  features: string[];
+  featuresFrozen: boolean;
+  fromSetting: boolean;
+  message?: string;
+  install?: string;
+}
+
 export interface InitializeResult {
   server: { name: string; version: string };
   protocol: number;

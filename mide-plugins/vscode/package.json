@@ -188,6 +188,11 @@
         "category": "%category%"
       },
       {
+        "command": "mcpp.exportReport",
+        "title": "%command.mcpp.exportReport.title%",
+        "category": "%category%"
+      },
+      {
         "command": "mcpp.autoConfigureModules",
         "title": "%command.mcpp.autoConfigureModules.title%",
         "category": "%category%"
@@ -1125,6 +1130,20 @@
           "order": 100090,
           "description": "%mcpp.trust.denyEffects.title%",
           "markdownDescription": "%mcpp.trust.denyEffects.description%"
+        },
+        "mcpp.backend.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "error",
+            "warning",
+            "info",
+            "debug"
+          ],
+          "scope": "window",
+          "order": 100100,
+          "description": "%mcpp.backend.logLevel.title%",
+          "markdownDescription": "%mcpp.backend.logLevel.description%"
         }
       }
     },

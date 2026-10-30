@@ -331,6 +331,46 @@
         }
       }
     },
+    "project/mcpp": {
+      "description": "The project's mcpp, asked in the project through the shim (design 2026-10-30 part 2 §4.2): its version, the program that ran, what it states it can do, and whether mcpp.path decided it. `state` is ok, pinned-missing (a pinned version not installed; `install` is the command), failed, or not-probed (an untrusted workspace: the global mcpp's facts).",
+      "params": { "type": "object", "properties": { "root": { "type": "string" } } },
+      "result": {
+        "type": "object",
+        "required": ["root", "state", "version", "program", "features", "featuresFrozen", "fromSetting"],
+        "properties": {
+          "root": { "type": "string" },
+          "state": { "enum": ["ok", "pinned-missing", "failed", "not-probed"] },
+          "version": { "type": "string" },
+          "program": { "type": "string" },
+          "features": { "type": "array", "items": { "type": "string" } },
+          "featuresFrozen": { "type": "boolean" },
+          "fromSetting": { "type": "boolean" },
+          "message": { "type": "string" },
+          "install": { "type": "string" }
+        }
+      }
+    },
+    "project/refresh": {
+      "description": "Forgets what a project's mcpp is (every project's, without `root`), so its next use asks again: the editor regained focus.",
+      "params": { "type": "object", "properties": { "root": { "type": "string" } } },
+      "result": { "type": "object" }
+    },
+    "capabilities/explain": {
+      "description": "Each feature the panels gate, whether it is available for the project, and if not which party lacks what and from which version (design 2026-10-30 part 2 §3.2).",
+      "params": { "type": "object", "properties": { "root": { "type": "string" } } },
+      "result": {
+        "type": "object",
+        "required": ["root", "mcpp", "features"],
+        "properties": {
+          "features": { "type": "array", "items": { "type": "object", "required": ["id", "available"], "properties": { "reason": { "type": "object", "required": ["source", "capability", "message"] } } } }
+        }
+      }
+    },
+    "report/collect": {
+      "description": "The IDE report: the backend, every project's mcpp, mcppls's status, the settings in effect, recent jobs and the backend's recent log. The editor writes it to a file the person chose.",
+      "params": { "type": "object", "properties": { "root": { "type": "string" } } },
+      "result": { "type": "object", "required": ["kind", "version", "backend", "projects", "settings", "jobs", "log"] }
+    },
     "shutdown": { "description": "Waits for the requests in flight; the next message is `exit`.", "params": { "type": "object" }, "result": { "type": "null" } },
     "exit": { "description": "A notification: the backend ends (status 0 after shutdown, 1 otherwise).", "params": { "type": "object" }, "result": { "type": "null" } }
   },
@@ -375,7 +415,8 @@
     "test/summary": { "params": { "type": "object", "required": ["jobId", "passed", "failed"] } },
     "result/changed": { "description": "A project's result record changed: a build finished, whoever ran it.", "params": { "type": "object", "required": ["root", "result"] } },
     "manifest/changed": { "params": { "type": "object", "required": ["root"] } },
-    "manifest/diagnostics": { "params": { "type": "object", "required": ["root", "diagnostics"] } }
+    "manifest/diagnostics": { "params": { "type": "object", "required": ["root", "diagnostics"] } },
+    "project/mcppChanged": { "description": "A job's envelope named another mcpp than the project's was asked as: it is asked again on its next use.", "params": { "type": "object", "required": ["root", "version"] } }
   },
   "$defs": {
     "settingValues": { "type": "object", "additionalProperties": true },
@@ -410,7 +451,7 @@
         "when": { "type": "string" },
         "quickMenu": { "type": "boolean" },
         "subcommand": { "type": "string", "description": "The name a command line types (`:Mcpp <subcommand>` in Neovim): the row's own, else the id after `mcpp.`" },
-        "action": { "type": "object", "required": ["kind"], "properties": { "kind": { "enum": ["job", "run", "debug", "cache", "panel", "cancel", "selectTarget", "installToolchain", "selectDefaultToolchain", "newProject", "quickMenu", "selfCheck", "rpc", "languageService", "forward", "editor", "problems"] } } }
+        "action": { "type": "object", "required": ["kind"], "properties": { "kind": { "enum": ["job", "run", "debug", "cache", "panel", "cancel", "selectTarget", "installToolchain", "selectDefaultToolchain", "newProject", "quickMenu", "selfCheck", "rpc", "languageService", "forward", "editor", "problems", "report"] } } }
       }
     },
     "launchParams": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "target": { "type": "string" }, "profile": { "type": "string" }, "bin": { "type": "string" }, "args": { "type": "array", "items": { "type": "string" } } } },
