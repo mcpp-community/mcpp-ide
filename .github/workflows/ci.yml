@@ -189,7 +189,7 @@ jobs:
             const fail = (message) => { console.error(message); process.exit(1); };
             if (p.extensionDependencies?.[0] !== "sunrisepeak.mcpp-language-server") fail("the dependency moved");
             if (p.extensionDependencies.some((id) => id.includes("clangd"))) fail("clangd is back in the dependency list");
-            // The backend's language client is bundled into dist/vendor; nothing is a runtime dependency.
+            // The language client of the backend is bundled into dist/vendor; nothing is a runtime dependency.
             if (Object.keys(p.dependencies ?? {}).length) fail("a runtime dependency crept in: the VSIX carries no node_modules");
             if ((p.activationEvents ?? []).some((event) => event.startsWith("onCommand:"))) fail("onCommand activations are derived since 1.74");
             if (!p.contributes?.viewsContainers?.activitybar?.length) fail("the view container disappeared");
