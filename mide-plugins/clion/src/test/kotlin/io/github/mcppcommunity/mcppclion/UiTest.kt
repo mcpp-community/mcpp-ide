@@ -1,12 +1,16 @@
 // CLion's own views over the backend's view models (mcpp design 2026-10-30 part 2 §9), headless: the
 // project tree and the cache's rows from the answers the backend gives, a package's page, and the
-// settings form from a registry -- its fields, its search, Apply's changes and Reset.
+// settings form from a registry -- its fields, its search, Apply's changes and Reset. They need the
+// application (icons, Swing) and no project: a light project lives on temp://, where a bundled
+// plugin's startup activity (CLion's STM32) fails.
 package io.github.mcppcommunity.mcppclion
 
 import com.google.gson.JsonElement
 import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.ApplicationRule
+import com.intellij.testFramework.EdtRule
+import com.intellij.testFramework.RunsInEdt
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBTextField
 import io.github.mcppcommunity.mcppclion.settings.SettingsForm
@@ -14,8 +18,21 @@ import io.github.mcppcommunity.mcppclion.ui.CacheModel
 import io.github.mcppcommunity.mcppclion.ui.LibraryPage
 import io.github.mcppcommunity.mcppclion.ui.ProjectModel
 import io.github.mcppcommunity.mcppclion.ui.RowNode
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.ClassRule
+import org.junit.Rule
+import org.junit.Test
 
-class UiTest : BasePlatformTestCase() {
+@RunsInEdt
+class UiTest {
+    companion object {
+        @ClassRule @JvmField val application = ApplicationRule()
+    }
+
+    @get:Rule val edt = EdtRule()
+
     private val t: (String, Array<out Any?>) -> String = { key, args ->
         var text = key
         args.forEachIndexed { i, a -> text = text.replace("{$i}", a.toString()) }
@@ -26,7 +43,8 @@ class UiTest : BasePlatformTestCase() {
 
     private fun texts(node: RowNode): List<String> = (0 until node.childCount).map { (node.getChildAt(it) as RowNode).row.text }
 
-    fun testTheProjectTreeFromTheBackendsAnswers() {
+    @Test
+    fun theProjectTreeFromTheBackendsAnswers() {
         val project = json("""{"root": "/w/app", "name": "app"}""")
         val summary = json("""{"targets": [{"name": "app", "kind": "executable", "configuration": "dev"}],
             "tests": [{"name": "test_smoke", "kind": "test"}], "libraries": [],
@@ -46,7 +64,8 @@ class UiTest : BasePlatformTestCase() {
         assertTrue((missing.getChildAt(0) as RowNode).row.error)
     }
 
-    fun testTheCacheRowsFromTheInventory() {
+    @Test
+    fun theCacheRowsFromTheInventory() {
         val inventory = json("""{"root": "/home/u/.mcpp", "totalBytes": 3, "totalEntries": 2, "totalText": "1.5 GiB",
             "byKind": [{"kind": "bmi", "entries": 2, "bytes": 3, "bytesText": "1.5 GiB"}],
             "topLabels": [{"label": "std", "entries": 1, "bytes": 2, "bytesText": "1.0 GiB"}],
@@ -58,7 +77,8 @@ class UiTest : BasePlatformTestCase() {
         assertEquals(1, rows[3].childCount)   // an empty bucket is not a row
     }
 
-    fun testAPackagesPage() {
+    @Test
+    fun aPackagesPage() {
         val html = LibraryPage.html(json("""{"id": "mcpplibs:os", "description": "the OS <API>", "index": "mcpplibs",
             "dependencyName": "mcpplibs.os", "latest": "0.2.4", "versions": ["0.2.4", "0.2.3"], "licenses": ["Apache-2.0"],
             "repo": "https://github.com/mcpplibs/os"}""")) { it }
@@ -68,7 +88,8 @@ class UiTest : BasePlatformTestCase() {
         assertTrue(html.contains("href=\"https://github.com/mcpplibs/os\""))
     }
 
-    fun testTheSettingsFormFromARegistry() {
+    @Test
+    fun theSettingsFormFromARegistry() {
         val registry = json("""{"groups": [{"id": "project", "order": 10, "title": "Project"}, {"id": "build", "order": 20, "title": "Build"}],
             "settings": [
               {"key": "mcpp.path", "type": "string", "default": "", "group": "project", "tier": "public", "title": "mcpp path", "description": "the mcpp to run"},
