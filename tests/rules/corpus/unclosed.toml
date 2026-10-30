@@ -1,0 +1,6 @@
+[package]
+name = "u"
+text = """
+never closed
+[build]
+cxxflags = ["-O2"

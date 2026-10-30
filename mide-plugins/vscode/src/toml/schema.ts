@@ -11,7 +11,7 @@ import raw from "../../data/toml-schema.json";
 
 export interface TomlKey {
   key: string;
-  type: "string" | "boolean" | "number" | "array" | "enum";
+  type: "string" | "boolean" | "number" | "array" | "enum" | "table";
   values?: string[];
   default?: unknown;
   since?: string;

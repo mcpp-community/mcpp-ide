@@ -1,6 +1,6 @@
 {
-  "sourceVersion": "2026.10.27.1",
-  "sourceCommit": "e0b1133dd2912f539ee68a06724cb524e3531f46",
+  "sourceVersion": "2026.10.29.1",
+  "sourceCommit": "db3b8159480ce94df2ba7ec20c7f9e0654f97764",
   "protocolVersion": 17,
   "cacheEpoch": 3,
   "roles": [
@@ -155,8 +155,10 @@
       "transform": "Verbatim",
       "mustExist": false,
       "since": 4,
-      "rules": [],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#runner-how-the-artifact-is-executed-20268192"
+      "rules": [
+        "R9.10"
+      ],
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#runner-how-the-artifact-is-executed-20268192"
     },
     {
       "wire": "runner-named",
@@ -320,7 +322,7 @@
         "R2.1",
         "R9.4"
       ],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#warning-succeeding-and-still-being-heard-20268212"
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#warning-succeeding-and-still-being-heard-20268212"
     },
     {
       "wire": "diagnostic",
@@ -360,7 +362,8 @@
         "R5.1",
         "R5.3",
         "R6.4",
-        "R9.2"
+        "R9.2",
+        "R9.10"
       ],
       "docsUrl": null
     },
@@ -378,7 +381,7 @@
       "rules": [
         "R2.1"
       ],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#the-probe-channel-fact-floor-2026952"
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#the-probe-channel-fact-floor-2026952"
     },
     {
       "wire": "floor",
@@ -394,7 +397,7 @@
       "rules": [
         "R2.1"
       ],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#the-probe-channel-fact-floor-2026952"
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#the-probe-channel-fact-floor-2026952"
     },
     {
       "wire": "pack-format",
@@ -407,7 +410,9 @@
       "transform": "Verbatim",
       "mustExist": false,
       "since": 9,
-      "rules": [],
+      "rules": [
+        "R9.10"
+      ],
       "docsUrl": null
     },
     {
@@ -455,7 +460,7 @@
         "R9.2",
         "R9.5"
       ],
-      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/684a306bced037014da08b038412f57c203d0bc9/docs/30-build-mcpp.md#deploying-what-the-program-generated-deploy-20269123-protocol-11"
+      "docsUrl": "https://github.com/mcpp-community/mcpp/blob/db3b8159480ce94df2ba7ec20c7f9e0654f97764/docs/30-build-mcpp.md#deploying-what-the-program-generated-deploy-20269123-protocol-11"
     },
     {
       "wire": "runtime-search-dir",
@@ -532,7 +537,9 @@
       "transform": "Verbatim",
       "mustExist": false,
       "since": 16,
-      "rules": [],
+      "rules": [
+        "R9.2"
+      ],
       "docsUrl": "https://github.com/mcpp-community/mcpp/blob/e0b1133dd2912f539ee68a06724cb524e3531f46/docs/30-build-mcpp.md#typed-api-import-mcpp-recommended"
     },
     {
@@ -589,7 +596,9 @@
       "transform": "Verbatim",
       "mustExist": false,
       "since": 17,
-      "rules": [],
+      "rules": [
+        "R9.2"
+      ],
       "docsUrl": "https://github.com/mcpp-community/mcpp/blob/e0b1133dd2912f539ee68a06724cb524e3531f46/docs/30-build-mcpp.md#typed-api-import-mcpp-recommended"
     },
     {

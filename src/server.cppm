@@ -1603,10 +1603,6 @@ void Session::install() {
         return job_start(job);
     });
     s.on("manifest/check", [this](const Json& p, const rpc::Context&) { return manifest_check(p); });
-    s.on("toml/complete", [](const Json& p, const rpc::Context&) -> Result { return manifest::complete(p); });
-    s.on("toml/hover", [](const Json& p, const rpc::Context&) -> Result { return manifest::hover(p); });
-    s.on("toml/symbols", [](const Json& p, const rpc::Context&) -> Result { return manifest::symbols(p); });
-    s.on("buildscript/complete", [](const Json& p, const rpc::Context&) -> Result { return manifest::buildscript_complete(p); });
 }
 
 }  // namespace mcppide::server

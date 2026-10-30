@@ -8,6 +8,8 @@
 // 点分键、字符串（含三引号多行串）、整数、布尔、数组与内联表（可嵌套、
 // 可跨行）、行注释。CRLF 行尾在进入解析前剥除，列号按剥除后的文本计算。
 
+import { SCHEMA } from "./schema";
+
 /** 0 基行列范围，end 为开区间（与 VS Code Range 同构）。 */
 export interface TomlRange {
   startLine: number;
@@ -151,29 +153,63 @@ const PARAMETERIZED_BASES: ReadonlySet<string> = new Set([
   "dev-dependencies",
 ]);
 
+/** The schema's section names (the rules layer's reading of a table, design 2026-10-30 part 2 §8). */
+const SCHEMA_SECTIONS: ReadonlySet<string> = new Set(SCHEMA.sections.map((section) => section.name));
+
+/** A platform's tables that a target selector overrides (`[target.<sel>.link]` is `[platform.link]`). */
+const PLATFORM_OVERRIDES: ReadonlySet<string> = new Set(["carrier", "layers", "link", "runners", "tools"]);
+
+/** Tables whose sub-tables are named entries: `[targets.<name>]`, `[platform.build.<selector>]`. */
+const NAMED_ENTRY_BASES: ReadonlySet<string> = new Set([
+  ...PARAMETERIZED_BASES,
+  "build-dependencies",
+  "features",
+  "platform",
+]);
+
 function resolveGroup(segments: readonly string[]): string | undefined {
   const joined = segments.join(".");
-  if (KNOWN_SECTIONS.has(joined)) {
+  if (KNOWN_SECTIONS.has(joined) || SCHEMA_SECTIONS.has(joined)) {
     return joined;
   }
   const head = segments[0];
   if (head === "target") {
     // [target.<sel>] 或 [target.<sel>.<子表>]；sel 是三元组或去引号后的
-    // cfg 表达式，本身不含未引号点，因此子表部分从第三段开始。
+    // cfg 表达式，本身不含未引号点，因此子表部分从第三段开始。A platform's table under a
+    // selector is the platform's.
     if (segments.length <= 2) {
       return "target";
     }
-    return resolveGroup(segments.slice(2));
+    const rest = segments.slice(2);
+    return resolveGroup(PLATFORM_OVERRIDES.has(rest[0]) ? ["platform", ...rest] : rest);
+  }
+  if (head === "workspace" && segments[1] === "dependencies" && segments.length >= 3) {
+    return "workspace.dependencies";
+  }
+  if (head === "workspace" && segments.length >= 2) {
+    // `[workspace.<table>]` is the table it mirrors.
+    return resolveGroup(segments.slice(1));
+  }
+  if (segments.length >= 2 && segments[segments.length - 1] === "requires_abi") {
+    return "requires_abi";
+  }
+  if (head === "platform" && segments[1] === "hosted" && segments[2] === "layers") {
+    return "platform.layers";
   }
   if (head === "runtime" && segments.length === 2) {
     // [runtime."<capability>"]：带点 capability 名的显式 provider 子表。
     return "runtime.capability";
   }
-  if (PARAMETERIZED_BASES.has(head) && segments.length >= 2) {
+  if (NAMED_ENTRY_BASES.has(head) && segments.length >= 2) {
+    // The longest leading run that names a section: `[platform.build.'cfg(...)']` is
+    // `platform.build`, `[targets.app]` is `targets`.
+    for (let length = segments.length - 1; length >= 1; length -= 1) {
+      const name = segments.slice(0, length).join(".");
+      if (SCHEMA_SECTIONS.has(name) || KNOWN_SECTIONS.has(name)) {
+        return name;
+      }
+    }
     return head;
-  }
-  if (head === "workspace" && segments[1] === "dependencies" && segments.length >= 3) {
-    return "workspace.dependencies";
   }
   return undefined;
 }
@@ -319,6 +355,15 @@ class Scanner {
   }
 
   private sliceText(a: Pos, b: Pos): string {
+    // A scan that ran to the end of the document (an unclosed multi-line string) ends one line past
+    // the last; its text ends where the last line does.
+    if (b.line >= this.lines.length) {
+      const last = this.lines.length - 1;
+      b = { line: last, col: this.lines[last].length };
+      if (a.line > last) {
+        return "";
+      }
+    }
     if (a.line === b.line) {
       return this.lines[a.line].slice(a.col, b.col);
     }

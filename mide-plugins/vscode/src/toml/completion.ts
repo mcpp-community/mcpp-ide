@@ -71,6 +71,10 @@ export const SECTION_HEADERS: readonly SectionHeaderSpec[] = [
   { group: "xlings", label: "[xlings]", header: "[xlings]", detail: () => t("Build environment (supplied by xlings)") },
   { group: "xlings.workspace", label: "[xlings.workspace]", header: "[xlings.workspace]", detail: () => t("Pin tool versions") },
   { group: "target", label: "[target.<triple>]", header: "[target.${1:x86_64-linux-gnu}]", detail: () => t("Configuration per target triple") },
+  { group: "dependencies.<namespace>", label: "[dependencies.<namespace>]", header: "[dependencies.${1:mcpplibs}]", detail: () => t("Dependencies of one index namespace") },
+  { group: "features.<name>", label: "[features.<name>]", header: "[features.${1:name}]", detail: () => t("A feature as a table") },
+  { group: "target.cfg.build", label: "[target.'cfg(...)'.build]", header: "[target.'cfg(${1:os = \"linux\"})'.build]", detail: () => t("Build settings for the targets a selector matches") },
+  { group: "target.cfg.dependencies", label: "[target.'cfg(...)'.dependencies]", header: "[target.'cfg(${1:os = \"linux\"})'.dependencies]", detail: () => t("Dependencies for the targets a selector matches") },
   { group: "pack", label: "[pack]", header: "[pack]", detail: () => t("mcpp pack packaging configuration") },
   { group: "pack.bundle-project", label: "[pack.bundle-project]", header: "[pack.bundle-project]", detail: () => t("Fine-tuning of the vendored filtering policy") },
   { group: "indices", label: "[indices]", header: "[indices]", detail: () => t("Project-level index redirection") },
@@ -197,6 +201,16 @@ function headerEntries(): HeaderEntry[] {
   // `[workspace.dependencies]`). Merge them, preferring the curated wording, so
   // schema-driven detail never costs a writable table its suggestion.
   const entries: HeaderEntry[] = SCHEMA.sections.map((section) => {
+    // A table written only under a selector (`[target.<selector>.abi]`) is offered with the
+    // selector to fill in.
+    if ((section as { selector?: boolean }).selector === true) {
+      const tail = section.header.slice(section.header.indexOf("<selector>") + "<selector>".length);
+      return {
+        label: `[target.'cfg(...)'${tail}`,
+        header: `[target.'cfg(\${1:os = "linux"})'${tail}`,
+        detail: `plane: ${section.plane}`,
+      };
+    }
     const spec = HEADER_SPEC_BY_GROUP.get(section.name);
     const entry: HeaderEntry = {
       label: spec?.label ?? section.header,
@@ -254,6 +268,8 @@ function keyPlaceholder(key: TomlKey): string {
       return "0";
     case "array":
       return "[]";
+    case "table":
+      return "{ }";
     case "enum":
       return JSON.stringify(key.values?.[0] ?? "");
     default:

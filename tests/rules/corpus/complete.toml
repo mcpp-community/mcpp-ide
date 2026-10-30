@@ -1,0 +1,80 @@
+# A manifest that uses most of what mcpp reads.
+[package]
+name        = "demo.app"
+version     = "0.3.0"
+mcpp        = ">=2026.10.30.1"
+standard    = "c++23"
+description = "演示 a manifest — with 中文 text"
+authors     = ["A <a@example.com>"]
+
+[build]
+cxxflags = ["-O2", "-Wall"]
+bmi_schedule = "auto"
+sources  = [
+    "src/**/*.cppm",
+    "src/**/*.cpp",   # a comment inside an array
+]
+
+[dependencies]
+fmt          = "11.0.2"
+compat.zlib  = { version = "1.3.1" }
+local        = { path = "../lib" }
+remote       = { git = "https://github.com/user/repo.git", tag = "v1.0.0" }
+shared       = { workspace = true }
+simdlib      = { version = "2.0", features = ["avx2", "simd"] }
+
+[dependencies.mcpplibs]
+os = "0.2.3"
+
+[dev-dependencies]
+gtest = "1.15.0"
+
+[features]
+default = ["simd"]
+simd    = { defines = ["USE_SIMD"] }
+extra   = []
+
+[features.simd]
+sources = ["src/simd/**"]
+
+[targets.app]
+kind = "bin"
+main = "src/main.cpp"
+
+[targets.tool]
+kind = "entry"
+
+[profile.release]
+opt = 3
+
+[target.'cfg(os = "linux")'.build]
+cxxflags = ["-pthread"]
+
+[target.x86_64-openkal]
+platform = "mcpplibs.openkal-platform@0.18.0"
+
+[workspace]
+members = ["libs/*"]
+
+[workspace.dependencies]
+shared = "1.2.0"
+
+[xlings]
+deps = ["cmake"]
+
+[xlings.workspace]
+node = "24.19.0"
+
+[toolchain]
+linux = "llvm@23.1.3"
+
+[pack]
+format = "tar"
+
+[runtime]
+libraries = ["m"]
+
+description2 = """
+a multi-line
+string = with an equals sign
+"""

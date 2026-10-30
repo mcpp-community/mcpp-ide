@@ -1,0 +1,24 @@
+[pack
+[targets.
+[[
+[package]
+name = "edit"
+standard = "
+kind = 
+[targets.app]
+kind = "b
+main = 
+[build]
+bmi_schedule = au
+cxxflags = ["-O2", 
+[dependencies]
+zlib = "1.
+fmt = { version = "1
+foo = { git = "x", tag = "
+bar = { features = ["
+	tabbed = "v"
+名字 = "unicode key"
+x = "名字" # 注释
+[features]
+simd = { defines = ["A"], sources = [ { 
+[dependencies.ns

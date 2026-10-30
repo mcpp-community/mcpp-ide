@@ -2,3 +2,4 @@
 * text=auto eol=lf
 protocol/fixtures/** -text
 *.png binary
+tests/rules/corpus/** -text

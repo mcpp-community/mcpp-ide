@@ -18,7 +18,7 @@
 //   6 legacy-key        legacy 段/键
 //   7 array-table       数组表 [[...]]（mcpp 只接受少数几处，见下）
 
-import { sectionByName, type TomlKey, type TomlSection } from "./schema";
+import { SCHEMA, sectionByName, type TomlKey, type TomlSection } from "./schema";
 
 export type Severity = "error" | "warning" | "info" | "off";
 
@@ -398,9 +398,14 @@ const ALLOWED_ARRAY_TABLES: ReadonlyArray<ReadonlyArray<string>> = [
   ["xlings", "deps"],
 ];
 
+/** The schema's own arrays of tables (`[[platform.link.inputs]]`, `[[runtime.artifacts]]`). */
+const SCHEMA_ARRAY_TABLES: ReadonlyArray<ReadonlyArray<string>> = SCHEMA.sections
+  .filter((section) => section.header.startsWith("[["))
+  .map((section) => splitDots(section.name));
+
 function isAllowedArrayTable(name: string): boolean {
   const parts = splitDots(name);
-  return ALLOWED_ARRAY_TABLES.some(
+  return [...ALLOWED_ARRAY_TABLES, ...SCHEMA_ARRAY_TABLES].some(
     (pattern) =>
       pattern.length === parts.length && pattern.every((part, index) => part === "*" || part === parts[index]),
   );

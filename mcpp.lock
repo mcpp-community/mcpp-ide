@@ -30,9 +30,9 @@ targets = ["aarch64-openkal", "x86_64-openkal"]
 
 [package."openkal-linux"]
 namespace = "mcpplibs"
-version = "0.18.2"
-source  = "index+mcpplibs@0.18.2"
-hash    = "fnv1a:2947b54ddbcf8813"
+version = "0.18.3"
+source  = "index+mcpplibs@0.18.3"
+hash    = "fnv1a:2947b44ddbcf8660"
 
 [package."openkal-llvm-runtime"]
 namespace = "mcpplibs"
@@ -68,10 +68,9 @@ targets = ["aarch64-openkal", "x86_64-openkal"]
 
 [package."mcpplibs.os"]
 namespace = "mcpplibs"
-version = "0.2.1"
-source  = "index+mcpplibs@0.2.1"
-hash    = "fnv1a:d0be97a50033077e"
-targets = ["aarch64-openkal", "x86_64-linux-gnu", "x86_64-openkal"]
+version = "0.2.3"
+source  = "index+mcpplibs@0.2.3"
+hash    = "fnv1a:d0be95a500330418"
 
 [package."nlohmann.json"]
 namespace = "nlohmann"

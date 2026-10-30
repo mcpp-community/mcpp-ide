@@ -22,6 +22,10 @@ class McppProjectTaskRunner : ProjectTaskRunner() {
     override fun canRun(project: Project, task: ProjectTask): Boolean =
         task is ModuleBuildTask && project.basePath?.let { File(it, "mcpp.toml").isFile } == true
 
+    // Abstract in 2026.1, which asks it of a task alone: the module's project answers.
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun canRun(task: ProjectTask): Boolean = (task as? ModuleBuildTask)?.module?.project?.let { canRun(it, task) } ?: false
+
     override fun run(project: Project, context: ProjectTaskContext, vararg tasks: ProjectTask): Promise<ProjectTaskRunner.Result> {
         val promise = AsyncPromise<ProjectTaskRunner.Result>()
         val session = McppSession.get(project)
