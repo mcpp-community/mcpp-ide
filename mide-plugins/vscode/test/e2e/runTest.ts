@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 
 import { runTests } from "@vscode/test-electron";
 
-import { STUB_VARIANTS, stubExtensionJs, stubPackageJson, type StubVariant } from "./mcpplsStub";
+import { STUB_VARIANTS, stubExtensionJs, stubPackageJson, stubServerJs, type StubVariant } from "./mcpplsStub";
 
 /**
  * One Extension Host run per mcppls variant. Each run gets its own extensions
@@ -39,6 +39,19 @@ async function runVariant(repositoryRoot: string, fixtureRoot: string, variant: 
   }
   writeFileSync(join(mcpplsStub, "package.json"), stubPackageJson(variant));
   writeFileSync(join(mcpplsStub, "extension.js"), stubExtensionJs(variant));
+  // The stub's server, in its payload as the real extension carries it: the backend asks it for
+  // mcppls's actions. A node script, behind a .cmd shim on Windows as the fake mcpp is.
+  const payloadBin = join(mcpplsStub, "payload", "bin");
+  mkdirSync(payloadBin, { recursive: true });
+  writeFileSync(join(payloadBin, "mcppls.js"), stubServerJs(variant));
+  const server = process.platform === "win32" ? "mcppls.cmd" : "mcppls";
+  if (process.platform === "win32") {
+    writeFileSync(join(payloadBin, server), `@node "%~dp0mcppls.js" %*\r\n`);
+  } else {
+    writeFileSync(join(payloadBin, server), `#!/usr/bin/env node\n${stubServerJs(variant)}`);
+    chmodSync(join(payloadBin, server), 0o755);
+  }
+  writeFileSync(join(mcpplsStub, "payload", "payload.json"), JSON.stringify({ server: { path: `bin/${server}` } }));
   copyFileSync(join(fixtureRoot, "project/mcpp.toml"), join(workspaceDir, "mcpp.toml"));
   copyFileSync(join(fixtureRoot, "project/main.cpp"), join(workspaceDir, "main.cpp"));
   copyFileSync(join(fixtureRoot, "project/build.mcpp"), join(workspaceDir, "build.mcpp"));

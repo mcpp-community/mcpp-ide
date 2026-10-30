@@ -26,7 +26,6 @@ class McppStartup : ProjectActivity {
                 }
                 n.notify(project)
             }
-            session.root?.let { session.refreshTests(it) }
         }
         val stale = File(base, "compile_commands.json")
         if (stale.isFile) {

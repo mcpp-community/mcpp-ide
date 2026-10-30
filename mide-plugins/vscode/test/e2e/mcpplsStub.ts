@@ -6,6 +6,12 @@
  * one that renamed its command, one that exposes no state API, and one whose
  * state API throws. The stub is generated rather than checked in five times so
  * the command list has a single source here.
+ *
+ * Each variant carries a server in its payload, as the real extension does: what the backend asks
+ * (`mcppls --version`, and `mcppls status` from 0.0.20) to learn mcppls's actions and their VS Code
+ * commands (design 2026-10-30 part 2 §5.3). The full one is 0.0.20 and states its actions; the
+ * partial one is 0.0.18, the oldest supported, read through the backend's frozen table; the others
+ * are 0.0.19, read the same way.
  */
 
 export type StubVariant = "full" | "partial" | "renamed" | "noapi" | "throwing";
@@ -106,5 +112,57 @@ ${apiReturn}
 }
 
 ${exportsBody}
+`;
+}
+
+/** The server's version: `status` exists from 0.0.20. */
+export function stubServerVersion(variant: StubVariant): string {
+  return variant === "full" ? "0.0.20" : variant === "partial" ? "0.0.18" : "0.0.19";
+}
+
+/** mcppls 0.0.20's actions under VS Code, as `mcppls status` states them (mcppls S3-8-7). */
+const STATUS_ACTIONS: ReadonlyArray<[string, string, unknown[]?]> = [
+  ["restart", "mcppls.restartServer"],
+  ["reload", "mcppls.reloadBuildDescription"],
+  ["restartEngine", "mcppls.restartClangd"],
+  ["resetCache", "mcppls.resetWorkspaceCache"],
+  ["showLog", "mcppls.showLogs"],
+  ["openLogDirectory", "mcppls.revealCacheDirectory", ["logs"]],
+  ["openCacheDirectory", "mcppls.revealCacheDirectory"],
+  ["collectReport", "mcppls.collectReport"],
+  ["exportDiagnostics", "mcppls.exportDiagnosticBundle"],
+  ["selectContext", "mcppls.selectContext"],
+  ["moduleGraph", "mcppls.showModuleGraph"],
+  ["runBuildTool", "mcppls.runBuildToolInTerminal"],
+  ["installTools", "mcppls.installCommandLineTools"],
+  ["reviewRun", "mcppls.review.run"],
+  ["reviewClear", "mcppls.review.clear"],
+  ["turnOffInWorkspace", "mcppls.turnOffInWorkspace"],
+  ["turnOnInWorkspace", "mcppls.turnOnInWorkspace"],
+  ["turnOffOtherCppFeatures", "mcppls.turnOffOtherCppFeatures"],
+  ["restoreOtherCppFeatures", "mcppls.restoreOtherCppFeatures"],
+];
+
+/** The server's program, a node script: `--version`, and `status --format json --root <dir>`. */
+export function stubServerJs(variant: StubVariant): string {
+  const version = stubServerVersion(variant);
+  const actions = STATUS_ACTIONS.map(([id, vscode, args]) => ({ id, title: id, vscode, ...(args ? { vscodeArguments: args } : {}) }));
+  return `const args = process.argv.slice(2);
+if (args[0] === "--version") {
+  process.stdout.write("mcppls ${version}\\n");
+} else if (args[0] === "status" && ${JSON.stringify(variant === "full")}) {
+  const root = args[args.indexOf("--root") + 1];
+  process.stdout.write(JSON.stringify({
+    schema: 1,
+    server: { version: "${version}", platform: "test" },
+    capabilities: ["status"],
+    workspace: { root, state: "ready" },
+    instances: [],
+    actions: ${JSON.stringify(actions)},
+  }) + "\\n");
+} else {
+  process.stderr.write("mcppls: unknown command\\n");
+  process.exit(2);
+}
 `;
 }

@@ -51,7 +51,7 @@ suite(`mcpp extension smoke (mcppls stub: ${STUB})`, () => {
     assert.ok(contributes.colors, "theme colours are contributed");
   });
 
-  test("a build runs mcpp and then asks the language service to refresh", async () => {
+  test("a build runs mcpp; the language service is asked to reload only when the setting says so", async () => {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(workspaceFolder, "the fixture workspace should be open");
     const fakeMcpp = process.env.MCPP_E2E_FAKE_MCPP;
@@ -60,25 +60,36 @@ suite(`mcpp extension smoke (mcppls stub: ${STUB})`, () => {
     assert.ok(fakeMcpp, "MCPP_E2E_FAKE_MCPP");
     assert.ok(mcppLog, "MCPP_E2E_LOG");
     assert.ok(mcpplsLog, "MCPP_E2E_MCPPLS_LOG");
-    await vscode.workspace
-      .getConfiguration("mcpp", workspaceFolder.uri)
-      .update("path", fakeMcpp, vscode.ConfigurationTarget.Workspace);
+    const settings = vscode.workspace.getConfiguration("mcpp", workspaceFolder.uri);
+    await settings.update("path", fakeMcpp, vscode.ConfigurationTarget.Workspace);
+    const builds = (): number => (existsSync(mcppLog) ? lines(mcppLog).filter((line) => line === "build").length : 0);
+    const waitForBuilds = async (count: number): Promise<void> => {
+      const deadline = Date.now() + 20_000;
+      while (builds() < count && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
+      assert.ok(builds() >= count, `mcpp build ran ${builds()} time(s), expected ${count}`);
+    };
 
+    // `auto`: mcppls reads mcpp's result record and refreshes itself, so nothing is forwarded
+    // (design 2026-10-30 part 2 §5.4).
     void vscode.commands.executeCommand("mcpp.build");
-    assert.ok((await waitForFile(mcppLog, 20_000, "build")).trim().split(/\r?\n/).includes("build"), "a build must run even when a read-only self env probe also ran");
+    await waitForBuilds(1);
+    await new Promise((r) => setTimeout(r, 1500));
+    const afterAuto = existsSync(mcpplsLog) ? lines(mcpplsLog) : [];
+    assert.ok(!afterAuto.includes("mcppls.reloadBuildDescription"), `auto forwarded: ${afterAuto.join(",")}`);
 
-    // Which command the refresh chain lands on is exactly what the variant decides.
-    const recorded = await waitForFile(mcpplsLog, 20_000);
-    if (STUB === "partial") {
-      assert.ok(recorded.includes("mcppls.restartServer"), `expected a restart, saw: ${recorded.trim()}`);
-    } else if (STUB === "renamed") {
-      assert.equal(recorded.trim(), "", "a stub without the command must not be called");
+    // `reload`: the action mcppls names for VS Code, when its extension registered the command.
+    await settings.update("languageService.refreshAfterBuild", "reload", vscode.ConfigurationTarget.Workspace);
+    void vscode.commands.executeCommand("mcpp.build");
+    await waitForBuilds(2);
+    if (STUB === "full" || STUB === "noapi" || STUB === "throwing") {
+      const recorded = await waitForFile(mcpplsLog, 20_000, "mcppls.reloadBuildDescription");
+      assert.ok(recorded.includes("mcppls.reloadBuildDescription"), `expected the reload, saw: ${recorded.trim()}`);
     } else {
-      assert.ok(
-        recorded.includes("mcppls.reloadBuildDescription"),
-        `expected the cheap reload to be preferred, saw: ${recorded.trim()}`,
-      );
+      await new Promise((r) => setTimeout(r, 1500));
+      const recorded = existsSync(mcpplsLog) ? lines(mcpplsLog) : [];
+      assert.deepEqual(recorded.filter((line) => line.startsWith("mcppls.")), [], `${STUB} registered no reload`);
     }
+    await settings.update("languageService.refreshAfterBuild", undefined, vscode.ConfigurationTarget.Workspace);
   });
 
   test("forwarded commands reach mcppls, and a missing one does not throw", async () => {
