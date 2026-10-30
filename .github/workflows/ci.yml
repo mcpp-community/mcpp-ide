@@ -59,8 +59,10 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
-          package="mcpp-ide-$version-openkal"
           mcpp pack mcpp-ide --target openkal --mode self-contained --systems all --pkg-format tar,okb -o target/dist/
+          # The tree's name carries the mode (`mcpp-ide-<version>-openkal-bundle-all`, mcpp SPEC-014).
+          tarball="$(ls target/dist/mcpp-ide-"$version"-openkal*.tar.gz)"
+          package="$(basename "$tarball" .tar.gz)"
           mkdir -p backend unpacked
           cp "target/dist/$package.tar.gz" backend/
           cp "target/dist/mcpp-ide-$version.okb" backend/mcpp-ide.okb
@@ -547,7 +549,7 @@ jobs:
         run: |
           set -euo pipefail
           dir="$(mktemp -d)"
-          tar -xzf backend/mcpp-ide-*-openkal.tar.gz -C "$dir"
-          root="$(echo "$dir"/mcpp-ide-*-openkal)"
+          tar -xzf backend/mcpp-ide-*-openkal*.tar.gz -C "$dir"
+          root="$(echo "$dir"/mcpp-ide-*-openkal*)"
           "$root/bin/mcpp-ide" --version | tee said.txt
           grep -q '^mcpp-ide ' said.txt

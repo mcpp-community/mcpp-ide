@@ -36,7 +36,7 @@ jobs:
           mkdir -p dist
           cp artifacts/mcpp-vscode-vsix/*.vsix artifacts/mcpp-clion-zip/*.zip dist/
           cp artifacts/backend/mcpp-ide.okb "dist/mcpp-ide-${version}.okb"
-          cp "artifacts/backend/mcpp-ide-${version}-openkal.tar.gz" dist/
+          cp "artifacts/backend/mcpp-ide-${version}"-openkal*.tar.gz dist/
           (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
           gh release create "v${version}" dist/* --target "$GITHUB_SHA" --title "mcpp-ide ${version}" --notes-file CHANGELOG.md
       # Open VSX receives the exact VSIX attached to the GitHub Release; the Visual Studio

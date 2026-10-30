@@ -94,8 +94,8 @@ installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on 
 plugin carries no package of the backend: it starts setup()'s `backend`, else `mcpp-ide` on PATH,
 and `xlings install mcpp-ide-nvim` installs it from the release's source tree, with the backend's
 package as its dependency. CI packs the
-bundle and the universal package (`mcpp-ide-<version>-openkal.tar.gz`, a release asset) once, on
-Linux, takes okrun from that package, opens both editor packages and the universal package on every
+bundle and the target set's tree (`mcpp-ide-<version>-openkal-bundle-all.tar.gz`, a release asset) in
+one pack on Linux, takes okrun from that tree, opens both editor packages and the tree on every
 system and starts what they carry for it (`.github/scripts/check-package.sh`).
 
 ## Generated declarations
