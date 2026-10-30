@@ -1082,6 +1082,7 @@ std::expected<Json, rpc::Error> Session::capabilities_explain(const Json& p) {
     static constexpr Gate kGates[] = {
         {"targets.sets", "target-sets", "2026.10.30.1"},
         {"pack.formatList", "pkg-format-list", "2026.10.30.1"},
+        {"tests.debug", "test-launch", "2026.11.1.1"},
     };
     Json features = Json::array();
     for (const auto& g : kGates) {
@@ -1302,7 +1303,14 @@ std::string read_text(const std::filesystem::path& file) {
 std::optional<std::string> test_name_of(const std::filesystem::path& root, const std::filesystem::path& file) {
     const auto ext = file.extension().string();
     if (ext != ".cpp" && ext != ".cc" && ext != ".cxx") return std::nullopt;
-    const auto rel = file.lexically_normal().lexically_relative(root.lexically_normal());
+    // Both as the file system spells them: a temporary directory behind a link (macOS's /var), a
+    // drive letter in either case (Windows).
+    std::error_code ec;
+    auto canonical = [&](const std::filesystem::path& p) {
+        auto c = std::filesystem::weakly_canonical(p, ec);
+        return ec ? p.lexically_normal() : c;
+    };
+    const auto rel = canonical(file).lexically_relative(canonical(root));
     if (rel.empty() || *rel.begin() != "tests") return std::nullopt;
     std::filesystem::path below;
     bool first = true;
