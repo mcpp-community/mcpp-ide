@@ -14,7 +14,7 @@ description = "The IDE backend for mcpp: sessions, jobs, records and view models
 license     = "Apache-2.0"
 authors     = ["mcpp-community"]
 repo        = "https://github.com/mcpp-community/mcpp-ide"
-mcpp        = ">=2026.10.27.1"
+mcpp        = ">=2026.10.31.2"
 
 [language]
 standard   = "c++23"
@@ -32,6 +32,12 @@ toolchain = "llvm@23.1.3"
 
 [target.'cfg(windows)']
 toolchain = "llvm@23.1.3"
+
+# The platform of the ok images the editor packages carry: 0.19.0's version group is openkal 0.18's,
+# which mcpplibs.os 0.2.4 is written against and whose okrun maps the image it runs; mcpp's own
+# openkal rows pin 0.18.0.
+[target.'cfg(os = "openkal")']
+platform = "openkal-platform@0.19.0"
 
 # An arm64 Linux machine's own programs: the xlings gcc payload has no aarch64-hosted C++ frontend.
 [target.aarch64-linux-gnu]
@@ -68,10 +74,9 @@ kind = "bin"
 main = "src/bin/dev.cpp"
 
 [dependencies.mcpplibs]
-# os 0.2.3: openkal-linux 0.18.3 (a program is found in a directory the process may search but not
-# read, mcpp#857). Since 0.2.1 an ok image's C library, C++ run-time and loader are its platform's,
+# os 0.2.4: openkal 0.18 (openkal-linux 0.19.0, openkal-macos 0.16.0, openkal-windows 0.14.0). Since 0.2.1 an ok image's C library, C++ run-time and loader are its platform's,
 # so the package declares no openkal-tools of its own beside the platform's.
-os = "0.2.3"
+os = "0.2.4"
 
 [dependencies.nlohmann]
 json = "3.12.0"

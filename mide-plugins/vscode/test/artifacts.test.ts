@@ -679,7 +679,7 @@ test("CI runs the gates, the package checks, the drift check and every e2e varia
   assert.match(workflow, /NODE_VERSION: 22/);
   // The unit gates, the Extension Host e2e and the isolated install all run on Linux, macOS and
   // Windows, where the spawn and path handling actually differ.
-  const osMatrixes = workflow.match(/os: \[ubuntu-latest, macos-14, windows-latest\]/g) ?? [];
+  const osMatrixes = workflow.match(/os: \[ubuntu-latest, macos-15, windows-latest\]/g) ?? [];
   assert.equal(osMatrixes.length, 3, "gates, the Extension Host e2e and the isolated install must run on three systems");
   for (const job of ["vscode-gates:", "vscode-drift:", "vscode:", "vscode-e2e:", "vscode-isolated-install:", "vscode-graph-browser:"]) {
     assert.match(workflow, new RegExp(`^  ${job}`, "m"), job);
