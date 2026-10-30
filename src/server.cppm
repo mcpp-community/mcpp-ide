@@ -25,6 +25,8 @@ import mcppide.i18n;
 import mcppide.manifest;
 import mcppide.spec;
 import mcppide.languageservice;
+import mcppide.scan;
+import mcppide.testing;
 import mcpplibs.os;
 
 export namespace mcppide::server {
@@ -36,7 +38,7 @@ inline constexpr int kProtocol = 1;
 
 // The methods `install` registers, for the protocol schema's test: a method
 // here and not in protocol/protocol.schema.json (or the other way) fails it.
-inline constexpr std::array<std::string_view, 49> kMethods = {
+inline constexpr std::array<std::string_view, 52> kMethods = {
     "initialize", "settings/update", "settings/registry", "settings/preset", "i18n/bundle",
     "selfCheck", "commands/list", "menu/quick", "languageService/status",
     "projects/list", "projects/forFile", "project/summary", "project/new", "result/last",
@@ -46,13 +48,13 @@ inline constexpr std::array<std::string_view, 49> kMethods = {
     "cache/inventory", "cache/plan", "cache/apply", "graph/packages", "graph/modules",
     "pack/formats", "pack/start", "manifest/check", "toml/complete", "toml/hover", "toml/symbols",
     "buildscript/complete", "mcpp/exec", "project/files", "languageService/exec", "project/mcpp", "project/refresh",
-    "capabilities/explain", "report/collect", "shutdown", "exit"};
+    "capabilities/explain", "report/collect", "source/entries", "test/cases", "test/runCases", "shutdown", "exit"};
 
 // The notifications the backend sends.
-inline constexpr std::array<std::string_view, 15> kNotifications = {
+inline constexpr std::array<std::string_view, 16> kNotifications = {
     "job/started", "job/output", "job/plan", "job/progress", "job/diagnostic", "job/artifact", "job/record",
     "job/finished", "test/result", "test/summary", "result/changed", "manifest/changed",
-    "manifest/diagnostics", "project/mcppChanged", "languageService/changed"};
+    "manifest/diagnostics", "project/mcppChanged", "languageService/changed", "test/caseResult"};
 
 class Session {
 public:
@@ -67,7 +69,8 @@ private:
     using Result = std::expected<Json, rpc::Error>;
     Result initialize(const Json& p);
     Result update_settings(const Json& p);
-    Result job_start(const Json& p);
+    // `after` runs when the job has ended, before the editors are told (jobs::Request::after).
+    Result job_start(const Json& p, std::function<void(std::string_view, const Json&)> after = {});
     Result run_launch(const Json& p, const rpc::Context& ctx);
     Result debug_configuration(const Json& p, const rpc::Context& ctx);
     Result library_search(const Json& p);
@@ -85,6 +88,13 @@ private:
     Json server_actions();
     Result quick_menu(const Json& p);
     Result test_list(const Json& p);
+    Result source_entries(const Json& p);
+    Result test_cases(const Json& p);
+    Result test_run_cases(const Json& p);
+    // `mcpp.test.macros` as testing reads it: {"gtest": ["MY_TEST"]}.
+    Json test_macros() const;
+    // The packages of a project's plan, from its build database when one was read.
+    std::vector<std::string> plan_packages(const std::filesystem::path& root, bool read);
     Result project_mcpp(const Json& p);
     Result project_refresh(const Json& p);
     Result capabilities_explain(const Json& p);
@@ -569,7 +579,7 @@ std::expected<Json, rpc::Error> Session::update_settings(const Json& p) {
     return resolved;
 }
 
-std::expected<Json, rpc::Error> Session::job_start(const Json& p) {
+std::expected<Json, rpc::Error> Session::job_start(const Json& p, std::function<void(std::string_view, const Json&)> after) {
     const auto kindName = p.value("kind", "");
     auto kind = jobs::kind_from(kindName);
     if (!kind) return std::unexpected(invalid(std::format("unknown job kind {}", kindName)));
@@ -645,6 +655,7 @@ std::expected<Json, rpc::Error> Session::job_start(const Json& p) {
     }
     for (const auto& a : extra) r.args.push_back(a);
     if (r.args.empty()) return std::unexpected(invalid("a command job names its arguments"));
+    r.after = std::move(after);
     const auto id = jobs_->submit(std::move(r));
     watcher_->watch(root);
     return Json{{"jobId", id}};
@@ -653,11 +664,23 @@ std::expected<Json, rpc::Error> Session::job_start(const Json& p) {
 std::expected<Json, rpc::Error> Session::run_launch(const Json& p, const rpc::Context& ctx) {
     const auto root = root_of(p);
     if (root.empty()) return std::unexpected(invalid("run/launch names its project's root"));
-    std::vector<std::string> args{"run", "--print-launch"};
+    // A test's program is described by `mcpp test <name> --print-launch` (mcpp's `test-launch`),
+    // with its framework's filter after `--` when cases are asked for.
+    const auto test = p.value("test", "");
+    std::vector<std::string> args{test.empty() ? "run" : "test", "--print-launch"};
     const auto profile = p.value("profile", setting("mcpp.build.profile").is_string() ? setting("mcpp.build.profile").get<std::string>() : "dev");
     if (profile == "release") args.push_back("--release");
     for (const auto& a : target_args(p)) args.push_back(a);
-    if (auto bin = p.value("bin", ""); !bin.empty()) args.push_back(bin);
+    if (!test.empty()) {
+        args.push_back(test);
+        if (const auto* f = testing::framework(p.value("framework", "")))
+            if (const auto filter = testing::filter_args(*f, strings_of(p.value("cases", Json::array()))); !filter.empty()) {
+                args.push_back("--");
+                for (const auto& a : filter) args.push_back(a);
+            }
+    } else if (auto bin = p.value("bin", ""); !bin.empty()) {
+        args.push_back(bin);
+    }
     auto r = query(root, std::move(args));
     if (!r) return std::unexpected(r.error());
     if (ctx.cancelled()) return std::unexpected(rpc::Error{rpc::REQUEST_CANCELLED, "cancelled"});
@@ -1238,6 +1261,187 @@ std::expected<Json, rpc::Error> Session::test_list(const Json& p) {
     return Json{{"root", root.generic_string()}, {"tests", tests}};
 }
 
+Json Session::test_macros() const {
+    Json out = Json::object();
+    for (const auto& entry : strings_of(setting("mcpp.test.macros"))) {
+        const auto colon = entry.find(':');
+        if (colon == std::string::npos || colon == 0 || colon + 1 == entry.size()) continue;
+        out[entry.substr(0, colon)].push_back(entry.substr(colon + 1));
+    }
+    return out;
+}
+
+std::vector<std::string> Session::plan_packages(const std::filesystem::path& root, bool read) {
+    Json db;
+    {
+        std::lock_guard lock(mutex_);
+        if (auto it = buildDatabases_.find(root); it != buildDatabases_.end()) db = it->second;
+    }
+    if (db.is_null() && read)
+        if (auto r = build_database(root)) db = *r;
+    std::vector<std::string> out;
+    if (!db.is_object()) return out;
+    const auto& data = db.contains("data") ? db["data"] : db;
+    const auto& database = data.contains("database") ? data["database"] : data;
+    for (const auto& set : database.value("sets", Json::array())) {
+        for (const auto* key : {"family-name", "name"})
+            if (set.contains(key) && set[key].is_string() && std::ranges::find(out, set[key].get<std::string>()) == out.end())
+                out.push_back(set[key].get<std::string>());
+    }
+    return out;
+}
+
+namespace {
+
+std::string read_text(const std::filesystem::path& file) {
+    std::ifstream in(file, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), {});
+}
+
+// A test's name by mcpp's convention: the path below tests/ without its extension (docs/08).
+std::optional<std::string> test_name_of(const std::filesystem::path& root, const std::filesystem::path& file) {
+    const auto ext = file.extension().string();
+    if (ext != ".cpp" && ext != ".cc" && ext != ".cxx") return std::nullopt;
+    const auto rel = file.lexically_normal().lexically_relative(root.lexically_normal());
+    if (rel.empty() || *rel.begin() != "tests") return std::nullopt;
+    std::filesystem::path below;
+    bool first = true;
+    for (const auto& part : rel) {
+        if (first) { first = false; continue; }
+        below /= part;
+    }
+    below.replace_extension();
+    return below.generic_string();
+}
+
+// The source of a test by its name: tests/<name>.cpp (or .cc, .cxx).
+std::filesystem::path test_source(const std::filesystem::path& root, std::string_view name) {
+    for (const auto* ext : {".cpp", ".cc", ".cxx"}) {
+        auto file = root / "tests" / (std::string(name) + ext);
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(file, ec)) return file;
+    }
+    return {};
+}
+
+}  // namespace
+
+// What a C++ file is to its project (§6.3): a test's or a program's `main`, or neither, with the
+// line of `main` read from the text (approximate: an editor takes its language service's position
+// when it has one). Nothing is built and nothing run.
+std::expected<Json, rpc::Error> Session::source_entries(const Json& p) {
+    const std::filesystem::path file(p.value("file", ""));
+    if (file.empty()) return std::unexpected(invalid("source/entries names a file"));
+    auto proj = projects::project_for(file.generic_string(), p.value("boundary", ""));
+    if (!proj) return Json{{"file", file.generic_string()}, {"kind", "none"}};
+    const auto text = p.contains("text") && p["text"].is_string() ? p["text"].get<std::string>() : read_text(file);
+    const auto extra = test_macros();
+    const auto found = scan::scan(text, testing::macros(extra));
+    Json out{{"file", file.generic_string()}, {"root", proj->root.generic_string()}, {"kind", "none"}};
+    if (auto name = test_name_of(proj->root, file)) {
+        out["kind"] = "test";
+        out["test"] = *name;
+        if (const auto* f = testing::framework_of(plan_packages(proj->root, false), found, extra)) out["framework"] = f->id;
+    } else if (found.mainLine) {
+        out["kind"] = "program";
+    }
+    if (found.mainLine && out["kind"] != "none") out["main"] = Json{{"line", *found.mainLine}, {"approximate", true}};
+    return out;
+}
+
+// A test program's cases (§7.3): as its source names them, and -- when `list` is asked for, the
+// workspace is trusted and the source calls its framework's macros -- as the program lists them.
+std::expected<Json, rpc::Error> Session::test_cases(const Json& p) {
+    std::filesystem::path root = root_of(p);
+    std::string test = p.value("test", "");
+    std::filesystem::path file(p.value("file", ""));
+    if (!file.empty()) {
+        if (root.empty()) if (auto proj = projects::project_for(file.generic_string(), "")) root = proj->root;
+        if (test.empty()) if (auto name = test_name_of(root, file)) test = *name;
+    }
+    if (root.empty() || test.empty()) return std::unexpected(invalid("test/cases names a project's test, or a test's file"));
+    if (file.empty()) file = test_source(root, test);
+    Json out{{"root", root.generic_string()}, {"test", test}, {"file", file.generic_string()}, {"framework", nullptr}, {"cases", Json::array()}};
+    if (file.empty()) return out;
+    const auto extra = test_macros();
+    const auto found = scan::scan(read_text(file), testing::macros(extra));
+    if (found.mainLine) out["main"] = Json{{"line", *found.mainLine}, {"approximate", true}};
+    bool trusted;
+    {
+        std::lock_guard lock(mutex_);
+        trusted = trusted_;
+    }
+    const auto* f = testing::framework_of(plan_packages(root, trusted), found, extra);
+    if (!f) return out;
+    out["framework"] = f->id;
+    auto cases = testing::static_cases(*f, found, extra);
+    if (p.value("list", false) && trusted) {
+        mcpp::Client client;
+        {
+            std::lock_guard lock(mutex_);
+            client = client_;
+        }
+        if (client.ready()) {
+            mcpp::RunOptions o;
+            o.cwd = root;
+            o.args = {"test", "--message-format", "json"};
+            for (const auto& a : target_args(p)) o.args.push_back(a);
+            o.args.push_back(test);
+            o.args.push_back("--");
+            for (const auto& a : f->list) o.args.push_back(a);
+            o.deny = deny();
+            o.client = client_label();
+            if (auto r = client.records(o))
+                for (const auto& rec : r->records)
+                    if (rec.is_object() && rec.value("test", "") == test && rec.contains("run_output")) {
+                        cases = testing::merge(cases, testing::listed(*f, rec.value("run_output", "")), *f);
+                        out["listed"] = true;
+                    }
+        }
+    }
+    for (const auto& c : cases) {
+        Json row{{"name", c.name}, {"source", c.source}};
+        if (c.line >= 0) row["line"] = c.line;
+        out["cases"].push_back(row);
+    }
+    return out;
+}
+
+// Runs some of a test program's cases (§7.3): `mcpp test <test> -- <filter> <report>`, the report
+// written to a directory of this run's own, read when the job ends -- each case's outcome sent as
+// `test/caseResult` -- and removed.
+std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
+    const auto root = root_of(p);
+    const auto test = p.value("test", "");
+    const auto* f = testing::framework(p.value("framework", ""));
+    if (root.empty() || test.empty() || !f) return std::unexpected(invalid("test/runCases names a project, a test and its framework"));
+    const auto cases = strings_of(p.value("cases", Json::array()));
+    const auto dir = std::filesystem::temp_directory_path() /
+                     std::format("mcpp-ide-cases-{}-{}", std::random_device{}(), std::chrono::steady_clock::now().time_since_epoch().count());
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (ec) return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, ec.message()});
+    const auto report = dir / "report";
+    Json args = Json::array({"--"});
+    for (const auto& a : testing::run_args(*f, cases, report)) args.push_back(a);
+    Json job{{"kind", "test"}, {"root", root.generic_string()}, {"filter", test}, {"args", args}, {"color", p.value("color", true)}};
+    for (const auto* key : {"profile", "target"}) if (p.contains(key)) job[key] = p[key];
+    const std::string framework = f->id;
+    return job_start(job, [this, root, test, framework, dir, report](std::string_view jobId, const Json&) {
+        const auto* fw = testing::framework(framework);
+        std::ifstream in(report, std::ios::binary);
+        const std::string text(std::istreambuf_iterator<char>(in), {});
+        in.close();
+        if (fw)
+            for (const auto& o : testing::read_report(*fw, text))
+                rpc_.notify("test/caseResult", Json{{"jobId", jobId}, {"root", root.generic_string()}, {"test", test},
+                                                    {"case", o.name}, {"status", o.status}, {"durationMs", o.durationMs},
+                                                    {"message", o.message}});
+        std::error_code ignored;
+        std::filesystem::remove_all(dir, ignored);
+    });
+}
+
 Session::PackOptions Session::pack_options(const std::filesystem::path& cwd) {
     mcpp::Client client;
     {
@@ -1317,6 +1521,9 @@ void Session::install() {
     s.on("run/launch", [this](const Json& p, const rpc::Context& c) { return run_launch(p, c); });
     s.on("debug/configuration", [this](const Json& p, const rpc::Context& c) { return debug_configuration(p, c); });
     s.on("test/list", [this](const Json& p, const rpc::Context&) { return test_list(p); });
+    s.on("source/entries", [this](const Json& p, const rpc::Context&) { return source_entries(p); });
+    s.on("test/cases", [this](const Json& p, const rpc::Context&) { return test_cases(p); });
+    s.on("test/runCases", [this](const Json& p, const rpc::Context&) { return test_run_cases(p); });
     s.on("project/mcpp", [this](const Json& p, const rpc::Context&) { return project_mcpp(p); });
     s.on("project/refresh", [this](const Json& p, const rpc::Context&) { return project_refresh(p); });
     s.on("capabilities/explain", [this](const Json& p, const rpc::Context&) { return capabilities_explain(p); });

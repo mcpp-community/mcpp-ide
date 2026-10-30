@@ -45,10 +45,42 @@
   "main": "./dist/src/extension.js",
   "contributes": {
     "menus": {
+      "editor/context": [
+        {
+          "command": "mcpp.build",
+          "group": "mcpp@3",
+          "when": "mcpp.inProject && editorLangId == cpp"
+        },
+        {
+          "command": "mcpp.run",
+          "group": "mcpp@1",
+          "when": "mcpp.inProject && editorLangId == cpp"
+        },
+        {
+          "command": "mcpp.debug",
+          "group": "mcpp@2",
+          "when": "mcpp.inProject && editorLangId == cpp"
+        },
+        {
+          "command": "mcpp.test",
+          "group": "mcpp@4",
+          "when": "mcpp.inProject && editorLangId == cpp"
+        }
+      ],
       "editor/title": [
+        {
+          "command": "mcpp.editor.build",
+          "group": "navigation@0",
+          "when": "mcpp.inProject && mcpp.editorTitleButtons"
+        },
         {
           "command": "mcpp.run",
           "group": "navigation@1",
+          "when": "mcpp.inProject && mcpp.editorTitleButtons"
+        },
+        {
+          "command": "mcpp.debug",
+          "group": "navigation@3",
           "when": "mcpp.inProject && mcpp.editorTitleButtons"
         },
         {
@@ -82,6 +114,10 @@
       ],
       "commandPalette": [
         {
+          "command": "mcpp.editor.build",
+          "when": "false"
+        },
+        {
           "command": "mcpp.debug",
           "when": "mcpp.inProject"
         },
@@ -104,6 +140,12 @@
         "command": "mcpp.build",
         "title": "%command.mcpp.build.title%",
         "category": "%category%"
+      },
+      {
+        "command": "mcpp.editor.build",
+        "title": "%command.mcpp.editor.build.title%",
+        "category": "%category%",
+        "icon": "$(tools)"
       },
       {
         "command": "mcpp.run",
@@ -558,6 +600,22 @@
           "order": 20130,
           "description": "%mcpp.debug.engine.title%",
           "markdownDescription": "%mcpp.debug.engine.description%"
+        },
+        "mcpp.codeLens.enable": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "order": 20140,
+          "description": "%mcpp.codeLens.enable.title%",
+          "markdownDescription": "%mcpp.codeLens.enable.description%"
+        },
+        "mcpp.test.macros": {
+          "type": "array",
+          "default": [],
+          "scope": "resource",
+          "order": 20150,
+          "description": "%mcpp.test.macros.title%",
+          "markdownDescription": "%mcpp.test.macros.description%"
         },
         "mcpp.languageService.menuItems": {
           "type": "boolean",

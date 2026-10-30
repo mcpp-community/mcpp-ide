@@ -299,6 +299,7 @@ export class McppCliController {
       vscode.commands.registerCommand(CLI_COMMANDS.showMenu, this.guarded(() => this.showMenu())),
       vscode.commands.registerCommand(CLI_COMMANDS.newProject, this.guarded(() => this.newProject())),
       vscode.commands.registerCommand(CLI_COMMANDS.build, this.guarded(() => this.runProjectTask("build"))),
+      vscode.commands.registerCommand(CLI_COMMANDS.editorBuild, this.guarded(() => this.runProjectTask("build"))),
       vscode.commands.registerCommand(CLI_COMMANDS.run, this.guarded(() => this.runProjectTask("run"))),
       vscode.commands.registerCommand(CLI_COMMANDS.test, this.guarded(() => this.runProjectTask("test"))),
       vscode.commands.registerCommand(CLI_COMMANDS.clean, this.guarded(() => this.runProjectTask("clean"))),

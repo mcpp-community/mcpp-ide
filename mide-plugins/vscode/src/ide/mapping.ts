@@ -24,7 +24,41 @@ export function testId(root: string, member: string, test: string): string {
   return `${root}::${member}::${test}`;
 }
 
+/** What separates a case's name from its program's id: a name is the framework's, and may hold "::". */
+const CASE = "\u001f";
+
+/** A case of a test program (design 2026-10-30 part 2 §7): its program's id, then its full name. */
+export function caseId(root: string, member: string, test: string, name: string): string {
+  return `${testId(root, member, test)}${CASE}${name}`;
+}
+
+export function parseCaseId(id: string): { root: string; member: string; test: string; name: string } | undefined {
+  const at = id.indexOf(CASE);
+  if (at < 0) return undefined;
+  const program = parseTestId(id.slice(0, at));
+  return program === undefined ? undefined : { ...program, name: id.slice(at + 1) };
+}
+
+/** A case result's name as its source names it: GoogleTest's instance prefix and parameter dropped. */
+export function baseCaseName(framework: string | null, name: string): string {
+  if (framework !== "gtest") return name;
+  const dot = name.indexOf(".");
+  if (dot < 0) return name;
+  const suiteParts = name.slice(0, dot).split("/").filter((part) => part !== "" && !/^\d+$/.test(part));
+  const test = name.slice(dot + 1).split("/")[0];
+  return `${suiteParts[suiteParts.length - 1] ?? ""}.${test}`;
+}
+
+/** VS Code's SymbolKind.Function (LSP numbers it 12). */
+const FUNCTION_SYMBOL = 11;
+
+/** The line of `main` among a document's symbols: a function named main at the top level. */
+export function mainLineOf(symbols: readonly { name: string; kind: number; range: { start: { line: number } } }[] | undefined): number | undefined {
+  return symbols?.find((s) => s.kind === FUNCTION_SYMBOL && (s.name === "main" || s.name.startsWith("main(")))?.range.start.line;
+}
+
 export function parseTestId(id: string): { root: string; member: string; test: string } | undefined {
+  if (id.includes(CASE)) return undefined;
   const parts = id.split("::");
   if (parts.length < 3) return undefined;
   const test = parts.pop()!;

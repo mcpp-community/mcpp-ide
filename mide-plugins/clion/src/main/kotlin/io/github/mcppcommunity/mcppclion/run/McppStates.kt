@@ -49,7 +49,7 @@ open class JobProcessHandler(protected val session: McppSession, private val par
 
     override fun startNotify() {
         super.startNotify()
-        for (m in listOf("job/output", "job/finished", "test/result", "test/summary"))
+        for (m in listOf("job/output", "job/finished", "test/result", "test/summary", "test/caseResult"))
             subscriptions += session.on(m) { p -> route(m, p) }
         session.request(method, params).whenComplete { r, e ->
             if (e != null) {
@@ -118,11 +118,37 @@ class McppJobState(private val c: McppRunConfiguration, env: ExecutionEnvironmen
  * A test job whose results fill the IDE's test tree: each `test/result` becomes the TeamCity
  * service messages the test runner reads, located at the file that holds the test's `main`.
  */
-class TestJobProcessHandler(session: McppSession, params: JsonObject, private val mains: Map<String, String>) : JobProcessHandler(session, params) {
+class TestJobProcessHandler(session: McppSession, params: JsonObject, private val mains: Map<String, String>, method: String = "job/start") :
+    JobProcessHandler(session, params, method) {
     private fun escape(s: String) = s.replace("|", "||").replace("'", "|'").replace("\n", "|n").replace("\r", "|r").replace("[", "|[").replace("]", "|]")
+    /** The program whose cases are reported, once its first case is (test/runCases). */
+    private var suite: String? = null
 
     override fun handle(method: String, p: JsonObject) {
         when (method) {
+            // A case of a framework (§7.4): the program is a suite, each case a test in it.
+            "test/caseResult" -> {
+                val program = p["test"].asString
+                val out = StringBuilder()
+                if (suite == null) {
+                    suite = program
+                    val hint = mains[program]?.let { " locationHint='file://${escape(it)}'" } ?: ""
+                    out.append("##teamcity[testSuiteStarted name='${escape(program)}'$hint]\n")
+                }
+                val name = escape(p["case"].asString)
+                out.append("##teamcity[testStarted name='$name']\n")
+                when (p["status"]?.asString) {
+                    "passed" -> {}
+                    "skipped" -> out.append("##teamcity[testIgnored name='$name']\n")
+                    else -> out.append("##teamcity[testFailed name='$name' message='${escape(p["message"]?.asString ?: "")}']\n")
+                }
+                out.append("##teamcity[testFinished name='$name' duration='${p["durationMs"]?.asLong ?: 0}']\n")
+                notifyTextAvailable(out.toString(), ProcessOutputTypes.STDOUT)
+            }
+            "job/finished" -> {
+                suite?.let { notifyTextAvailable("##teamcity[testSuiteFinished name='${escape(it)}']\n", ProcessOutputTypes.STDOUT) }
+                super.handle(method, p)
+            }
             "test/result" -> {
                 val name = escape(p["test"].asString)
                 val hint = mains[p["test"].asString]?.let { " locationHint='file://${escape(it)}'" } ?: ""
@@ -149,6 +175,14 @@ class McppTestState(private val c: McppRunConfiguration, env: ExecutionEnvironme
             session.request("test/list", JsonObject().apply { addProperty("root", c.root) }).get()
                 .asJsonObject.getAsJsonArray("tests").associate { it.asJsonObject["test"].asString to it.asJsonObject["main"].asString }
         }.getOrDefault(emptyMap())
+        // A framework's cases (test/runCases): the program receives the framework's filter.
+        if (c.options.framework.isNotBlank() && c.options.filter.isNotBlank())
+            return TestJobProcessHandler(session, jobParams(c, "test").apply {
+                remove("kind")
+                addProperty("test", c.options.filter)
+                addProperty("framework", c.options.framework)
+                add("cases", JsonArray().apply { c.options.cases.lines().filter { it.isNotBlank() }.forEach { add(it) } })
+            }, mains, "test/runCases")
         return TestJobProcessHandler(session, jobParams(c, "test").apply {
             if (c.options.filter.isNotBlank()) addProperty("filter", c.options.filter)
             if (c.programArgs.isNotEmpty()) add("args", JsonArray().apply { add("--"); c.programArgs.forEach { add(it) } })

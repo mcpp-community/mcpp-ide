@@ -46,5 +46,11 @@
         <runLineMarkerContributor language="C++" implementationClass="io.github.mcppcommunity.mcppclion.run.McppRunLineMarker"/>
         <runLineMarkerContributor language="ObjectiveC" implementationClass="io.github.mcppcommunity.mcppclion.run.McppRunLineMarker"/>
         <consoleFilterProvider implementation="io.github.mcppcommunity.mcppclion.run.McppConsoleFilterProvider"/>
+        <!-- The hammer (Build | Build Project) of an mcpp project is `mcpp build` (part 2 §6.1). -->
+        <projectTaskRunner implementation="io.github.mcppcommunity.mcppclion.run.McppProjectTaskRunner" order="first"/>
+        <statusBarWidgetFactory id="io.github.mcppcommunity.mcppclion.status" implementation="io.github.mcppcommunity.mcppclion.McppStatusBarFactory"/>
+        <!-- VS Code's chords (Ctrl+Alt+B/R/T) as keymaps of their own, generated from spec/commands.json. -->
+        <bundledKeymap file="mcpp.xml"/>
+        <bundledKeymap file="mcpp-macos.xml"/>
     </extensions>
 </idea-plugin>

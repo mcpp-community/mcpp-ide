@@ -43,6 +43,9 @@ export class Debugging implements vscode.DebugConfigurationProvider, vscode.Disp
         { location: vscode.ProgressLocation.Window, title: t("mcpp: building for the debugger…") },
         () => this.session.request<{ engine: string; configuration: vscode.DebugConfiguration & { mcppNote?: string } }>("debug/configuration", {
           root: project.root,
+          // A test's program (mcpp test --print-launch), where the project's mcpp describes one.
+          ...(config.test ? { test: config.test } : {}),
+          ...(config.framework ? { framework: config.framework, cases: Array.isArray(config.cases) ? config.cases : [] } : {}),
           ...(config.target !== undefined ? { target: config.target } : {}),
           ...(config.profile ? { profile: config.profile } : {}),
           ...(config.engine ? { engine: config.engine } : {}),

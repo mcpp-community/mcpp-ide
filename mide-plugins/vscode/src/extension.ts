@@ -42,6 +42,7 @@ import { Jobs } from "./ide/jobs";
 import type { IdeProjects } from "./ide/projects";
 import { Session } from "./ide/session";
 import { Testing } from "./ide/testing";
+import { McppCodeLens } from "./ide/codeLens";
 import { changedSettings, onDidChange as onConfigurationChanged, read } from "./config/access";
 import { applyRenames, pendingRenames, renamePrompt } from "./config/migrate";
 import { languagePreference, setLanguagePreference, t, type LanguagePreference } from "./i18n/t";
@@ -321,11 +322,13 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     }
   });
   extensionContext.subscriptions.push({ dispose: () => { useMcppExecutor(undefined); useMcpplsExecutor(undefined); } });
+  const testing = new Testing(session, jobs, ideProjects);
   extensionContext.subscriptions.push(
     session,
     jobs,
     new Debugging(session, ideProjects),
-    new Testing(session, jobs, ideProjects),
+    testing,
+    new McppCodeLens(session, testing, (root) => projectMcpp.get(root)),
     jobs.onDidChangeRunning.event((n) => void vscode.commands.executeCommand("setContext", "mcpp.jobRunning", n > 0)),
     vscode.tasks.onDidStartTask(() => void updateJobRunning()),
     vscode.tasks.onDidEndTask(() => void updateJobRunning()),

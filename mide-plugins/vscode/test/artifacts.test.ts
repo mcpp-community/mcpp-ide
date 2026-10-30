@@ -21,7 +21,7 @@ interface PackageManifest {
   capabilities?: { untrustedWorkspaces?: { supported?: string; description?: string; restrictedConfigurations?: string[] } };
   contributes?: {
     commands?: Array<{ command: string; title?: string; category?: string; icon?: string }>;
-    menus?: { "editor/title"?: Array<{ command: string; group?: string; when?: string }> };
+    menus?: { "editor/title"?: Array<{ command: string; group?: string; when?: string }>; "editor/context"?: Array<{ command: string; group?: string; when?: string }> };
     configuration?: { title?: string; properties?: Record<string, unknown> };
     configurationDefaults?: Record<string, unknown>;
     languages?: Array<{ id: string; aliases?: string[]; filenames?: string[]; configuration?: string }>;
@@ -340,15 +340,22 @@ function sourceFiles(directory = path.join(root, "src")): Array<[string, string]
 test("shows editor title buttons only inside mcpp projects", () => {
   const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as PackageManifest;
   // Both conditions matter: a project must be open, and the user must not have
-  // turned the buttons off with `mcpp.task.editorTitleButtons`.
+  // turned the buttons off with `mcpp.task.editorTitleButtons`. 0.9.0's Run and Test as they were,
+  // then Build and Debug (design 2026-10-30 part 2 §6.1).
   assert.deepEqual(manifest.contributes?.menus?.["editor/title"], [
+    { command: "mcpp.editor.build", group: "navigation@0", when: "mcpp.inProject && mcpp.editorTitleButtons" },
     { command: "mcpp.run", group: "navigation@1", when: "mcpp.inProject && mcpp.editorTitleButtons" },
+    { command: "mcpp.debug", group: "navigation@3", when: "mcpp.inProject && mcpp.editorTitleButtons" },
     { command: "mcpp.test", group: "navigation@2", when: "mcpp.inProject && mcpp.editorTitleButtons" },
   ]);
+  // Run, Debug, Build and Test in the editor's context menu.
+  assert.deepEqual((manifest.contributes?.menus?.["editor/context"] ?? []).map((entry) => entry.command),
+                   ["mcpp.build", "mcpp.run", "mcpp.debug", "mcpp.test"]);
 
   const commands = manifest.contributes?.commands ?? [];
   assert.equal(commands.find((command) => command.command === "mcpp.run")?.icon, "$(play)");
   assert.equal(commands.find((command) => command.command === "mcpp.test")?.icon, "$(beaker)");
+  assert.equal(commands.find((command) => command.command === "mcpp.editor.build")?.icon, "$(tools)");
   assert.ok(!commands.some((command) => command.command === "mcpp.inProject"));
 });
 

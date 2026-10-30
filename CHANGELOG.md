@@ -35,6 +35,24 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
   asked again after a job, on focus, when the project view becomes visible and, while it is visible,
   at most every 30 seconds. A missing semantic kit is a row with **C++ Modules: Install the Semantic
   Kit**. After a build nothing is forwarded by default (`auto`): mcppls reads mcpp's result record.
+- **Entries (§6).** The backend's `source/entries` says what a C++ file is to its project -- a
+  program's `main`, a test's (`tests/**`, named as mcpp names it), or neither -- with the line of
+  `main` read from the text, outside comments and literals. VS Code shows Run and Debug above `main`
+  (`mcpp.codeLens.enable`), at the position C++ Modules gives and otherwise at the line read, said to
+  be approximate; Build and Debug join Run and Test in the editor's title bar, and Run, Debug, Build
+  and Test are in the editor's context menu. The command table states these places (`placements`),
+  and the generator writes VS Code's menus and CLion's editor popup from it. CLion's ▶ stands on the
+  PSI element `main` on the line the backend read, the IDE's Build (the hammer) of an mcpp project is
+  `mcpp build`, a status bar item shows the project's mcpp and the running job with the quick menu,
+  and two keymaps (`mcpp`, `mcpp (macOS)`) carry VS Code's chords.
+- **Test cases (§7).** `spec/test-frameworks.json` describes GoogleTest, Catch2 and doctest: a test
+  program belongs to one when its plan holds the framework's package and its source calls the
+  framework's macros (`mcpp.test.macros` adds a project's own). `test/cases` reads the cases from the
+  source and, after a build in a trusted workspace, from the program's own listing; `test/runCases`
+  runs some of them with the framework's filter and reads its report, each outcome sent as
+  `test/caseResult`. VS Code's Testing view has the cases under their program, located at their
+  macros, and the program at its `main`; CLion has a ▶ on each case and runs cases in its test tree.
+  Debugging a test's program is offered where the project's mcpp describes its launch (`test-launch`).
 - **mcpp-vscode 1.1.0 is mcpp-vscode 0.9.0 over the backend.** 0.9.0's extension is imported with
   its history (`mide-plugins/vscode`); every view, page, command, menu, setting and string a user
   sees is 0.9.0's. What 1.0 added stays, in 0.9.0's style: debugging (`mcpp.debug`, the `mcpp`

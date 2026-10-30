@@ -42,7 +42,24 @@ class McppSession(private val project: Project) : Disposable {
         project.messageBus.connect(this).subscribe(McppSettings.CHANGED, McppSettings.Listener { key ->
             if (key == "mcpp.ide.backendPath") restart() else pushSettings()
         })
-        on("manifest/changed") { p -> p.asJsonObject["root"]?.asString?.let { refreshTests(it) } }
+        on("manifest/changed") { forgetSources() }
+        // A build ended: a test program can list the cases its macros generate (§7.3).
+        on("job/finished") { p ->
+            val o = p.asJsonObject
+            if (o["status"]?.asString == "ok" && o["kind"]?.asString in setOf("build", "test")) {
+                cases.keys.toList().forEach { key -> key.split('\u0000').takeIf { it.size == 2 }?.let { refreshCases(it[0], it[1], list = true) } }
+            }
+        }
+        // A C++ source saved: what was read from it (main, a framework's cases) is read again.
+        project.messageBus.connect(this).subscribe(com.intellij.openapi.vfs.VirtualFileManager.VFS_CHANGES,
+            object : com.intellij.openapi.vfs.newvfs.BulkFileListener {
+                override fun after(events: MutableList<out com.intellij.openapi.vfs.newvfs.events.VFileEvent>) {
+                    for (e in events) {
+                        val path = e.path
+                        if (path.endsWith(".cpp") || path.endsWith(".cc") || path.endsWith(".cxx") || path.endsWith(".cppm")) forgetSource(path)
+                    }
+                }
+            })
         // mcppls answered differently (another version, other actions): the commands are asked again,
         // since mcppls's actions are offered under the ids it states (§5.3).
         on("languageService/changed") { refreshCommands() }
@@ -188,23 +205,55 @@ class McppSession(private val project: Project) : Disposable {
         return start().thenCompose { backend?.request(method, params) ?: CompletableFuture.failedFuture(IllegalStateException(t("the mcpp-ide backend is not running"))) }
     }
 
-    // The tests of each project by the file holding their `main` (mcpp test --list), for the gutter
-    // and the run configurations from context, which must not wait for mcpp.
-    private val testMains = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
+    // What each C++ file is to its project (source/entries) and each test program's cases
+    // (test/cases), for the gutter, which must not wait for the backend: asked in the background
+    // when unknown, and the editor's markers recomputed when the answer arrives.
+    private val sources = java.util.concurrent.ConcurrentHashMap<String, JsonObject>()
+    private val cases = java.util.concurrent.ConcurrentHashMap<String, JsonObject>()
 
-    /** The test whose `main` is `path`, from what is known; asks again in the background when nothing is. */
-    fun testForFile(root: String, path: String): String? {
-        val known = testMains[root]
-        if (known == null) refreshTests(root)
-        return known?.get(File(path).canonicalPath)
+    fun entriesFor(path: String): JsonObject? {
+        val known = sources[path]
+        if (known == null) refreshEntries(path)
+        return known
     }
 
-    fun refreshTests(root: String) {
-        request("test/list", JsonObject().apply { addProperty("root", root) }).thenAccept { r ->
-            testMains[root] = r.asJsonObject.getAsJsonArray("tests").map { it.asJsonObject }
-                .filter { it["main"]?.asString?.isNotEmpty() == true }
-                .associate { File(it["main"].asString).canonicalPath to it["test"].asString }
+    fun refreshEntries(path: String) {
+        request("source/entries", JsonObject().apply { addProperty("file", path) }).thenAccept { r ->
+            sources[path] = r.asJsonObject
+            restartMarkers()
         }
+    }
+
+    fun casesFor(root: String, test: String): JsonObject? {
+        val known = cases["$root\u0000$test"]
+        if (known == null) refreshCases(root, test, list = false)
+        return known
+    }
+
+    fun refreshCases(root: String, test: String, list: Boolean) {
+        request("test/cases", JsonObject().apply {
+            addProperty("root", root)
+            addProperty("test", test)
+            addProperty("list", list && TrustedProjects.isProjectTrusted(project))
+        }).thenAccept { r ->
+            cases["$root\u0000$test"] = r.asJsonObject
+            restartMarkers()
+        }
+    }
+
+    /** A source changed: what was read from it is read again on its next use. */
+    fun forgetSource(path: String) {
+        sources.remove(path)
+        cases.keys.removeIf { it.split('\u0000').getOrNull(1)?.let { test -> path.replace('\\', '/').endsWith("/tests/$test.cpp") } == true }
+    }
+
+    private fun forgetSources() {
+        sources.clear()
+        cases.clear()
+    }
+
+    private fun restartMarkers() = com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+        if (!project.isDisposed) com.intellij.codeInsight.daemon.DaemonCodeAnalyzer.getInstance(project).restart()
     }
 
     fun pushSettings() {

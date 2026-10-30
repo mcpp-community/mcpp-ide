@@ -85,6 +85,30 @@
       "params": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "string" } }, "root": { "type": "string", "description": "The workspace to ask mcppls about (default: the first folder)" } } },
       "result": { "$ref": "#/$defs/languageService" }
     },
+    "source/entries": {
+      "description": "What a C++ file is to its project (part 2 §6.3): a test's main (tests/**, named as mcpp names it), a program's main, or neither, with the line of main read from the text (approximate) and, for a test, its framework. Nothing is built or run.",
+      "params": { "type": "object", "required": ["file"], "properties": { "file": { "type": "string" }, "text": { "type": "string", "description": "The editor's unsaved text" }, "boundary": { "type": "string" } } },
+      "result": {
+        "type": "object", "required": ["file", "kind"],
+        "properties": { "file": { "type": "string" }, "root": { "type": "string" }, "kind": { "enum": ["program", "test", "none"] }, "test": { "type": "string" },
+                        "framework": { "type": "string" }, "main": { "type": "object", "required": ["line"], "properties": { "line": { "type": "integer" }, "approximate": { "type": "boolean" } } } }
+      }
+    },
+    "test/cases": {
+      "description": "A test program's cases (part 2 §7.3): as its source names them (a framework's macros), and with `list` -- trusted, and only for a source that calls its framework's macros -- as the program lists them. Without a framework, no cases: the program is the unit.",
+      "params": { "type": "object", "properties": { "root": { "type": "string" }, "test": { "type": "string" }, "file": { "type": "string" }, "list": { "type": "boolean" }, "target": { "type": "string" } } },
+      "result": {
+        "type": "object", "required": ["root", "test", "framework", "cases"],
+        "properties": { "root": { "type": "string" }, "test": { "type": "string" }, "file": { "type": "string" }, "framework": { "type": ["string", "null"] }, "listed": { "type": "boolean" },
+                        "main": { "type": "object" },
+                        "cases": { "type": "array", "items": { "type": "object", "required": ["name", "source"], "properties": { "name": { "type": "string" }, "line": { "type": "integer" }, "source": { "enum": ["static", "listed"] } } } } }
+      }
+    },
+    "test/runCases": {
+      "description": "Runs some of a test program's cases (all of them when `cases` is empty): a test job whose program receives the framework's filter and report arguments after `--`. Each case's outcome is sent as test/caseResult when the job ends.",
+      "params": { "type": "object", "required": ["root", "test", "framework"], "properties": { "root": { "type": "string" }, "test": { "type": "string" }, "framework": { "type": "string" }, "cases": { "type": "array", "items": { "type": "string" } }, "profile": { "type": "string" }, "target": { "type": "string" }, "color": { "type": "boolean" } } },
+      "result": { "type": "object", "required": ["jobId"] }
+    },
     "projects/list": {
       "params": { "type": "object", "properties": { "folders": { "type": "array", "items": { "type": "string" } }, "depth": { "type": "integer" } } },
       "result": { "type": "array", "items": { "$ref": "#/$defs/project" } }
@@ -417,6 +441,7 @@
     "manifest/changed": { "params": { "type": "object", "required": ["root"] } },
     "manifest/diagnostics": { "params": { "type": "object", "required": ["root", "diagnostics"] } },
     "project/mcppChanged": { "description": "A job's envelope named another mcpp than the project's was asked as: it is asked again on its next use.", "params": { "type": "object", "required": ["root", "version"] } },
+    "test/caseResult": { "description": "One case's outcome, read from the framework's report when a test/runCases job ended.", "params": { "type": "object", "required": ["jobId", "root", "test", "case", "status"], "properties": { "status": { "enum": ["passed", "failed", "skipped"] }, "durationMs": { "type": "integer" }, "message": { "type": "string" } } } },
     "languageService/changed": { "description": "mcppls answered differently from the last time it was asked: another program or version, other actions, or another state of the workspace. An editor that lists the commands asks for them again.", "params": { "type": "object", "required": ["root", "state", "workspaceState"] } }
   },
   "$defs": {

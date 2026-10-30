@@ -45,6 +45,8 @@ class McppRunOptions : RunConfigurationOptions() {
     private val filterProperty = string("").provideDelegate(this, "filter")
     private val binProperty = string("").provideDelegate(this, "bin")
     private val rootProperty = string("").provideDelegate(this, "root")
+    private val frameworkProperty = string("").provideDelegate(this, "framework")
+    private val casesProperty = string("").provideDelegate(this, "cases")
 
     var command: String get() = commandProperty.getValue(this) ?: "run"; set(v) = commandProperty.setValue(this, v)
     var target: String get() = targetProperty.getValue(this) ?: ""; set(v) = targetProperty.setValue(this, v)
@@ -53,6 +55,10 @@ class McppRunOptions : RunConfigurationOptions() {
     var filter: String get() = filterProperty.getValue(this) ?: ""; set(v) = filterProperty.setValue(this, v)
     var bin: String get() = binProperty.getValue(this) ?: ""; set(v) = binProperty.setValue(this, v)
     var root: String get() = rootProperty.getValue(this) ?: ""; set(v) = rootProperty.setValue(this, v)
+    /** The test framework whose cases `cases` names (design 2026-10-30 part 2 §7); empty: whole programs. */
+    var framework: String get() = frameworkProperty.getValue(this) ?: ""; set(v) = frameworkProperty.setValue(this, v)
+    /** The cases to run, one per line, by the framework's full names; empty: every case. */
+    var cases: String get() = casesProperty.getValue(this) ?: ""; set(v) = casesProperty.setValue(this, v)
 }
 
 class McppRunConfiguration(project: Project, factory: ConfigurationFactory, name: String) :
@@ -81,6 +87,8 @@ class McppRunConfiguration(project: Project, factory: ConfigurationFactory, name
         private val args = JBTextField()
         private val filter = JBTextField()
         private val bin = JBTextField()
+        private val framework = JBTextField()
+        private val cases = com.intellij.ui.components.JBTextArea(3, 40)
 
         override fun resetEditorFrom(c: McppRunConfiguration) {
             command.selectedItem = c.options.command
@@ -89,6 +97,8 @@ class McppRunConfiguration(project: Project, factory: ConfigurationFactory, name
             args.text = c.options.args
             filter.text = c.options.filter
             bin.text = c.options.bin
+            framework.text = c.options.framework
+            cases.text = c.options.cases
         }
 
         override fun applyEditorTo(c: McppRunConfiguration) {
@@ -98,6 +108,8 @@ class McppRunConfiguration(project: Project, factory: ConfigurationFactory, name
             c.options.args = args.text
             c.options.filter = filter.text.trim()
             c.options.bin = bin.text.trim()
+            c.options.framework = framework.text.trim()
+            c.options.cases = cases.text.lines().map { it.trimEnd() }.filter { it.isNotEmpty() }.joinToString("\n")
         }
 
         override fun createEditor(): JComponent = FormBuilder.createFormBuilder()
@@ -106,6 +118,8 @@ class McppRunConfiguration(project: Project, factory: ConfigurationFactory, name
             .addLabeledComponent("Profile (empty: the mcpp.build.profile setting):", profile)
             .addLabeledComponent("Executable (run):", bin)
             .addLabeledComponent("Test filter (test):", filter)
+            .addLabeledComponent("Test framework (test cases):", framework)
+            .addLabeledComponent("Cases, one per line (test cases):", cases)
             .addLabeledComponent("Arguments:", args)
             .panel
     }

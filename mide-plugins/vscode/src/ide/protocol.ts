@@ -170,6 +170,38 @@ export interface JobFinished {
   artifacts?: { kind: string; name: string; path: string }[];
 }
 
+/** `source/entries` (design 2026-10-30 part 2 §6.3): what a C++ file is to its project. */
+export interface SourceEntries {
+  file: string;
+  root?: string;
+  kind: "program" | "test" | "none";
+  test?: string;
+  framework?: string;
+  main?: { line: number; approximate?: boolean };
+}
+
+/** `test/cases` (§7.3): a test program's cases, from its source and, once listed, from the program. */
+export interface TestCases {
+  root: string;
+  test: string;
+  file: string;
+  framework: string | null;
+  listed?: boolean;
+  main?: { line: number; approximate?: boolean };
+  cases: { name: string; line?: number; source: "static" | "listed" }[];
+}
+
+/** `test/caseResult`: one case's outcome, read from the framework's report. */
+export interface CaseResult {
+  jobId: string;
+  root: string;
+  test: string;
+  case: string;
+  status: "passed" | "failed" | "skipped";
+  durationMs: number;
+  message: string;
+}
+
 export interface TestResult {
   jobId: string;
   root: string;

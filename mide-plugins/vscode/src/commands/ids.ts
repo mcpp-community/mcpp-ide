@@ -31,6 +31,8 @@ export const CLI_COMMANDS = {
   selectTarget: "mcpp.selectTarget",
   showTargets: "mcpp.showTargets",
   showCachePanel: "mcpp.showCachePanel",
+  /** Build in the editor's title bar, with an icon (mcpp.build has none in 0.9.0's manifest). */
+  editorBuild: "mcpp.editor.build",
 } as const;
 
 /** The language-service entries that existed in 0.4.x (kept as aliases, see below). */

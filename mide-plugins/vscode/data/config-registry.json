@@ -294,6 +294,32 @@
       "description": "The debug adapter a debug session uses. auto: CodeLLDB when it is installed, then the C/C++ extension's gdb or lldb, then lldb-dap."
     },
     {
+      "key": "mcpp.codeLens.enable",
+      "type": "boolean",
+      "default": true,
+      "scope": "resource",
+      "group": "tasks",
+      "order": 140,
+      "tier": "public",
+      "applies": "immediate",
+      "since": "1.1.0",
+      "title": "Show Run and Debug above main",
+      "description": "A CodeLens above the main of a program or a test: Run and Debug. Where C++ Modules serves the file its position is the language service's; otherwise the line is read from the text."
+    },
+    {
+      "key": "mcpp.test.macros",
+      "type": "array",
+      "default": [],
+      "scope": "resource",
+      "group": "tasks",
+      "order": 150,
+      "tier": "advanced",
+      "applies": "immediate",
+      "since": "1.1.0",
+      "title": "Add a test framework's macros",
+      "description": "Macros that write a test framework's cases, each as framework:MACRO (gtest:MY_TEST). A test program's cases are listed only when its source calls one of its framework's macros."
+    },
+    {
       "key": "mcpp.languageService.menuItems",
       "type": "boolean",
       "default": true,

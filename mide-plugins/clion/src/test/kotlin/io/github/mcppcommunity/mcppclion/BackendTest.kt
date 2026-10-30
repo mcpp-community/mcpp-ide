@@ -103,7 +103,15 @@ class BackendTest {
         assertTrue(xml!!.contains("""id="mcpp.build""""))
         // mcppls's actions are declared; each is shown where mcppls states a JetBrains id for it.
         assertTrue(xml.contains("mcpp.languageServer.restart"))
+        // Build, Run, Debug and Test in the editor's context menu (part 2 §6.2).
+        assertTrue(xml.contains("""<add-to-group group-id="EditorPopupMenu" anchor="last"/>"""))
+        assertTrue(xml.contains("""<reference ref="mcpp.debug"/>"""))
         val bundle = javaClass.getResource("/messages/McppClionBundle.properties")!!.readText()
         assertTrue(bundle.contains("action.mcpp.build.text=Build"))
+        // VS Code's chords as keymaps of their own.
+        val keymap = javaClass.getResource("/keymaps/mcpp.xml")!!.readText()
+        assertTrue(keymap.contains("""<action id="mcpp.build">"""))
+        assertTrue(keymap.contains("""first-keystroke="ctrl alt B""""))
+        assertTrue(javaClass.getResource("/keymaps/mcpp-macos.xml")!!.readText().contains("""first-keystroke="meta alt B""""))
     }
 }
