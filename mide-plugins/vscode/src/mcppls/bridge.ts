@@ -1,10 +1,11 @@
 /**
  * The one place this extension talks to the C++ Modules extension.
  *
- * It forwards commands and nothing else: no LSP client, no reading of
- * `mcppls.*` settings, no writing of them, no parsing of its logs. The
- * capability table (`./contract.ts`) says what may be forwarded and how much
- * confirmation each action needs; `./capabilities.ts` decides whether it exists.
+ * It forwards mcppls's actions and nothing else: no LSP client, no reading of
+ * `mcppls.*` settings, no writing of them, no parsing of its logs. mcppls says
+ * which actions exist and which command each one is (the backend's
+ * `languageService/status`); the capability table (`./contract.ts`) says how
+ * much confirmation each needs; `./capabilities.ts` puts the two together.
  *
  * Results are **structured, not phrased**: a caller that has a user in front of
  * it turns them into words through `./messages.ts`. That keeps this module free
@@ -29,7 +30,7 @@ export interface LanguageServerBridge {
   invoke(key: string, ...args: unknown[]): Promise<LanguageServerCommandResult>;
   /** True when the user should not be offered this capability. */
   isGone(key: string): boolean;
-  /** True when it exists but the static read could not confirm it. */
+  /** True when mcppls has not answered yet. */
   isUnconfirmed(key: string): boolean;
   /** How much confirmation the action needs. */
   dangerOf(key: string): "none" | "confirm" | "destructive";
@@ -47,21 +48,23 @@ export interface LanguageServerBridge {
   manageConflicts(restore?: boolean): Promise<LanguageServerCommandResult>;
   toggleInWorkspace(enable: boolean): Promise<LanguageServerCommandResult>;
   installCommandLineTools(): Promise<LanguageServerCommandResult>;
+  installKit(): Promise<LanguageServerCommandResult>;
   reviewChanges(clear?: boolean): Promise<LanguageServerCommandResult>;
 }
 
 /** Methods that map one-to-one onto a capability, so the bridge stays a table. */
 const FORWARDED = {
-  restartLanguageServer: "restartServer",
+  restartLanguageServer: "restart",
   restartEngine: "restartEngine",
   resetWorkspaceCache: "resetCache",
   selectContext: "selectContext",
   showModuleGraph: "moduleGraph",
-  showLanguageServerLogs: "logs",
-  collectReport: "report",
-  exportDiagnosticBundle: "diagnosticBundle",
+  showLanguageServerLogs: "showLog",
+  collectReport: "collectReport",
+  exportDiagnosticBundle: "exportDiagnostics",
   runBuildToolInTerminal: "runBuildTool",
   installCommandLineTools: "installTools",
+  installKit: "installKit",
 } as const;
 
 export function createLanguageServerBridge(environment: CapabilityEnvironment): LanguageServerBridge {
@@ -80,7 +83,7 @@ export function createLanguageServerBridge(environment: CapabilityEnvironment): 
     if (refreshInFlight !== undefined) {
       return refreshInFlight;
     }
-    refreshInFlight = invoke("refresh").finally(() => {
+    refreshInFlight = invoke("reload").finally(() => {
       refreshInFlight = undefined;
     });
     return refreshInFlight;
@@ -100,7 +103,7 @@ export function createLanguageServerBridge(environment: CapabilityEnvironment): 
     ...forwarded,
     // The two commands whose *argument* selects the direction.
     manageConflicts: (restore = false) => invoke(restore ? "restoreOtherCppFeatures" : "turnOffOtherCppFeatures"),
-    toggleInWorkspace: (enable) => invoke("toggleInWorkspace", enable),
-    reviewChanges: (clear = false) => invoke("review", clear),
+    toggleInWorkspace: (enable) => invoke(enable ? "turnOnInWorkspace" : "turnOffInWorkspace"),
+    reviewChanges: (clear = false) => invoke(clear ? "reviewClear" : "reviewRun"),
   };
 }

@@ -16,6 +16,7 @@
   "command.mcpp.languageServer.collectReport.title": "C++ Modules: Collect a Diagnostic Report",
   "command.mcpp.languageServer.exportDiagnosticBundle.title": "C++ Modules: Export a Diagnostic Bundle",
   "command.mcpp.languageServer.installTools.title": "C++ Modules: Install Command Line Tools",
+  "command.mcpp.languageServer.installKit.title": "C++ Modules: Install the Semantic Kit",
   "command.mcpp.languageServer.manageConflicts.title": "C++ Modules: Turn Off Other C++ Language Services",
   "command.mcpp.languageServer.openLogFolder.title": "Open the C++ Modules log folder",
   "command.mcpp.languageServer.refreshState.title": "C++ Modules: Refresh This View",

@@ -61,6 +61,7 @@ export const LANGUAGE_SERVER_COMMANDS = {
   restoreConflicts: "mcpp.languageServer.restoreConflicts",
   toggleInWorkspace: "mcpp.languageServer.toggleInWorkspace",
   installTools: "mcpp.languageServer.installTools",
+  installKit: "mcpp.languageServer.installKit",
   reviewChanges: "mcpp.languageServer.reviewChanges",
 } as const;
 

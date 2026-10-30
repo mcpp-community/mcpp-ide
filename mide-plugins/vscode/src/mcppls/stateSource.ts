@@ -1,23 +1,22 @@
 /**
  * The `vscode`-facing half of the C++ Modules state read.
  *
- * `state.ts` normalises what it is given; this file fetches it. It is the only
- * place that touches `extension.exports`, and it is deliberately defensive: the
- * object is mcppls's test API, not a contract, so every failure becomes
- * `available: false` with a reason and never an exception.
+ * `state.ts` normalises what it is given; this file adds what VS Code knows (whether the extension
+ * is installed and enabled). The state itself is `mcppls status` as the backend reported it
+ * (`Session.languageService`, design 2026-10-30 part 2 §5.2); the mcppls extension's API object is
+ * not read.
  *
- * `mcpp.languageService.readState` can switch the whole read off. When it is off
- * the gate below returns before `extension.exports` is touched at all — not a
- * partial read, no read — and the view falls back to the degraded content it
- * always has for an installed-but-unreadable mcppls.
+ * `mcpp.languageService.readState` can switch the state off: the view then shows the degraded
+ * content it always has for an installed-but-unreadable mcppls.
  */
 
 import * as vscode from "vscode";
 
 import { read } from "../config/access";
 import { MCPPLS_EXTENSION_ID } from "./contract";
-import { localOtherCppFeatures, otherCppFeaturesFromExports, type OtherCppFeatures } from "./otherCppFeatures";
-import { readStateFromExports, type McpplsStateView } from "./state";
+import type { LanguageServiceStatus } from "../ide/protocol";
+import { localOtherCppFeatures, type OtherCppFeatures } from "./otherCppFeatures";
+import { readStateFromStatus, type McpplsStateView } from "./state";
 
 /** Why a state read did not happen. The view prints it verbatim. */
 export function stateUnavailableReason(reason: "disabled" | "missing"): string {
@@ -53,46 +52,23 @@ export function languageServerServes(): boolean {
   return languageServerInstalled() && languageServerEnabled();
 }
 
-export function readLanguageServerState(): McpplsStateView {
-  const extension = dependency();
-  const meta = {
-    version: languageServerVersion(),
-    active: extension?.isActive,
-    enabled: languageServerEnabled(),
-  };
-  // The gate: nothing below this line runs when the setting is off, so
-  // `extension.exports` is never read. `read()` falls back to the declared
-  // default (true) when the registry has no value for the key.
+export function readLanguageServerState(status: LanguageServiceStatus | undefined): McpplsStateView {
+  const meta = { version: languageServerVersion(), enabled: languageServerEnabled() };
+  // The gate: `read()` falls back to the declared default (true) when the registry has no value.
   if (read<boolean>("mcpp.languageService.readState") === false) {
     return { available: false, reason: stateUnavailableReason("disabled"), ...meta };
   }
-  if (extension === undefined) {
+  if (dependency() === undefined) {
     return { available: false, reason: stateUnavailableReason("missing"), ...meta };
   }
-  try {
-    return readStateFromExports(extension.exports, meta);
-  } catch (error) {
-    return {
-      available: false,
-      reason: `reading mcppls state threw: ${error instanceof Error ? error.message : String(error)}`,
-      ...meta,
-    };
-  }
+  return readStateFromStatus(status, meta);
 }
 
 /**
- * The other C++ language services serving next to C++ Modules: mcppls's own
- * answer when it gives one (and reading its exports is allowed), else a local
- * read-only look at the same three candidates.
+ * The other C++ language services serving next to C++ Modules: a read-only look at the candidates'
+ * installation and their own settings.
  */
 export function readOtherCppFeatures(): OtherCppFeatures {
-  const extension = dependency();
-  if (extension !== undefined && extension.isActive && read<boolean>("mcpp.languageService.readState") !== false) {
-    const answer = otherCppFeaturesFromExports(extension.exports);
-    if (answer !== undefined) {
-      return answer;
-    }
-  }
   return localOtherCppFeatures(
     (extensionId) => vscode.extensions.getExtension(extensionId) !== undefined,
     (section, key) => vscode.workspace.getConfiguration(section).get(key),

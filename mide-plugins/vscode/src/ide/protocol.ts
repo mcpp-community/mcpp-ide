@@ -14,6 +14,17 @@ export interface Check {
   message: string;
 }
 
+/** One of mcppls's actions under each editor's own id (mcppls S3 section 8). */
+export interface ServerAction {
+  id: string;
+  title: string;
+  vscode?: string;
+  vscodeArguments?: unknown[];
+  jetbrains?: string;
+  nvim?: string;
+  command?: string;
+}
+
 export interface LanguageServiceStatus {
   state: "ok" | "outdated" | "missing" | "unreadable";
   program: string;
@@ -22,6 +33,14 @@ export interface LanguageServiceStatus {
   required: string;
   message: string;
   actions: { id: "install" | "update"; title: string }[];
+  /** What mcppls says about the workspace: `mcppls status` (0.0.20 and later) or the frozen table. */
+  root?: string;
+  statusSource?: "status" | "frozen" | "none";
+  statusError?: string;
+  capabilities?: string[];
+  serverActions?: ServerAction[];
+  workspace?: Record<string, unknown> | null;
+  instances?: unknown[];
 }
 
 /** `project/mcpp` (design 2026-10-30 part 2 §4.4): the project's mcpp, asked in the project. */

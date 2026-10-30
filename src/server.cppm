@@ -49,10 +49,10 @@ inline constexpr std::array<std::string_view, 49> kMethods = {
     "capabilities/explain", "report/collect", "shutdown", "exit"};
 
 // The notifications the backend sends.
-inline constexpr std::array<std::string_view, 14> kNotifications = {
+inline constexpr std::array<std::string_view, 15> kNotifications = {
     "job/started", "job/output", "job/plan", "job/progress", "job/diagnostic", "job/artifact", "job/record",
     "job/finished", "test/result", "test/summary", "result/changed", "manifest/changed",
-    "manifest/diagnostics", "project/mcppChanged"};
+    "manifest/diagnostics", "project/mcppChanged", "languageService/changed"};
 
 class Session {
 public:
@@ -81,7 +81,8 @@ private:
     Result manifest_check(const Json& p);
     Result language_service(const Json& p);
     Result targets(const Json& p);
-    Result commands(const Json& p) const;
+    Result commands(const Json& p);
+    Json server_actions();
     Result quick_menu(const Json& p);
     Result test_list(const Json& p);
     Result project_mcpp(const Json& p);
@@ -126,6 +127,10 @@ private:
     std::string clientName_ = "mcpp-ide";
     std::string editor_ = "vscode";
     std::vector<std::string> mcpplsCandidates_;
+    // mcppls's actions as its last report named them (null until one was asked), and what the editors
+    // were last told about it, so that a change is sent once.
+    Json mcpplsActions_;
+    std::string mcpplsSeen_;
     std::vector<std::filesystem::path> folders_;
     std::unique_ptr<jobs::Jobs> jobs_;
     std::unique_ptr<projects::Watcher> watcher_;
@@ -887,6 +892,8 @@ std::expected<Json, rpc::Error> Session::language_service(const Json& p) {
         else mcpplsCandidates_ = candidates;
     }
     const auto s = languageservice::probe(candidates);
+    const auto root = any_root(p);
+    const auto report = languageservice::report(s, root);
     const std::string required(languageservice::kRequired);
     Json command = Json::array();
     for (const auto& part : s.command) command.push_back(part.generic_string());
@@ -913,7 +920,39 @@ std::expected<Json, rpc::Error> Session::language_service(const Json& p) {
             break;
     }
     out["actions"] = actions;
+    // What mcppls says about the workspace (§5.2): its capabilities, the workspace's state and
+    // mcppls's actions under each editor's id, from `mcppls status` or the frozen table.
+    out["root"] = root.generic_string();
+    out["statusSource"] = report.source;
+    out["capabilities"] = report.capabilities;
+    out["serverActions"] = report.actions;
+    out["workspace"] = report.workspace;
+    out["instances"] = report.instances;
+    if (!report.detail.empty()) out["statusError"] = report.detail;
+    // A change the editors did not see yet: another mcppls, other actions, another state.
+    const auto seen = Json{s.version, s.program.generic_string(), report.actions,
+                           report.workspace.is_object() ? report.workspace.value("state", "") : std::string{}}.dump();
+    bool changed = false;
+    {
+        std::lock_guard lock(mutex_);
+        changed = !mcpplsSeen_.empty() && mcpplsSeen_ != seen;
+        mcpplsSeen_ = seen;
+        mcpplsActions_ = report.actions;
+    }
+    if (changed) rpc_.notify("languageService/changed", Json{{"root", out["root"]}, {"state", out["state"]},
+                                                             {"workspaceState", report.workspace.is_object() ? report.workspace.value("state", "none") : "none"}});
     return out;
+}
+
+// mcppls's actions, asked for once when no report has named them yet.
+Json Session::server_actions() {
+    {
+        std::lock_guard lock(mutex_);
+        if (!mcpplsActions_.is_null()) return mcpplsActions_;
+    }
+    (void)language_service(Json::object());
+    std::lock_guard lock(mutex_);
+    return mcpplsActions_.is_null() ? Json::array() : mcpplsActions_;
 }
 
 mcpp::ProjectMcpp Session::probe_of(const std::filesystem::path& rootIn) {
@@ -1096,7 +1135,7 @@ std::expected<Json, rpc::Error> Session::targets(const Json& p) {
 // The command table for one editor, in the user's language: what the adapter registers at run time
 // beside the declarations generated from the same table (spec/commands.json), or, in Neovim, which
 // declares nothing, all it offers. Each row names its subcommand, the name a command line types.
-std::expected<Json, rpc::Error> Session::commands(const Json& p) const {
+std::expected<Json, rpc::Error> Session::commands(const Json& p) {
     std::string editor, locale;
     {
         std::lock_guard lock(mutex_);
@@ -1107,12 +1146,26 @@ std::expected<Json, rpc::Error> Session::commands(const Json& p) const {
         locale = locale_;
     }
     const auto& table = spec::commands();
+    // A forward runs mcppls's action under this editor's id, which mcppls states (§5.3); an action it
+    // gives this editor no id for is not offered.
+    Json actions = Json::array();
+    const bool forwards = std::ranges::any_of(table["commands"], [&](const Json& c) {
+        return spec::offered_in(c, editor) && c.contains("action") && c["action"].value("kind", "") == "forward";
+    });
+    if (forwards) actions = server_actions();
     Json groups = Json::object();
     for (const auto& g : table["groups"]) groups[g.value("id", "")] = spec::manifest_string(g.value("title", ""), locale);
     Json out = Json::array();
     for (const auto& c : table["commands"]) {
         if (!spec::offered_in(c, editor)) continue;
         Json row = c;
+        if (c.contains("action") && c["action"].value("kind", "") == "forward") {
+            const auto wanted = c["action"].value("mcppls", "");
+            const auto it = std::ranges::find_if(actions, [&](const Json& a) { return a.value("id", "") == wanted && a.contains(editor); });
+            if (it == actions.end()) continue;
+            row["action"]["command"] = (*it)[editor];
+            if (editor == "vscode" && it->contains("vscodeArguments")) row["action"]["arguments"] = (*it)["vscodeArguments"];
+        }
         const auto id = c.value("id", "");
         row["title"] = spec::manifest_string(std::format("command.{}.title", id), locale);
         row["subcommand"] = spec::subcommand_of(c);

@@ -1,17 +1,13 @@
 /**
  * Which other C++ language services are serving next to C++ Modules, normalised.
  *
- * Pure, like `./state.ts`: no `vscode`, nothing here throws. Two sources:
+ * Pure, like `./state.ts`: no `vscode`, nothing here throws. The read is local and read-only:
+ * mcppls's three candidates, from the installed extensions and their settings. The mcppls
+ * extension's API object is not read (design 2026-10-30 part 2 §5.2); whether there is something to
+ * restore is mcppls's own command's answer, so `canRestore` says only whether mcppls offers the
+ * command, and the caller sets it.
  *
- * - **mcppls's own answer** (0.0.16+): `otherCppFeatures()` on the object its
- *   `activate()` returned. It uses the same candidate table and the same "is it
- *   active" decision as mcppls's own turn-off command, and it knows whether that
- *   command has something to restore. Preferred whenever it is there.
- * - **A local, read-only fallback** for an older mcppls: the same three
- *   candidates, read from the installed extensions and their settings. It can
- *   never know what mcppls remembered, so `canRestore` is `false`.
- *
- * Either way this extension only *reads*. Turning a service off or restoring it
+ * This extension only *reads*. Turning a service off or restoring it
  * is mcppls's command (`mcppls.turnOffOtherCppFeatures`, which asks where), and
  * the settings it writes are the other extensions' own, never `mcppls.*`.
  */
@@ -25,10 +21,8 @@ export interface OtherCppService {
 
 export interface OtherCppFeatures {
   active: OtherCppService[];
-  /** mcppls remembers settings it changed and can put them back. */
+  /** mcppls offers to put back the settings it changed. */
   canRestore: boolean;
-  /** Who answered: mcppls itself, or this extension's local read. */
-  source: "mcppls" | "local";
 }
 
 /** A candidate the local read knows; `section`/`key`/`off` is how its language features are turned off. */
@@ -67,41 +61,5 @@ export function localOtherCppFeatures(
     displayName: candidate.displayName,
     settable: candidate.setting !== undefined,
   }));
-  return { active, canRestore: false, source: "local" };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function service(value: unknown): OtherCppService | undefined {
-  if (!isRecord(value) || typeof value.extensionId !== "string" || value.extensionId.length === 0) {
-    return undefined;
-  }
-  return {
-    extensionId: value.extensionId,
-    displayName: typeof value.displayName === "string" && value.displayName.length > 0 ? value.displayName : value.extensionId,
-    settable: value.settable !== false,
-  };
-}
-
-/**
- * mcppls's answer, or `undefined` when the object has no such function, it
- * throws, or what it returns has the wrong shape — the caller then reads locally.
- */
-export function otherCppFeaturesFromExports(exportsValue: unknown): OtherCppFeatures | undefined {
-  if (!isRecord(exportsValue) || typeof exportsValue.otherCppFeatures !== "function") {
-    return undefined;
-  }
-  let answer: unknown;
-  try {
-    answer = (exportsValue.otherCppFeatures as () => unknown).call(exportsValue);
-  } catch {
-    return undefined;
-  }
-  if (!isRecord(answer) || !Array.isArray(answer.active)) {
-    return undefined;
-  }
-  const active = answer.active.map(service).filter((entry): entry is OtherCppService => entry !== undefined);
-  return { active, canRestore: answer.canRestore === true, source: "mcppls" };
+  return { active, canRestore: false };
 }

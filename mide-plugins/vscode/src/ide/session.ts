@@ -11,13 +11,15 @@ import { Backend, BackendError } from "./backend/client";
 import { locateBackend, type Located } from "./backend/locate";
 import { mcpplsCandidates } from "./backend/mcppls";
 import { MCPPLS_EXTENSION } from "./mapping";
-import type { CommandEntry, InitializeResult } from "./protocol";
+import type { CommandEntry, InitializeResult, LanguageServiceStatus } from "./protocol";
 
 export class Session implements vscode.Disposable {
   private backend: Backend | undefined;
   private located: Located | undefined;
   private initResult: InitializeResult | undefined;
   private commandTable: CommandEntry[] = [];
+  private languageServiceNow: LanguageServiceStatus | undefined;
+  private languageServiceAsking: Promise<LanguageServiceStatus | undefined> | undefined;
   /** When the backend ended, within the last three minutes (§3.1). */
   private exits: number[] = [];
   private degradedNow = false;
@@ -32,9 +34,12 @@ export class Session implements vscode.Disposable {
     this.disposables.push(
       this.onDidStart,
       this.onDidDegrade,
-      // The editor regained focus: a `xlings use` or a changed pin happened outside it (§4.2).
+      // The editor regained focus: a `xlings use` or a changed pin happened outside it (§4.2), or a
+      // server started or stopped (§5.2).
       vscode.window.onDidChangeWindowState((state) => {
-        if (state.focused && this.backend?.running) void this.backend.request("project/refresh", {}).then(() => this.onDidRefresh.fire(), () => undefined);
+        if (!state.focused || !this.backend?.running) return;
+        void this.backend.request("project/refresh", {}).then(() => this.onDidRefresh.fire(), () => undefined);
+        void this.refreshLanguageService();
       }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("mcpp.ide.backendPath")) { void this.restart(); return; }
@@ -42,8 +47,41 @@ export class Session implements vscode.Disposable {
       }),
       vscode.workspace.onDidGrantWorkspaceTrust(() => void this.pushSettings()),
       vscode.workspace.onDidChangeWorkspaceFolders(() => void this.restart()),
-      vscode.extensions.onDidChange(() => void this.request("languageService/status", { candidates: this.mcpplsCandidates() }).catch(() => undefined)),
+      vscode.extensions.onDidChange(() => void this.refreshLanguageService()),
+      this.onDidChangeLanguageService,
     );
+    // mcppls answered differently, or a job ended (a build changes what the server serves).
+    this.on("languageService/changed", () => void this.refreshLanguageService());
+    this.on("job/finished", () => void this.refreshLanguageService());
+  }
+
+  /** What mcppls says about the workspace (§5.2), as last asked; `undefined` before the first answer. */
+  get languageService(): LanguageServiceStatus | undefined {
+    return this.languageServiceNow;
+  }
+
+  /** Fired when `languageService` was asked again. */
+  readonly onDidChangeLanguageService = new vscode.EventEmitter<LanguageServiceStatus>();
+
+  /**
+   * Asks the backend which mcppls answers and what it says about the workspace: one question at a
+   * time, and none while the backend is not running (nothing is started to answer it).
+   */
+  refreshLanguageService(root?: string): Promise<LanguageServiceStatus | undefined> {
+    if (!this.backend?.running) return Promise.resolve(this.languageServiceNow);
+    if (this.languageServiceAsking) return this.languageServiceAsking;
+    const params: Record<string, unknown> = { candidates: this.mcpplsCandidates() };
+    const folder = root ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (folder !== undefined) params.root = folder;
+    this.languageServiceAsking = this.backend
+      .request<LanguageServiceStatus>("languageService/status", params)
+      .then((status) => {
+        this.languageServiceNow = status;
+        this.onDidChangeLanguageService.fire(status);
+        return status;
+      }, () => this.languageServiceNow)
+      .finally(() => { this.languageServiceAsking = undefined; });
+    return this.languageServiceAsking;
   }
 
   /** Fired after the projects' mcpp were forgotten, so a view asks again. */
@@ -130,6 +168,10 @@ export class Session implements vscode.Disposable {
         languageService: { candidates: this.mcpplsCandidates() },
       });
       this.commandTable = (await backend.request<{ commands: CommandEntry[] }>("commands/list", { editor: "vscode" })).commands;
+      if (this.initResult.languageService) {
+        this.languageServiceNow = this.initResult.languageService;
+        this.onDidChangeLanguageService.fire(this.initResult.languageService);
+      }
       for (const c of this.initResult.checks) if (c.status === "error") this.output.appendLine(`mcpp: ${c.message}`);
       this.onDidStart.fire(this.initResult);
       return true;

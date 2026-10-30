@@ -129,6 +129,7 @@ function M.setup(opts)
     callback = function()
       if session.state.ready then
         session.request('project/refresh', {}, function() end)
+        session.request('languageService/status', { candidates = session.mcppls_candidates(), root = commands.root() }, function() end)
       end
     end,
   })

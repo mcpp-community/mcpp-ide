@@ -28,8 +28,9 @@ import * as vscode from "vscode";
 import { LANGUAGE_SERVER_COMMANDS, LEGACY_LANGUAGE_SERVER_COMMANDS, TOOL_COMMANDS } from "../commands/ids";
 import { read } from "../config/access";
 import { t } from "../i18n/t";
+import type { Session } from "../ide/session";
 import type { LanguageServerBridge } from "../mcppls/bridge";
-import { capability } from "../mcppls/contract";
+import { MCPPLS_EXTENSION_ID, capability } from "../mcppls/contract";
 import { confirmationFor, formatResult, type FormattedResult } from "../mcppls/messages";
 import {
   languageServerEnabled,
@@ -47,9 +48,14 @@ import { degradedNoticeEnabled, resetCacheConfirmation } from "./viewPolicy";
 /** The tick granularity; the settings are in seconds. */
 const REFRESH_TICK_MS = 100;
 
+/** The shortest interval at which `mcppls status` is asked while the view is visible (§5.2). */
+export const STATE_REFRESH_FLOOR_SECONDS = 30;
+
 export interface LanguageServerViewDeps {
   bridge: LanguageServerBridge;
   output: vscode.OutputChannel;
+  /** The backend session: what mcppls says about the workspace (§5.2). */
+  session: Session;
 }
 
 /**
@@ -163,18 +169,21 @@ export function registerLanguageServerCommands(
       installed: languageServerInstalled(),
       enabled: languageServerEnabled(),
       version: languageServerVersion(),
-      state: readLanguageServerState(),
-      otherCppFeatures: languageServerInstalled() ? readOtherCppFeatures() : undefined,
+      state: readLanguageServerState(deps.session.languageService),
+      otherCppFeatures: languageServerInstalled()
+        ? { ...readOtherCppFeatures(), canRestore: !deps.bridge.isGone("restoreOtherCppFeatures") }
+        : undefined,
     };
   };
 
   // `mcpp.languageService.stateRefreshSeconds`, but only while the project view is
-  // visible and only while state is read at all (0 = off).
+  // visible, only while state is read at all (0 = off), and never more often than every 30 s:
+  // each tick runs `mcppls status` (§5.2).
   const timer = new PollTimer({
     periodMs: 0,
     tick: (): void => {
       if (visible) {
-        refresh();
+        void deps.session.refreshLanguageService();
       }
     },
   });
@@ -183,7 +192,7 @@ export function registerLanguageServerCommands(
     const disabled = read<boolean>("mcpp.languageService.readState") === false;
     const seconds = read<number>("mcpp.languageService.stateRefreshSeconds");
     const usable = !disabled && Number.isFinite(seconds) && seconds > 0;
-    const decision = refreshTimerDecision(usable ? seconds : 0, visible);
+    const decision = refreshTimerDecision(usable ? Math.max(STATE_REFRESH_FLOOR_SECONDS, seconds) : 0, visible);
     timer.start(decision.active ? decision.seconds * 1000 : 0);
   };
   applyTimer();
@@ -240,7 +249,7 @@ export function registerLanguageServerCommands(
   };
 
   register(LANGUAGE_SERVER_COMMANDS.exportDiagnosticBundle, async () => {
-    const result = await runLanguageServerCommand(deps.bridge, deps.output, "diagnosticBundle");
+    const result = await runLanguageServerCommand(deps.bridge, deps.output, "exportDiagnostics");
     const bundle = bundleFrom(result?.value);
     if (bundle !== undefined) {
       await context.globalState.update(BUNDLE_PATH_KEY, bundle);
@@ -264,28 +273,29 @@ export function registerLanguageServerCommands(
     await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(remembered));
   });
 
-  register(LANGUAGE_SERVER_COMMANDS.openLogFolder, async () => {
-    // Upstream owns the path: `revealCacheDirectory('logs')` asks the server's own
-    // detail for `paths.logDirectory` and reveals it, falling back to the output
-    // channel when the server cannot answer. Nothing here reconstructs a path.
-    await runLanguageServerCommand(deps.bridge, deps.output, "logsDirectory", { args: ["logs"] });
-  });
-
-  forward(LANGUAGE_SERVER_COMMANDS.restart, "restartServer");
+  // mcppls owns the path and the arguments: its action names the command and what it is called
+  // with (`revealCacheDirectory('logs')` today). Nothing here reconstructs a path.
+  forward(LANGUAGE_SERVER_COMMANDS.openLogFolder, "openLogDirectory");
+  forward(LANGUAGE_SERVER_COMMANDS.restart, "restart");
   forward(LANGUAGE_SERVER_COMMANDS.restartEngine, "restartEngine");
   forward(LANGUAGE_SERVER_COMMANDS.resetWorkspaceCache, "resetCache");
   forward(LANGUAGE_SERVER_COMMANDS.selectContext, "selectContext");
   forward(LANGUAGE_SERVER_COMMANDS.showModuleGraph, "moduleGraph");
-  forward(LANGUAGE_SERVER_COMMANDS.showLogs, "logs");
-  forward(LANGUAGE_SERVER_COMMANDS.collectReport, "report");
+  forward(LANGUAGE_SERVER_COMMANDS.showLogs, "showLog");
+  forward(LANGUAGE_SERVER_COMMANDS.collectReport, "collectReport");
   // `exportDiagnosticBundle` is registered above rather than forwarded: its
   // answer is the zip's path, and the caller has to keep it.
   forward(LANGUAGE_SERVER_COMMANDS.runBuildToolInTerminal, "runBuildTool");
   forward(LANGUAGE_SERVER_COMMANDS.installTools, "installTools");
+  forward(LANGUAGE_SERVER_COMMANDS.installKit, "installKit");
   forward(LANGUAGE_SERVER_COMMANDS.manageConflicts, "turnOffOtherCppFeatures");
   forward(LANGUAGE_SERVER_COMMANDS.restoreConflicts, "restoreOtherCppFeatures");
-  forward(LANGUAGE_SERVER_COMMANDS.reviewChanges, "review", () => [false]);
-  forward(LANGUAGE_SERVER_COMMANDS.toggleInWorkspace, "toggleInWorkspace", () => [!languageServerEnabled()]);
+  forward(LANGUAGE_SERVER_COMMANDS.reviewChanges, "reviewRun");
+  register(LANGUAGE_SERVER_COMMANDS.toggleInWorkspace, async () => {
+    const enable = !languageServerEnabled();
+    await runLanguageServerCommand(deps.bridge, deps.output, enable ? "turnOnInWorkspace" : "turnOffInWorkspace", { value: enable });
+    refresh();
+  });
 
   // The legacy ids from 0.4.x keep working, pointing at the new actions.
   register(LEGACY_LANGUAGE_SERVER_COMMANDS.configureLanguageServer, async () => {
@@ -295,13 +305,13 @@ export function registerLanguageServerCommands(
     await runLanguageServerCommand(deps.bridge, deps.output, "selectContext");
   });
   register(LEGACY_LANGUAGE_SERVER_COMMANDS.checkModuleSupport, async () => {
-    await runLanguageServerCommand(deps.bridge, deps.output, "restartServer");
+    await runLanguageServerCommand(deps.bridge, deps.output, "restart");
   });
   register(LEGACY_LANGUAGE_SERVER_COMMANDS.showModuleGraph, async () => {
     await runLanguageServerCommand(deps.bridge, deps.output, "moduleGraph");
   });
   register(LEGACY_LANGUAGE_SERVER_COMMANDS.showLanguageServerLogs, async () => {
-    await runLanguageServerCommand(deps.bridge, deps.output, "logs");
+    await runLanguageServerCommand(deps.bridge, deps.output, "showLog");
   });
 
   register(TOOL_COMMANDS.openLanguageServerSettings, async () => {
@@ -309,6 +319,11 @@ export function registerLanguageServerCommands(
   });
 
   context.subscriptions.push(
+    // The backend asked mcppls again: its actions and the workspace's state may differ.
+    deps.session.onDidChangeLanguageService.event(() => {
+      deps.bridge.capabilities.invalidate();
+      refresh();
+    }),
     vscode.extensions.onDidChange(() => refresh()),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (
@@ -328,7 +343,7 @@ export function registerLanguageServerCommands(
   // `mcpp.languageService.notifyOnDegraded` says the user does not want it.
   if (degradedNoticeEnabled(read<boolean>("mcpp.languageService.notifyOnDegraded")) && !languageServerInstalled()) {
     deps.output.appendLine(
-      t("The C++ Modules extension ({0}) is not installed or is disabled.", capability("refresh")?.key ?? ""),
+      t("The C++ Modules extension ({0}) is not installed or is disabled.", MCPPLS_EXTENSION_ID),
     );
   }
 
@@ -343,6 +358,7 @@ export function registerLanguageServerCommands(
       applyTimer();
       // Becoming visible is exactly when a stale block must be re-read.
       if (visible) {
+        void deps.session.refreshLanguageService();
         refresh();
       }
     },

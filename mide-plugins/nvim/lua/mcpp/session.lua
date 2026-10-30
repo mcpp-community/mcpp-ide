@@ -384,6 +384,17 @@ local function initialize()
   state.strings = M.call('i18n/bundle', {}) or {}
   local listed = M.call('commands/list', { editor = 'nvim' })
   state.commands = listed and listed.commands or {}
+  -- mcppls answered differently (another version, other actions): the commands are asked again,
+  -- since mcppls's actions are offered under the ids it states (§5.3).
+  if not state.listing then
+    state.listing = M.on('languageService/changed', function()
+      M.request('commands/list', { editor = 'nvim' }, function(err, again)
+        if not err and again and again.commands then
+          state.commands = again.commands
+        end
+      end)
+    end)
+  end
   local resolved = M.call('settings/update', settings_params())
   if resolved then
     state.values = resolved.values or {}

@@ -378,11 +378,20 @@ function M.language_service(s)
 end
 
 function actions.languageService()
-  local s, err = session.call('languageService/status', { candidates = session.mcppls_candidates() })
+  local s, err = session.call('languageService/status', { candidates = session.mcppls_candidates(), root = M.root() })
   if err then
     return report(err)
   end
   M.language_service(s)
+end
+
+-- One of mcppls's actions, by the user command of mcppls-nvim that mcppls states (§5.3).
+function actions.forward(row)
+  local command = row.action.command
+  if not command or vim.fn.exists(':' .. command) ~= 2 then
+    return vim.notify(t('This command is not available in this IDE.'), vim.log.levels.INFO)
+  end
+  vim.cmd(command)
 end
 
 function actions.rpc(row, _, root)
@@ -395,13 +404,15 @@ end
 
 -- ── the table ─────────────────────────────────────────────────────────────────────────────────
 
--- The rows Neovim offers now: not deprecated, not hidden from a palette, and the debugger only when
--- nvim-dap is there.
+-- The rows Neovim offers now: not deprecated, not hidden from a palette, the debugger only when
+-- nvim-dap is there, and mcppls's actions only where mcppls-nvim defines the command.
 function M.offered()
   local out = {}
   for _, row in ipairs(session.state.commands) do
     local debug = row.action and row.action.kind == 'debug'
-    if not row.deprecated and row.palette ~= false and (not debug or dap()) then
+    local forward = row.action and row.action.kind == 'forward'
+    if not row.deprecated and row.palette ~= false and (not debug or dap())
+      and (not forward or vim.fn.exists(':' .. (row.action.command or '')) == 2) then
       out[#out + 1] = row
     end
   end

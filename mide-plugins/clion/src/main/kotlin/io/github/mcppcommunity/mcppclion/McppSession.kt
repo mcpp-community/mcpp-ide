@@ -43,12 +43,17 @@ class McppSession(private val project: Project) : Disposable {
             if (key == "mcpp.ide.backendPath") restart() else pushSettings()
         })
         on("manifest/changed") { p -> p.asJsonObject["root"]?.asString?.let { refreshTests(it) } }
+        // mcppls answered differently (another version, other actions): the commands are asked again,
+        // since mcppls's actions are offered under the ids it states (§5.3).
+        on("languageService/changed") { refreshCommands() }
         // The IDE regained focus: a `xlings use` or a changed pin happened outside it (§4.2).
         com.intellij.openapi.application.ApplicationManager.getApplication().messageBus.connect(this).subscribe(
             com.intellij.openapi.application.ApplicationActivationListener.TOPIC,
             object : com.intellij.openapi.application.ApplicationActivationListener {
                 override fun applicationActivated(ideFrame: com.intellij.openapi.wm.IdeFrame) {
-                    if (backend?.running == true) backend?.request("project/refresh", JsonObject())
+                    if (backend?.running != true) return
+                    backend?.request("project/refresh", JsonObject())
+                    languageServiceStatus()
                 }
             })
     }
@@ -153,6 +158,18 @@ class McppSession(private val project: Project) : Disposable {
             io.github.mcppcommunity.mcppclion.actions.Dispatch.exportReport(project)
         })
         n.notify(project)
+    }
+
+    /** What mcppls says about the project (§5.2); the backend tells `languageService/changed` when it differs. */
+    fun languageServiceStatus(): CompletableFuture<JsonElement> =
+        request("languageService/status", JsonObject().apply {
+            add("candidates", mcpplsCandidates())
+            root?.let { addProperty("root", it) }
+        })
+
+    private fun refreshCommands() {
+        backend?.request("commands/list", JsonObject().apply { addProperty("editor", "jetbrains") })
+            ?.thenAccept { table -> commands = table.asJsonObject.getAsJsonArray("commands").map { it.asJsonObject } }
     }
 
     fun restart() {

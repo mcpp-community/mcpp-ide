@@ -14,6 +14,8 @@ import com.intellij.ide.impl.ProjectUtil
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
@@ -42,6 +44,17 @@ class McppCommandAction : DumbAwareAction() {
         e.presentation.isEnabledAndVisible = project != null
         if (project == null) return
         val id = e.actionManager.getId(this) ?: return
+        // mcppls's actions are offered where mcppls states a JetBrains id for them and its plugin has
+        // the action (§5.3); the table is the backend's, asked when the session started.
+        val session = McppSession.get(project)
+        val row = session.commands.firstOrNull { it["id"].asString == id }
+        if (row != null && row["action"].asJsonObject["kind"]?.asString == "forward") {
+            val target = row["action"].asJsonObject["command"]?.asString
+            e.presentation.isEnabledAndVisible = target != null && e.actionManager.getAction(target) != null
+            return
+        }
+        // A command the backend's table does not hold for this IDE is not offered.
+        if (row == null && session.commands.isNotEmpty()) { e.presentation.isEnabledAndVisible = false; return }
         val needsProject = id in setOf("mcpp.build", "mcpp.run", "mcpp.debug", "mcpp.test", "mcpp.clean", "mcpp.pack", "mcpp.cleanProjectArtifacts")
         if (needsProject) e.presentation.isEnabled = McppSession.get(project).root != null
     }
@@ -113,6 +126,7 @@ object Dispatch {
                 ApplicationManager.getApplication().invokeLater { Messages.showInfoMessage(project, text, t("Environment Self-check")) }
             }
             "languageService" -> languageService(project)
+            "forward" -> forward(project, action)
             "report" -> exportReport(project)
             "rpc" -> job(project, action["method"].asString, JsonObject().apply { session.root?.let { addProperty("root", it) } })
             else -> session.notify(t("This command is not available in this IDE."), NotificationType.INFORMATION)
@@ -287,6 +301,14 @@ object Dispatch {
                 else session.notify(session.t("mcpp new {0}: {1}", name, p.asJsonObject["status"]?.asString ?: "failed"), NotificationType.ERROR)
             }
         }
+    }
+
+    /** One of mcppls's actions, by the id of its CLion plugin's action that mcppls states. */
+    private fun forward(project: Project, action: JsonObject) {
+        val session = McppSession.get(project)
+        val target = action["command"]?.asString?.let { ActionManager.getInstance().getAction(it) }
+        if (target == null) { session.notify(session.t("This command is not available in this IDE."), NotificationType.INFORMATION); return }
+        ActionManager.getInstance().tryToExecute(target, null, null, ActionPlaces.UNKNOWN, true)
     }
 
     fun languageServiceAction(project: Project, id: String) {

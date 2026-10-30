@@ -145,8 +145,14 @@ for _, row in ipairs(session.state.commands) do
 end
 check('the command table arrives, each row with its subcommand', #session.state.commands > 20 and by.build ~= nil, #session.state.commands)
 check('cancel and problems are Neovim\'s, settings is not', by.cancel and by.cancel.id == 'mcpp.cancelJob' and by.problems ~= nil and by.openSettings == nil)
-local forwards = vim.tbl_filter(function(r) return r.action.kind == 'forward' or r.action.kind == 'editor' end, session.state.commands)
-check('no forward to mcppls\'s commands (mcppls-nvim has its own)', #forwards == 0, #forwards)
+local editors = vim.tbl_filter(function(r) return r.action.kind == 'editor' end, session.state.commands)
+check('no command of another editor', #editors == 0, #editors)
+-- mcppls's actions only under the mcppls-nvim command mcppls states; offered only where it is defined.
+local forwards = vim.tbl_filter(function(r) return r.action.kind == 'forward' end, session.state.commands)
+check('a forward names mcppls-nvim\'s command', vim.tbl_isempty(vim.tbl_filter(function(r)
+  return not (r.action.command or ''):match('^Mcppls') end, forwards)), vim.inspect(forwards))
+check('a forward whose command is not defined is not offered', vim.tbl_isempty(vim.tbl_filter(function(r)
+  return r.action.kind == 'forward' and vim.fn.exists(':' .. r.action.command) ~= 2 end, require('mcpp.commands').offered())))
 
 -- ── completion ────────────────────────────────────────────────────────────────────────────────
 local all = vim.fn.getcompletion('Mcpp ', 'cmdline')

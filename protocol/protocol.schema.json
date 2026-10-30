@@ -81,8 +81,8 @@
       }
     },
     "languageService/status": {
-      "description": "Which mcppls answers this editor's C++ files and whether it reads mcpp's result record (0.0.18 and later). Candidates are the servers the adapter knows of (the mcppls extension's or plugin's own); PATH, xlings and the plugin payload follow.",
-      "params": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "string" } } } },
+      "description": "Which mcppls answers this editor's C++ files, whether it reads mcpp's result record (0.0.18 and later), and what it says about the workspace: `mcppls status` (0.0.20 and later) or the frozen table. Candidates are the servers the adapter knows of (the mcppls extension's or plugin's own); PATH, xlings and the plugin payload follow.",
+      "params": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "string" } }, "root": { "type": "string", "description": "The workspace to ask mcppls about (default: the first folder)" } } },
       "result": { "$ref": "#/$defs/languageService" }
     },
     "projects/list": {
@@ -416,7 +416,8 @@
     "result/changed": { "description": "A project's result record changed: a build finished, whoever ran it.", "params": { "type": "object", "required": ["root", "result"] } },
     "manifest/changed": { "params": { "type": "object", "required": ["root"] } },
     "manifest/diagnostics": { "params": { "type": "object", "required": ["root", "diagnostics"] } },
-    "project/mcppChanged": { "description": "A job's envelope named another mcpp than the project's was asked as: it is asked again on its next use.", "params": { "type": "object", "required": ["root", "version"] } }
+    "project/mcppChanged": { "description": "A job's envelope named another mcpp than the project's was asked as: it is asked again on its next use.", "params": { "type": "object", "required": ["root", "version"] } },
+    "languageService/changed": { "description": "mcppls answered differently from the last time it was asked: another program or version, other actions, or another state of the workspace. An editor that lists the commands asks for them again.", "params": { "type": "object", "required": ["root", "state", "workspaceState"] } }
   },
   "$defs": {
     "settingValues": { "type": "object", "additionalProperties": true },
@@ -437,7 +438,26 @@
         "version": { "type": "string" },
         "required": { "type": "string" },
         "message": { "type": "string" },
-        "actions": { "type": "array", "items": { "type": "object", "required": ["id", "title"], "properties": { "id": { "enum": ["install", "update"] } } } }
+        "actions": { "type": "array", "items": { "type": "object", "required": ["id", "title"], "properties": { "id": { "enum": ["install", "update"] } } } },
+        "root": { "type": "string", "description": "The workspace mcppls was asked about" },
+        "statusSource": { "enum": ["status", "frozen", "none"], "description": "`mcppls status` (0.0.20 and later), the frozen table of 0.0.18 and 0.0.19, or no mcppls that reads the result record" },
+        "statusError": { "type": "string", "description": "Why `mcppls status` could not be read; the actions are then the frozen table's" },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "serverActions": {
+          "type": "array",
+          "description": "mcppls's actions under each editor's own id (mcppls S3 section 8)",
+          "items": {
+            "type": "object", "required": ["id", "title"],
+            "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "vscode": { "type": "string" }, "vscodeArguments": { "type": "array" },
+                            "jetbrains": { "type": "string" }, "nvim": { "type": "string" }, "command": { "type": "string" } }
+          }
+        },
+        "workspace": {
+          "type": ["object", "null"],
+          "properties": { "root": { "type": "string" }, "state": { "enum": ["ready", "starting", "degraded", "stopped", "none"] }, "since": { "type": "string" },
+                          "engine": { "type": "object" }, "kit": { "type": "object" }, "mcpp": { "type": "object" }, "problems": { "type": "array" } }
+        },
+        "instances": { "type": "array", "items": { "type": "object" } }
       }
     },
     "command": {

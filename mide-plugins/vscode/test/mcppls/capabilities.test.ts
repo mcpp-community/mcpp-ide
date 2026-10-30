@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { ServerAction } from "../../src/ide/protocol";
 import { MCPPLS_EXTENSION_ID } from "../../src/mcppls/contract";
 import { CapabilityRegistry, classifyCommandError, type CapabilityEnvironment } from "../../src/mcppls/capabilities";
 
@@ -8,22 +9,34 @@ interface Harness {
   registry: CapabilityRegistry;
   calls: Array<{ command: string; args: unknown[] }>;
   activations: string[];
+  answer(actions: readonly ServerAction[] | undefined): void;
 }
+
+/** mcppls's actions as `mcppls status` names them, a few of them. */
+const ACTIONS: readonly ServerAction[] = [
+  { id: "restart", title: "Restart", vscode: "mcppls.restartServer", jetbrains: "community.mcpp.mcppls.RestartServer" },
+  { id: "moduleGraph", title: "Graph", vscode: "mcppls.showModuleGraph" },
+  { id: "openLogDirectory", title: "Logs", vscode: "mcppls.revealCacheDirectory", vscodeArguments: ["logs"] },
+  { id: "showStatus", title: "Status", nvim: "McpplsStatus" },
+  { id: "exportDiagnostics", title: "Bundle", vscode: "mcppls.exportDiagnosticBundle" },
+  { id: "somethingNew", title: "New", vscode: "mcppls.somethingNew" },
+];
 
 function harness(options: {
   installed?: boolean;
-  declared?: readonly string[] | undefined;
+  actions?: readonly ServerAction[] | undefined;
   behaviour?: (command: string, attempt: number) => void;
   /** What the command answers with, for the few that answer at all. */
   result?: (command: string) => unknown;
 } = {}): Harness {
   const installed = options.installed ?? true;
+  let actions = "actions" in options ? options.actions : ACTIONS;
   const calls: Array<{ command: string; args: unknown[] }> = [];
   const activations: string[] = [];
   const attempts = new Map<string, number>();
   const environment: CapabilityEnvironment = {
     extensionInstalled: (id) => installed && id === MCPPLS_EXTENSION_ID,
-    declaredCommands: () => options.declared,
+    serverActions: () => actions,
     activateExtension: async (id) => {
       activations.push(id);
     },
@@ -35,7 +48,16 @@ function harness(options: {
       return (options.result === undefined ? undefined : options.result(command)) as T;
     },
   };
-  return { registry: new CapabilityRegistry(environment), calls, activations };
+  const registry = new CapabilityRegistry(environment);
+  return {
+    registry,
+    calls,
+    activations,
+    answer: (next) => {
+      actions = next;
+      registry.invalidate();
+    },
+  };
 }
 
 const notFound = (command: string): never => {
@@ -50,131 +72,91 @@ test("classifyCommandError separates a missing command from a real failure", () 
   assert.equal(classifyCommandError("plain string"), "failed");
 });
 
-test("with no static information a capability is assumed usable until a call says otherwise", () => {
-  const { registry, calls } = harness({ declared: undefined });
+test("an action runs the VS Code command mcppls names for it", async () => {
+  const { registry, calls } = harness();
   assert.equal(registry.status("moduleGraph").state, "declared");
-  assert.equal(registry.isGone("moduleGraph"), false);
-  return registry.invoke("moduleGraph").then((result) => {
-    assert.deepEqual(result, { state: "completed", capabilityKey: "moduleGraph", command: "mcppls.showModuleGraph" });
-    assert.deepEqual(calls, [{ command: "mcppls.showModuleGraph", args: [] }]);
-  });
+  const result = await registry.invoke("moduleGraph");
+  assert.deepEqual(result, { state: "completed", capabilityKey: "moduleGraph", command: "mcppls.showModuleGraph" });
+  assert.deepEqual(calls, [{ command: "mcppls.showModuleGraph", args: [] }]);
 });
 
-test("a statically undeclared command is only greyed out, never hidden", () => {
-  const { registry } = harness({ declared: ["mcppls.restartServer"] });
-  assert.equal(registry.status("moduleGraph").state, "undeclared");
-  assert.equal(registry.isUnconfirmed("moduleGraph"), true);
-  assert.equal(registry.isGone("moduleGraph"), false);
+test("the arguments mcppls names are passed, unless the caller passes its own", async () => {
+  const { registry, calls } = harness();
+  await registry.invoke("openLogDirectory");
+  await registry.invoke("openLogDirectory", "elsewhere");
+  assert.deepEqual(calls, [
+    { command: "mcppls.revealCacheDirectory", args: ["logs"] },
+    { command: "mcppls.revealCacheDirectory", args: ["elsewhere"] },
+  ]);
+});
+
+test("an action mcppls offers no VS Code command for, or does not name, is hidden and never called", async () => {
+  const { registry, calls } = harness();
+  assert.equal(registry.isGone("selectContext"), true);
+  assert.equal((await registry.invoke("selectContext")).state, "missing");
+  assert.equal(registry.isGone("showStatus"), true);
+  assert.deepEqual(calls, []);
+});
+
+test("an action mcpp-ide has no policy for is not offered", () => {
+  const { registry } = harness();
+  assert.ok(!registry.availableKeys().includes("somethingNew"));
+});
+
+test("before the backend answers, an action is greyed out, not hidden", async () => {
+  const { registry, calls, answer } = harness({ actions: undefined });
+  assert.equal(registry.isUnconfirmed("restart"), true);
+  assert.equal(registry.isGone("restart"), false);
+  assert.equal((await registry.invoke("restart")).state, "missing");
+  answer(ACTIONS);
+  assert.equal(registry.isUnconfirmed("restart"), false);
+  assert.equal((await registry.invoke("restart")).state, "completed");
+  assert.deepEqual(calls, [{ command: "mcppls.restartServer", args: [] }]);
 });
 
 test("the command's own answer is passed back untouched", async () => {
-  // `mcppls.exportDiagnosticBundle` resolves to the zip it wrote, and that path
-  // is the only reliable pointer at the file afterwards; most commands answer
-  // with nothing, so the field is optional and never interpreted here.
-  const { registry, calls } = harness({
-    declared: ["mcppls.exportDiagnosticBundle", "mcppls.revealCacheDirectory"],
-    result: (command) => (command === "mcppls.exportDiagnosticBundle" ? "/cache/bundles/x.zip" : undefined),
-  });
-
-  const answered = await registry.invoke("diagnosticBundle");
-  assert.equal(answered.state, "completed");
-  assert.equal(answered.value, "/cache/bundles/x.zip");
-
-  // The reveal command takes its target as an argument; the table only names the
-  // command, so the caller's `'logs'` has to arrive as-is.
-  await registry.invoke("logsDirectory", "logs");
-  assert.deepEqual(calls[calls.length - 1], { command: "mcppls.revealCacheDirectory", args: ["logs"] });
-
-  const silent = await registry.invoke("logsDirectory");
-  assert.equal(silent.state, "completed");
-  assert.ok(!("value" in silent), "a command that answered nothing must not invent a value");
+  const { registry } = harness({ result: () => "/cache/bundles/b.zip" });
+  const result = await registry.invoke("exportDiagnostics");
+  assert.equal(result.value, "/cache/bundles/b.zip");
 });
 
 test("an uninstalled dependency makes every capability unavailable without calling anything", async () => {
   const { registry, calls } = harness({ installed: false });
-  assert.equal(registry.status("refresh").state, "unavailable");
-  assert.equal(registry.isGone("refresh"), true);
-  assert.deepEqual(await registry.invoke("refresh"), { state: "unavailable", capabilityKey: "refresh" });
+  assert.equal(registry.isGone("restart"), true);
+  assert.deepEqual(await registry.invoke("restart"), { state: "unavailable", capabilityKey: "restart" });
   assert.deepEqual(calls, []);
 });
 
-test("refresh falls back down its candidate chain when the preferred command is missing", async () => {
-  const { registry, calls } = harness({
-    declared: undefined,
-    behaviour: (command, attempt) => {
-      if (command === "mcppls.reloadBuildDescription" && attempt === 1) {
-        notFound(command);
-      }
-    },
-  });
-  const result = await registry.invoke("refresh");
-  assert.deepEqual(result, { state: "completed", capabilityKey: "refresh", command: "mcppls.restartServer" });
-  assert.deepEqual(calls.map((call) => call.command), [
-    "mcppls.reloadBuildDescription",
-    "mcppls.restartServer",
-  ]);
-  assert.equal(registry.status("refresh").state, "available");
-});
-
-test("a capability whose whole chain is missing is remembered as gone", async () => {
-  const { registry, calls } = harness({
-    declared: undefined,
-    behaviour: (command) => notFound(command),
-  });
-  assert.deepEqual(await registry.invoke("refresh"), {
-    state: "missing",
-    capabilityKey: "refresh",
-    command: "mcppls.reloadBuildDescription",
-  });
-  assert.equal(registry.status("refresh").state, "missing");
-  assert.equal(registry.isGone("refresh"), true);
-  assert.equal(calls.length, 2, "the chain is tried once, not forever");
+test("a command VS Code does not know is remembered as gone", async () => {
+  const { registry, calls } = harness({ behaviour: notFound });
+  assert.equal((await registry.invoke("restart")).state, "missing");
+  assert.equal(registry.isGone("restart"), true);
+  assert.equal((await registry.invoke("restart")).state, "missing");
+  assert.equal(calls.length, 1);
 });
 
 test("a real failure keeps the capability and reports the error verbatim", async () => {
   const { registry } = harness({
-    declared: undefined,
-    behaviour: (command) => {
-      throw new Error(`${command}: server is not running`);
+    behaviour: () => {
+      throw new Error("server is not running");
     },
   });
-  const result = await registry.invoke("logs");
+  const result = await registry.invoke("restart");
   assert.equal(result.state, "failed");
-  assert.match(result.error ?? "", /server is not running/);
-  assert.equal(registry.isGone("logs"), false);
+  assert.equal(result.error, "server is not running");
+  assert.equal(registry.isGone("restart"), false);
 });
 
 test("the dependency is activated before the first forward", async () => {
-  const { registry, activations } = harness({ declared: undefined });
-  await registry.invoke("selectContext");
+  const { registry, activations } = harness();
+  await registry.invoke("restart");
   assert.deepEqual(activations, [MCPPLS_EXTENSION_ID]);
 });
 
-test("invalidate re-reads the static declaration", () => {
-  let declared: readonly string[] = [];
-  const environment: CapabilityEnvironment = {
-    extensionInstalled: () => true,
-    declaredCommands: () => declared,
-    executeCommand: async <T>(): Promise<T> => undefined as T,
-  };
-  const registry = new CapabilityRegistry(environment);
-  assert.equal(registry.status("moduleGraph").state, "undeclared");
-  declared = ["mcppls.showModuleGraph"];
-  registry.invalidate();
-  assert.equal(registry.status("moduleGraph").state, "declared");
-  assert.ok(registry.availableKeys().includes("moduleGraph"));
-});
-
-test("readState is never probed by calling a command", () => {
-  const { registry, calls } = harness({ declared: [] });
-  assert.equal(registry.status("readState").state, "declared");
-  assert.deepEqual(calls, []);
-});
-
 test("an unknown capability fails without touching the dependency", async () => {
-  const { registry, calls } = harness();
+  const { registry, calls, activations } = harness();
   const result = await registry.invoke("nope");
   assert.equal(result.state, "failed");
-  assert.match(result.error ?? "", /unknown capability/);
   assert.deepEqual(calls, []);
+  assert.deepEqual(activations, []);
 });

@@ -361,6 +361,11 @@
         "category": "%category%"
       },
       {
+        "command": "mcpp.languageServer.installKit",
+        "title": "%command.mcpp.languageServer.installKit.title%",
+        "category": "%category%"
+      },
+      {
         "command": "mcpp.languageServer.reviewChanges",
         "title": "%command.mcpp.languageServer.reviewChanges.title%",
         "category": "%category%"

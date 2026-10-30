@@ -16,6 +16,7 @@
   "command.mcpp.languageServer.collectReport.title": "C++ Modules: 收集诊断报告",
   "command.mcpp.languageServer.exportDiagnosticBundle.title": "C++ Modules: 导出诊断包",
   "command.mcpp.languageServer.installTools.title": "C++ Modules: 安装命令行工具",
+  "command.mcpp.languageServer.installKit.title": "C++ Modules: 安装语义套件",
   "command.mcpp.languageServer.manageConflicts.title": "C++ Modules: 关闭其他 C++ 语言服务",
   "command.mcpp.languageServer.openLogFolder.title": "打开 C++ Modules 日志目录",
   "command.mcpp.languageServer.refreshState.title": "C++ Modules: 刷新此视图",

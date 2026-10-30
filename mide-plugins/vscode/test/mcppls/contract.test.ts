@@ -2,14 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { CLI_COMMANDS, DEPRECATED_COMMANDS } from "../../src/commands/ids";
-import {
-  CAPABILITIES,
-  MCPPLS_EXTENSION_ID,
-  VERIFIED_MCPPLS_RANGE,
-  capability,
-  capabilityProblems,
-  commandsOf,
-} from "../../src/mcppls/contract";
+import { CAPABILITIES, MCPPLS_EXTENSION_ID, capability, capabilityProblems } from "../../src/mcppls/contract";
 
 test("the capability table satisfies its own rules", () => {
   assert.deepEqual(capabilityProblems(), []);
@@ -17,22 +10,12 @@ test("the capability table satisfies its own rules", () => {
 
 test("the dependency id is the published one", () => {
   assert.equal(MCPPLS_EXTENSION_ID, "sunrisepeak.mcpp-language-server");
-  assert.equal(VERIFIED_MCPPLS_RANGE, ">=0.0.4");
 });
 
-test("no capability is required: losing mcppls must not disable mcpp's own features", () => {
-  assert.ok(CAPABILITIES.every((entry) => entry.required === false));
-});
-
-test("the refresh chain prefers the cheap reload and falls back to a restart", () => {
-  assert.deepEqual(commandsOf("refresh"), ["mcppls.reloadBuildDescription", "mcppls.restartServer"]);
-});
-
-test("every forwarded command is an mcppls command", () => {
+test("the table keeps mcppls's action ids and no command id of either extension", () => {
   for (const entry of CAPABILITIES) {
-    for (const command of entry.commands) {
-      assert.ok(command.startsWith("mcppls."), `${entry.key} forwards ${command}`);
-    }
+    assert.ok(!entry.key.includes("."), `${entry.key} is a command id`);
+    assert.ok(!("commands" in entry), `${entry.key} keeps a command of mcppls's`);
   }
 });
 
@@ -53,5 +36,4 @@ test("capability keys are unique and unknown keys resolve to undefined", () => {
   const keys = CAPABILITIES.map((entry) => entry.key);
   assert.equal(new Set(keys).size, keys.length);
   assert.equal(capability("nope"), undefined);
-  assert.deepEqual(commandsOf("nope"), []);
 });

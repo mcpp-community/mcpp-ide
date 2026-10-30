@@ -23,6 +23,18 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
   person names. `mcpp.backend.logLevel` decides what the backend writes to the editor's log. VS
   Code's status item names the project's mcpp version, and its tooltip the program and whether
   `mcpp.path` chose it.
+- **What mcppls says about the workspace (§5).** The backend's `languageService/status` runs
+  `mcppls status --root <dir> --format json` (mcppls 0.0.20 and later, bounded at five seconds) and
+  returns its capabilities, the workspace's state, engine and kit, the servers serving it, and
+  mcppls's actions under each editor's own id; for mcppls 0.0.18 and 0.0.19 the actions come from a
+  table frozen at those releases. A different answer is sent once (`languageService/changed`). The
+  command table's forwards name mcppls's action ids, and `commands/list` gives each editor the id
+  mcppls states for it: CLion runs the mcppls plugin's action (and hides a row it does not have),
+  Neovim mcppls-nvim's command. VS Code reads the state and the commands from this answer instead of
+  the mcppls extension's API object and keeps only the confirmation each action needs; the state is
+  asked again after a job, on focus, when the project view becomes visible and, while it is visible,
+  at most every 30 seconds. A missing semantic kit is a row with **C++ Modules: Install the Semantic
+  Kit**. After a build nothing is forwarded by default (`auto`): mcppls reads mcpp's result record.
 - **mcpp-vscode 1.1.0 is mcpp-vscode 0.9.0 over the backend.** 0.9.0's extension is imported with
   its history (`mide-plugins/vscode`); every view, page, command, menu, setting and string a user
   sees is 0.9.0's. What 1.0 added stays, in 0.9.0's style: debugging (`mcpp.debug`, the `mcpp`

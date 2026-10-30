@@ -1,6 +1,6 @@
 // The wire and the backend, without an IDE: frames reassemble whatever the chunking; a session over
 // the mock mcpp finds the project, runs a build to `ok`, and lists the commands this editor offers
-// (no forward to mcppls's VS Code commands among them). The session test runs when the build passes
+// (a forward to one of mcppls's actions only under the JetBrains id mcppls states). The session test runs when the build passes
 // the backend and the mock mcpp (MCPP_IDE_BACKEND, MCPP_IDE_MOCK_MCPP).
 package io.github.mcppcommunity.mcppclion
 
@@ -90,7 +90,8 @@ class BackendTest {
             val commands = b.request("commands/list", JsonObject().apply { addProperty("editor", "jetbrains") }).get(30, TimeUnit.SECONDS)
                 .asJsonObject.getAsJsonArray("commands").map { it.asJsonObject }
             assertTrue(commands.any { it["id"].asString == "mcpp.build" })
-            assertTrue(commands.none { it["action"].asJsonObject["kind"].asString == "forward" })
+            assertTrue(commands.filter { it["action"].asJsonObject["kind"].asString == "forward" }
+                .all { it["action"].asJsonObject["command"]?.asString?.startsWith("community.mcpp.mcppls.") == true })
         }
         root.deleteRecursively()
     }
@@ -100,7 +101,8 @@ class BackendTest {
         val xml = javaClass.getResource("/META-INF/mcpp-actions.xml")?.readText()
         assumeTrue("the generated resources are on the test classpath", xml != null)
         assertTrue(xml!!.contains("""id="mcpp.build""""))
-        assertTrue(!xml.contains("mcpp.languageServer.restart"))
+        // mcppls's actions are declared; each is shown where mcppls states a JetBrains id for it.
+        assertTrue(xml.contains("mcpp.languageServer.restart"))
         val bundle = javaClass.getResource("/messages/McppClionBundle.properties")!!.readText()
         assertTrue(bundle.contains("action.mcpp.build.text=Build"))
     }

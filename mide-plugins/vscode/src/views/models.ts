@@ -452,6 +452,8 @@ export interface LanguageServiceBlock {
     reason?: string;
     state?: string;
     issues?: readonly LanguageServiceIssue[];
+    /** The semantic kit of the workspace's target (`mcppls status`, §5.2). */
+    kit?: { name: string; state: string };
   };
   /** Other C++ language services serving next to it (C/C++, clangd, ccls). */
   otherCppFeatures?: {
@@ -744,6 +746,17 @@ function languageServiceChildren(block: LanguageServiceBlock): TreeNode[] {
   if (block.otherCppFeatures !== undefined) {
     nodes.push(otherCppFeaturesNode(block.otherCppFeatures));
   }
+  // A missing kit: files are read with the openkal kit, and mcppls installs the target's (§5.3).
+  if (state?.available === true && state.kit?.state === "missing" && state.kit.name !== "") {
+    nodes.push({
+      id: "project.languageService.kit",
+      label: plain("The semantic kit is not installed"),
+      description: { key: "{0}", args: [state.kit.name] },
+      icon: "cloud-download",
+      tooltip: plain("Files are read with the openkal kit C++ Modules carries. Installing the target's kit gives its own standard library and headers."),
+      command: { command: "mcpp.languageServer.installKit", title: plain("Install the semantic kit") },
+    });
+  }
 
   (state?.issues ?? []).forEach((issue, index) => {
     nodes.push({
@@ -819,6 +832,15 @@ function actionNode(action: ActionRow): TreeNode {
   };
 }
 
+/** The workspace's state as `mcppls status` states it. */
+const STATE_LABELS: Readonly<Record<string, string>> = {
+  ready: "Ready",
+  starting: "Starting",
+  degraded: "Degraded",
+  stopped: "Stopped",
+  none: "Not serving this workspace",
+};
+
 function languageServiceStatus(state: LanguageServiceBlock["state"]): TreeNode {
   if (state === undefined || !state.available) {
     return {
@@ -830,7 +852,7 @@ function languageServiceStatus(state: LanguageServiceBlock["state"]): TreeNode {
   }
   return {
     id: "project.languageService.status",
-    label: plain(state.state === "ready" ? "Ready" : state.state === "degraded" ? "Degraded" : state.state ?? "Unknown"),
+    label: plain(STATE_LABELS[state.state ?? ""] ?? "Unknown"),
     icon: state.state === "ready" ? "pass" : "warning",
   };
 }

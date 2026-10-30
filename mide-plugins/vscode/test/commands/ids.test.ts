@@ -71,6 +71,7 @@ test("the C++ Modules group lists every id it registers", () => {
     "mcpp.languageServer.restoreConflicts",
     "mcpp.languageServer.toggleInWorkspace",
     "mcpp.languageServer.installTools",
+    "mcpp.languageServer.installKit",
     "mcpp.languageServer.reviewChanges",
   ]);
 });

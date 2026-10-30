@@ -1,8 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { ServerAction } from "../../src/ide/protocol";
 import { createLanguageServerBridge, MCPPLS_EXTENSION_ID } from "../../src/mcppls/bridge";
 import type { CapabilityEnvironment } from "../../src/mcppls/capabilities";
+
+/** mcppls's actions under their VS Code commands, as `mcppls status` names them (mcppls S3-8-7). */
+const ACTIONS: readonly ServerAction[] = [
+  ["restart", "mcppls.restartServer"],
+  ["reload", "mcppls.reloadBuildDescription"],
+  ["restartEngine", "mcppls.restartClangd"],
+  ["resetCache", "mcppls.resetWorkspaceCache"],
+  ["showLog", "mcppls.showLogs"],
+  ["collectReport", "mcppls.collectReport"],
+  ["exportDiagnostics", "mcppls.exportDiagnosticBundle"],
+  ["selectContext", "mcppls.selectContext"],
+  ["moduleGraph", "mcppls.showModuleGraph"],
+  ["runBuildTool", "mcppls.runBuildToolInTerminal"],
+  ["installTools", "mcppls.installCommandLineTools"],
+  ["reviewRun", "mcppls.review.run"],
+  ["reviewClear", "mcppls.review.clear"],
+  ["turnOffInWorkspace", "mcppls.turnOffInWorkspace"],
+  ["turnOnInWorkspace", "mcppls.turnOnInWorkspace"],
+  ["turnOffOtherCppFeatures", "mcppls.turnOffOtherCppFeatures"],
+  ["restoreOtherCppFeatures", "mcppls.restoreOtherCppFeatures"],
+].map(([id, vscode]) => ({ id, title: id, vscode }));
 
 function harness(options: { installed?: boolean; behaviour?: (command: string) => void } = {}) {
   const installed = options.installed ?? true;
@@ -10,7 +32,7 @@ function harness(options: { installed?: boolean; behaviour?: (command: string) =
   const activations: string[] = [];
   const environment: CapabilityEnvironment = {
     extensionInstalled: (id) => installed && id === MCPPLS_EXTENSION_ID,
-    declaredCommands: () => undefined,
+    serverActions: () => ACTIONS,
     activateExtension: async (id) => {
       activations.push(id);
     },
@@ -32,7 +54,7 @@ test("forwards one command per capability and activates the dependency first", a
 
   assert.deepEqual(await bridge.restartLanguageServer(), {
     state: "completed",
-    capabilityKey: "restartServer",
+    capabilityKey: "restart",
     command: "mcppls.restartServer",
   });
   await bridge.selectContext();
@@ -61,12 +83,12 @@ test("forwards one command per capability and activates the dependency first", a
   assert.ok(activations.every((id) => id === MCPPLS_EXTENSION_ID));
 });
 
-test("the refresh capability prefers the cheap reload", async () => {
+test("the refresh after a build is mcppls's reload", async () => {
   const { bridge, calls } = harness();
   const result = await bridge.refreshLanguageServerAfterBuild();
   assert.deepEqual(result, {
     state: "completed",
-    capabilityKey: "refresh",
+    capabilityKey: "reload",
     command: "mcppls.reloadBuildDescription",
   });
   assert.deepEqual(calls.map((call) => call.command), ["mcppls.reloadBuildDescription"]);
@@ -76,9 +98,9 @@ test("an uninstalled dependency yields unavailable without calling anything", as
   const { bridge, calls } = harness({ installed: false });
   assert.deepEqual(await bridge.restartLanguageServer(), {
     state: "unavailable",
-    capabilityKey: "restartServer",
+    capabilityKey: "restart",
   });
-  assert.equal(bridge.isGone("restartServer"), true);
+  assert.equal(bridge.isGone("restart"), true);
   assert.deepEqual(calls, []);
 });
 
@@ -91,7 +113,7 @@ test("a failure is reported verbatim and does not remove the capability", async 
   const result = await bridge.restartLanguageServer();
   assert.equal(result.state, "failed");
   assert.match(result.error ?? "", /server is not running/);
-  assert.equal(bridge.isGone("restartServer"), false);
+  assert.equal(bridge.isGone("restart"), false);
 });
 
 test("a missing command is not called again", async () => {
@@ -113,7 +135,7 @@ test("coalesces concurrent build refresh requests into one call", async () => {
   const calls: string[] = [];
   const bridge = createLanguageServerBridge({
     extensionInstalled: () => true,
-    declaredCommands: () => undefined,
+    serverActions: () => ACTIONS,
     executeCommand: async <T>(command: string): Promise<T> => {
       calls.push(command);
       await new Promise<void>((resolve) => {
@@ -145,13 +167,17 @@ test("turning other C++ services off and restoring them are two commands, never 
   assert.equal(bridge.dangerOf("restoreOtherCppFeatures"), "none");
 });
 
-test("directional commands pass their argument through", async () => {
+test("a direction chooses one of mcppls's two actions", async () => {
   const { bridge, calls } = harness();
   await bridge.toggleInWorkspace(false);
+  await bridge.toggleInWorkspace(true);
+  await bridge.reviewChanges();
   await bridge.reviewChanges(true);
-  assert.deepEqual(calls, [
-    { command: "mcppls.turnOffInWorkspace", args: [false] },
-    { command: "mcppls.review.run", args: [true] },
+  assert.deepEqual(calls.map((call) => call.command), [
+    "mcppls.turnOffInWorkspace",
+    "mcppls.turnOnInWorkspace",
+    "mcppls.review.run",
+    "mcppls.review.clear",
   ]);
 });
 

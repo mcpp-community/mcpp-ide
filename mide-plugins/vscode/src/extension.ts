@@ -16,8 +16,7 @@ import {
   type LanguageServerBridge,
   type LanguageServerCommandResult,
 } from "./mcppls/bridge";
-import { compareVersions } from "./library/xpkg";
-import { CAPABILITIES, MCPPLS_EXTENSION_ID, VERIFIED_MCPPLS_MINIMUM, VERIFIED_MCPPLS_RANGE } from "./mcppls/contract";
+import { CAPABILITIES, MCPPLS_EXTENSION_ID } from "./mcppls/contract";
 import { formatResult } from "./mcppls/messages";
 import { describeState } from "./mcppls/state";
 import {
@@ -50,23 +49,6 @@ import { CACHE_VIEW_FOCUS_COMMAND } from "./cache/cachePanel";
 import { readCacheSnapshot } from "./cache/cacheView";
 import { registerPages } from "./pages";
 import { registerLanguageServerCommands } from "./views/languageServerView";
-
-/**
- * The commands an extension declares in its own `package.json`, read without
- * activating it. `undefined` means "no static information", which the capability
- * probe treats as "assume it works until a call says otherwise".
- */
-function declaredCommandsOf(id: string): readonly string[] | undefined {
-  const extension = vscode.extensions.getExtension(id);
-  const commands = (extension?.packageJSON as { contributes?: { commands?: Array<{ command?: string }> } })
-    ?.contributes?.commands;
-  if (!Array.isArray(commands)) {
-    return undefined;
-  }
-  return commands
-    .map((entry) => entry.command)
-    .filter((command): command is string => typeof command === "string");
-}
 
 /** When the language service was last asked to reload, for the self-check. */
 let lastRefresh: { at: string; state: string; command?: string } | undefined;
@@ -205,9 +187,13 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   applyLanguagePreference();
   extensionContext.subscriptions.push(onConfigurationChanged(applyLanguagePreference));
 
+  // The mcpp-ide backend (`mcpp-ide serve`, carried as one ok-image bundle and every system's
+  // runner) answers the views' data, mcppls's account of the workspace among them; it starts in the
+  // background below, and nothing waits for it.
+  const session = new Session(extensionContext, output);
   const bridge = createLanguageServerBridge({
     extensionInstalled: (id) => vscode.extensions.getExtension(id) !== undefined,
-    declaredCommands: declaredCommandsOf,
+    serverActions: () => session.languageService?.serverActions,
     activateExtension: async (id) => {
       await vscode.extensions.getExtension(id)?.activate();
     },
@@ -253,13 +239,19 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
       lastRefresh = { at: new Date().toISOString(), state: "skipped (mcpp.languageService.refreshAfterBuild = off)" };
       return;
     }
+    // `auto`: mcppls 0.0.18 and later read mcpp's result record after any build and refresh
+    // themselves, so nothing is forwarded (the backend reports an older mcppls as outdated).
     const result =
-      mode === "restart" ? await bridge.restartLanguageServer() : await bridge.refreshLanguageServerAfterBuild();
-    lastRefresh = { at: new Date().toISOString(), state: result.state, command: result.command };
-    resultText(output, result);
-    if (completion.state === "succeeded" && result.state === "completed") {
+      mode === "restart" ? await bridge.restartLanguageServer()
+      : mode === "reload" ? await bridge.refreshLanguageServerAfterBuild()
+      : undefined;
+    lastRefresh = result === undefined
+      ? { at: new Date().toISOString(), state: "mcppls reads mcpp's result record" }
+      : { at: new Date().toISOString(), state: result.state, command: result.command };
+    if (result !== undefined) resultText(output, result);
+    if (completion.state === "succeeded" && (result === undefined || result.state === "completed")) {
       await vscode.window.showInformationMessage(taskCompletionText(completion));
-    } else if (completion.state === "failed" && result.state === "completed") {
+    } else if (completion.state === "failed" && (result === undefined || result.state === "completed")) {
       await vscode.window.showWarningMessage(taskCompletionText(completion));
     }
   };
@@ -272,7 +264,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     afterProjectTask,
     isTrusted: () => vscode.workspace.isTrusted,
     languageServerSummary: () => {
-      const view = readLanguageServerState();
+      const view = readLanguageServerState(session.languageService);
       return view.available ? view.state : undefined;
     },
     projectMcpp: () => {
@@ -282,10 +274,8 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   });
 
   // ── the mcpp-ide backend ─────────────────────────────────────────────────
-  // The backend (`mcpp-ide serve`, carried as one ok-image bundle and every system's runner) answers
-  // the views' data and the flows 0.9.0 did not have: debugging, the Testing view, the targets and
-  // target sets, packing. It starts in the background; nothing above waits for it.
-  const session = new Session(extensionContext, output);
+  // The session (created above) also answers the flows 0.9.0 did not have: debugging, the Testing
+  // view, the targets and target sets, packing.
   const ideProjects: IdeProjects = {
     current: () => findCurrentProject(),
     all: () => session.info?.projects ?? [],
@@ -380,7 +370,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   // The C++ Modules block of the project view reads mcppls through the bridge; the views themselves
   // (the project tree, the libraries, the cache, the settings) are src/pages.ts's, which the
   // workbench mcpp-clion runs registers in the same way.
-  const languageService = registerLanguageServerCommands(extensionContext, { bridge, output });
+  const languageService = registerLanguageServerCommands(extensionContext, { bridge, output, session });
   registerPages(extensionContext, {
     output,
     mcppExecutable: (project) => cliController.mcppExecutable(project),
@@ -431,7 +421,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
 
     // Environment self-check: one copyable snapshot of everything a bug report needs.
     vscode.commands.registerCommand(TOOL_COMMANDS.selfCheck, runGuarded(async () => {
-      await showSelfCheck(output, cliController, bridge, extensionContext.extension.packageJSON.version);
+      await showSelfCheck(output, cliController, bridge, session, extensionContext.extension.packageJSON.version);
     })),
 
     vscode.workspace.onDidGrantWorkspaceTrust(() => cliController.refreshStatus()),
@@ -461,10 +451,9 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   );
 
   void offerSettingRenames(extensionContext);
-  void noteUnverifiedLanguageService(output);
 
   if (read<boolean>("mcpp.diagnostics.selfCheckOnStartup")) {
-    void showSelfCheck(output, cliController, bridge, extensionContext.extension.packageJSON.version);
+    void showSelfCheck(output, cliController, bridge, session, extensionContext.extension.packageJSON.version);
   }
 
   extensionContext.subscriptions.push(
@@ -502,28 +491,6 @@ async function offerSettingRenames(context: vscode.ExtensionContext): Promise<vo
 }
 
 /**
- * A version notice, never a gate. `extensionDependencies` cannot express a version
- * range, so a user can legitimately end up with a build of the language service
- * older than the one this extension was tested against; the capability probe means
- * that still works, but it is worth one sentence in the log.
- */
-async function noteUnverifiedLanguageService(output: vscode.OutputChannel): Promise<void> {
-  const version = languageServerVersion();
-  if (version === undefined) {
-    return;
-  }
-  // The same comparator the version matrix uses, against the contract's own
-  // minimum — the old hand-rolled comparison had dead `< 0` branches and a
-  // second, drifting copy of the floor (external review P1-3).
-  const below = compareVersions(version, VERIFIED_MCPPLS_MINIMUM) < 0;
-  if (below) {
-    output.appendLine(
-      t("{0} {1} is older than the verified range ({2}); the capability probe will hide what it cannot do.", MCPPLS_EXTENSION_ID, version, VERIFIED_MCPPLS_RANGE),
-    );
-  }
-}
-
-/**
  * The self-check gathers, never guesses: anything it cannot read is reported as
  * unknown rather than left blank. It is the first thing to ask for in a bug
  * report, and it writes to the `mcpp` channel so it can be copied in one go.
@@ -532,6 +499,7 @@ async function showSelfCheck(
   output: vscode.OutputChannel,
   cliController: McppCliController,
   bridge: LanguageServerBridge,
+  session: Session,
   extensionVersion: unknown,
 ): Promise<void> {
   const project = findCurrentProject();
@@ -544,7 +512,7 @@ async function showSelfCheck(
     timeoutMs: timeoutSeconds > 0 ? timeoutSeconds * 1000 : undefined,
   });
   const info = probeResult !== undefined && probeResult.exitCode === 0 ? parseProtocolInfo(probeResult.stdout) : undefined;
-  const state = readLanguageServerState();
+  const state = readLanguageServerState(await session.refreshLanguageService());
   const capabilities = CAPABILITIES.map((entry) => ({
     key: entry.key,
     state: bridge.isGone(entry.key) ? "missing" : bridge.isUnconfirmed(entry.key) ? "unconfirmed" : "available",
