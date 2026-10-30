@@ -770,5 +770,6 @@
   "The mcpp-ide backend ended four times in three minutes; build, run, test and the project pages go on without it.": "mcpp-ide 后端在三分钟内结束了四次；构建、运行、测试与项目页面在没有它的情况下继续工作。",
   "Restart the backend": "重新启动后端",
   "Export IDE Report": "导出 IDE 报告",
-  "The IDE report is written to {0}": "IDE 报告已写入 {0}"
+  "The IDE report is written to {0}": "IDE 报告已写入 {0}",
+  "cannot write {0}": "无法写入 {0}"
 }
