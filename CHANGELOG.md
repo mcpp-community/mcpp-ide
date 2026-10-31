@@ -113,8 +113,8 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
 - **mcpp 2026.10.31.2.** One pack of the target set `openkal` writes the editor packages' tree and
   okb (`--target openkal --mode self-contained --systems all --pkg-format tar,okb`); CI reads
   `runs_on`; the Windows launcher is `bin/mcpp-ide.exe`, built over a platform other than mcpp's own
-  openkal rows'. The backend is on mcpplibs.os 0.2.4 and openkal-platform 0.19.0, ok images included
-  (openkal 0.18, whose okrun maps the image it runs).
+  openkal rows'. The backend is on mcpplibs.os 0.2.4 and openkal-platform 0.19.1, ok images included
+  (openkal 0.18, whose okrun maps the image it runs and releases it once the image is loaded).
 - **CI and release.** 0.9.0's gates run in this repository (registry, translations, unit suite on
   three systems, manifest drift, parity, Extension Host on three systems, isolated install, the
   graph page in Chromium); the release publishes the VSIX to Open VSX beside the GitHub release.
