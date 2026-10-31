@@ -1,0 +1,6 @@
+[package]
+name = "crlf"
+version = "1.0.0"
+
+[build]
+bmi_schedule = "on"

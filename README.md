@@ -15,11 +15,12 @@ different tool.
 
 mcpp-ide makes them once. Its backend, `mcpp-ide serve`, is a C++ program that reads only mcpp's
 machine contract (event streams, result records, launch descriptors, JSON queries) and answers the
-editors over JSON-RPC. The VS Code extension and the CLion plugin map those answers onto their own
-UI and share one set of web panels; the Neovim plugin maps them onto buffers, floating windows and
-the quickfix list. The editor plugins are `mide-plugins/` of this repository. Language features of
-C++ files come from [mcppls](https://github.com/Sunrisepeak/mcpp-language-server); mcpp-ide
-registers none.
+editors as an LSP server (JSON-RPC, protocol 2). The VS Code extension's views and pages are
+mcpp-vscode 0.9.0's; the CLion plugin shows the same information in CLion's own trees, lists and
+settings form (a graph in JCEF), and the Neovim plugin maps the answers onto buffers, floating
+windows and the quickfix list. The editor plugins are `mide-plugins/` of this repository. Language
+features of C++ files come from [mcppls](https://github.com/Sunrisepeak/mcpp-language-server);
+those of mcpp.toml and build.mcpp come from the backend ([docs/rules.md](docs/rules.md)).
 
 ## Features
 
@@ -29,8 +30,9 @@ registers none.
 | Test tree, re-run one test | Testing view | IDE test runner | `:Mcpp test <filter>` |
 | Debug | CodeLLDB, C/C++ (gdb, lldb), lldb-dap | CLion's GDB or LLDB | nvim-dap (codelldb, lldb-dap, cppdbg, gdb) |
 | Diagnostics | Problems, from mcpp's located diagnostics | Console links to the reported location | `vim.diagnostic`, `:Mcpp problems` in the quickfix list |
-| mcpp.toml | Problems from mcpp; completion, hover, outline from mcpp's key registry | Problems from mcpp | Problems from mcpp |
-| Targets and platforms, libraries, graphs, cache, pack, settings | Shared web panels | The same panels (JCEF) | Text in floating windows, `vim.ui.select`; settings in `setup()` |
+| mcpp.toml, build.mcpp | Completion, hover, jumps and the rules' diagnostics from the backend (language client); Problems from mcpp | The same, through CLion's completion, documentation, annotations and go-to | The same, through `vim.lsp`; mcpp's problems in `vim.diagnostic` |
+| Libraries, a package's page, graphs, cache, settings | mcpp-vscode's views and pages | Native trees and lists, a settings form from the registry, the graphs in JCEF | Text in floating windows, `vim.ui.select`; settings in `setup()` |
+| Targets (target sets among them), pack | Quick picks | Popups | `vim.ui.select` |
 | Language features | mcppls (installed with the extension) | mcppls CLion plugin (a dependency) | mcppls-nvim (`xlings install mcppls-nvim`) |
 
 - **One answer everywhere** -- what a build runs, how a test is reported, what a cleanup costs: the backend's
@@ -57,10 +59,10 @@ the editor I use (VS Code, CLion or Neovim) from its latest release, and check i
 | VS Code-compatible editors | Open VSX, or the `.vsix` | install the `.vsix` from the extensions view |
 | CLion 2026.1+ | JetBrains Marketplace (`mcpp-clion`), or `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk; the mcppls CLion plugin (its package for this system carries the server) first |
 | Neovim 0.10+ | `mide-plugins/nvim` of the release's source tree | `xlings install mcpp-ide-nvim` (the backend with it, set up at start); or the directory on the runtimepath and `require('mcpp').setup()` ([its README](mide-plugins/nvim/README.md)) |
-| Agents, other clients | `mcpp-ide-<version>-openkal.tar.gz` (both images; okrun for Linux x64/arm64, macOS arm64, Windows x64), `mcpp-ide-<version>.okb` with okrun, or `xlings install mcpp-ide` | run `bin/mcpp-ide serve` (`bin\mcpp-ide.cmd` on Windows), or `okrun mcpp-ide-<version>.okb serve` |
+| Agents, other clients | `mcpp-ide-<version>-openkal-bundle-all.tar.gz` (both images; okrun for Linux x64/arm64, macOS arm64, Windows x64), `mcpp-ide-<version>.okb` with okrun, or `xlings install mcpp-ide` | run `bin/mcpp-ide serve` (`bin\mcpp-ide.exe` on Windows), or `okrun mcpp-ide-<version>.okb serve` |
 
 Each editor package serves every system: it carries the backend as one ok-image bundle
-(`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.17.3) and okrun for
+(`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.19.2) and okrun for
 Linux x64/arm64, macOS arm64 and Windows x64. The Neovim plugin carries none: it starts the
 `mcpp-ide` command xlings installs (okrun on the same bundle).
 
@@ -69,7 +71,8 @@ Linux x64/arm64, macOS arm64 and Windows x64. The Neovim plugin carries none: it
 ```bash
 mcpp build                                     # the backend, the mock mcpp, mcpp-ide-dev
 mcpp test                                      # the backend's tests
-cd mide-plugins/vscode && npm ci && npm test   # the extension's and the panels' tests
+cd mide-plugins/vscode && npm ci && npm test   # the extension's tests, the parity gates against 0.9.0 among them
+npm run test:webui                             # CLion's graph page in Chromium, over the backend
 npm run package                                # dist/mcpp-vscode-<version>.vsix
 cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
 cd ../.. && nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua   # the Neovim plugin's tests

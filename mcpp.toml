@@ -9,12 +9,12 @@
 # M2/M3), where the system it runs upon is answered when the image is loaded.
 [package]
 name        = "mcpp-ide"
-version     = "0.1.1"
+version     = "0.2.0"
 description = "The IDE backend for mcpp: sessions, jobs, records and view models over mcpp's control contract"
 license     = "Apache-2.0"
 authors     = ["mcpp-community"]
 repo        = "https://github.com/mcpp-community/mcpp-ide"
-mcpp        = ">=2026.10.27.1"
+mcpp        = ">=2026.10.31.2"
 
 [language]
 standard   = "c++23"
@@ -32,6 +32,12 @@ toolchain = "llvm@23.1.3"
 
 [target.'cfg(windows)']
 toolchain = "llvm@23.1.3"
+
+# The platform of the ok images the editor packages carry: 0.19.2's version group is openkal 0.18's,
+# which mcpplibs.os 0.2.4 is written against and whose okrun maps the image it runs and releases it
+# once the image is loaded; mcpp's own openkal rows pin 0.18.0.
+[target.'cfg(os = "openkal")']
+platform = "openkal-platform@0.19.2"
 
 # An arm64 Linux machine's own programs: the xlings gcc payload has no aarch64-hosted C++ frontend.
 [target.aarch64-linux-gnu]
@@ -57,15 +63,20 @@ main = "src/main.cpp"
 kind = "bin"
 main = "src/bin/mockmcpp.cpp"
 
+# Stands in for mcppls in the tests: its version and `mcppls status`.
+[targets.mcpp-ide-mock-mcppls]
+kind = "bin"
+main = "src/bin/mockmcppls.cpp"
+
 # The repository's tools: fixture capture, the editors' declarations from spec/, the i18n check.
 [targets.mcpp-ide-dev]
 kind = "bin"
 main = "src/bin/dev.cpp"
 
 [dependencies.mcpplibs]
-# os 0.2.1: an ok image's C library, C++ run-time and loader are its platform's, so the package
-# declares no openkal-tools of its own beside the platform's.
-os = "0.2.1"
+# os 0.2.4: openkal 0.18 (openkal-linux 0.19.0, openkal-macos 0.16.0, openkal-windows 0.14.0). Since 0.2.1 an ok image's C library, C++ run-time and loader are its platform's,
+# so the package declares no openkal-tools of its own beside the platform's.
+os = "0.2.4"
 
 [dependencies.nlohmann]
 json = "3.12.0"

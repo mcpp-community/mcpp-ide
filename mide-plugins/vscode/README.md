@@ -1,59 +1,92 @@
-# mcpp for Visual Studio Code
+<p align="center">
+  <img src="media/logo.png" width="160" alt="mcpp logo">
+</p>
 
-**English** | [简体中文](https://github.com/mcpp-community/mcpp-ide/blob/main/README.zh-CN.md)
+# mcpp for VS Code
 
-Build, run, test, debug and pack [mcpp](https://github.com/mcpp-community/mcpp) C++23 module
-projects, browse their libraries, dependency and module graphs, targets and platforms, and manage
-mcpp's shared build cache.
+English | [简体中文](README.zh-CN.md)
 
-This extension is the VS Code adapter of [mcpp-ide](https://github.com/mcpp-community/mcpp-ide).
-Its decisions are made by the mcpp-ide backend (`mcpp-ide serve`), which reads only mcpp's
-machine contract; JetBrains CLion has the same features through mcpp-clion, and Neovim through
-mcpp-nvim.
+The VS Code front end for the [mcpp](https://github.com/mcpp-community/mcpp) C++23 build tool:
+project discovery, `mcpp build` / `run` / `test` / `clean` as VS Code tasks, toolchain management,
+`mcpp.toml` and `build.mcpp` editing help, the package library view, and cache views with graded
+cleanup. C++ module semantics — diagnostics, completion, hover, definitions, references, the module
+graph — come from `sunrisepeak.mcpp-language-server`; this extension never starts an LSP client of
+its own and only **forwards** to it ([docs/architecture.md](docs/architecture.md)).
 
-## Language features come from mcppls
+## Related projects
 
-Completion, navigation, highlighting and diagnostics of C++ files come from the
-[C++ Modules language server](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server)
-(mcppls), which this extension installs with it (an extension pack: it can be uninstalled
-separately). This extension registers no language service. mcppls 0.0.18 and later refresh after
-every build, whoever runs it; the project view says when the installed mcppls is older or missing.
+| Project | What it is | Where |
+| --- | --- | --- |
+| [mcpp](https://github.com/mcpp-community/mcpp) | The C++23 build tool this extension drives | — |
+| [mcpp-language-server](https://github.com/Sunrisepeak/mcpp-language-server) | The C++ Modules language service; a hard dependency of this extension | [Marketplace](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) · [Open VSX](https://open-vsx.org/extension/sunrisepeak/mcpp-language-server) |
+| mcpp-vscode (this extension) | The VS Code front end | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) · [Releases](https://github.com/mcpp-community/mcpp-ide/releases) |
+
+See [dependency graph navigation and exports](docs/dependency-graphs.md) for entry groups, importer depth, refresh behavior and SVG/PNG export.
+
+## Install
+
+Any of the three channels installs the same extension:
+
+- **Marketplace**: the link above, or search "mcpp" inside VS Code.
+- **Open VSX**: the link above (VSCodium, Gitpod and friends; listed from 0.6.0 on).
+- **GitHub Releases**: download the VSIX, then **Extensions: Install from VSIX...**, or
+  `code --install-extension mcpp-vscode-<version>.vsix`.
+
+`package.json` declares `extensionDependencies: ["sunrisepeak.mcpp-language-server"]`, so VS Code
+installs that extension automatically where a platform package exists — the field only accepts an
+extension id, no version range ([docs/compatibility.md](docs/compatibility.md)).
+
+| Platform | mcppls package | This extension |
+| --- | --- | --- |
+| `linux-x64`, `linux-arm64`, `darwin-arm64`, `win32-x64` | yes | yes |
+| `darwin-x64`, `win32-arm64` | no package | not activated |
+
+## Quick start
+
+1. Open a folder containing an `mcpp.toml` (or run **mcpp: New Project**).
+2. Run **mcpp: Build** (`mcpp.build`); it runs in a dedicated task terminal.
+3. Open the **mcpp** activity-bar container: **Project**, **Libraries** and **Cache** (collapsed by
+   default); the C++ Modules status and actions live in **Project → Basics**.
+
+Opening a project never runs `mcpp` on its own and never downloads a toolchain.
 
 ## Features
 
-| Feature | Where |
-|---|---|
-| Build and test | Tasks of type `mcpp` in a terminal that shows mcpp's own output, in colour; closing it cancels the build |
-| Run | The program in a terminal of its own, started the way `mcpp run` starts it |
-| Debug | A launch configuration of type `mcpp`; the debugger is CodeLLDB, the C/C++ extension, lldb-dap or Native Debug. An ok image (`--target <arch>-openkal`) is debugged through `okrun` |
-| Tests | The Testing view: every test of every project, run one or all |
-| Problems | mcpp's diagnostics, located where mcpp reports them; mcpp.toml's problems from mcpp itself |
-| Targets and platforms | The targets mcpp knows, their toolchains and the platform that configures each; the build target is chosen in the status bar |
-| Libraries | The packages of mcpp's indexes; `mcpp add` from a package's page |
-| Graphs | The package dependency graph and the module graph of a project |
-| Cache | The shared build cache by kind, package and age; cleanups with a preview and a confirmation at their level of danger |
-| Pack | The formats a project can be packed into, and the result |
-| mcpp.toml | Completion, hover and outline from mcpp's own key registry |
+- **mcpp CLI and tasks** — build, run, test, clean, the quick menu, toolchains: [docs/commands.md](docs/commands.md).
+- **`mcpp.toml` editing** — completion of tables, keys, values and dependency versions, hovers, go-to-definition, seven structural diagnostics, no formatting, from the mcpp-ide backend's rules layer: [docs/rules.md](../../docs/rules.md).
+- **`build.mcpp` help** — `build.mcpp` is a `cpp` file that C++ Modules compiles as the build program; the backend's rules layer adds the `mcpp::…` directive completion, hovers and snippets and the SPEC-007 rule checks no compiler makes: [docs/rules.md](../../docs/rules.md).
+- **Libraries** — browse the official mcpp-index offline, choose a target project and dependency type, and view available versions and verified example code. Other registry hits have separate previews. See [Libraries](docs/libraries.md).
+- **Cache views and cleanup** — project artifacts and the shared build cache, previewed before anything is deleted: [docs/cache.md](docs/cache.md).
+- **C++ Modules** — the other extension's state and actions, in the project view and the status-bar menu, forwarded not reimplemented: [docs/commands.md](docs/commands.md).
+- **Debug, tests, targets, packing** — **mcpp: Debug** and the `mcpp` launch type (CodeLLDB, the C/C++ extension or lldb-dap), the Testing tree, **mcpp: Select the Build Target** (target sets among its rows with mcpp 2026.10.30.1 and later), **mcpp: Pack**, and build on save (`mcpp.build.onSave`).
+- **Settings and diagnostics** — a registry-backed settings panel (`mcpp.openSettings`) and a copyable environment self-check (`mcpp.selfCheck`): [docs/settings.md](docs/settings.md). `mcpp.ui.language` overrides our messages and panels only; palette titles always follow VS Code ([docs/architecture.md](docs/architecture.md#language)).
 
-## Requirements
+## The backend
 
-- mcpp 2026.10.26.1 or later (`xlings install mcpp`).
-- The mcpp-ide backend: shipped inside the extension for every system (one ok-image bundle run by
-  the okrun the extension carries for Linux x64/arm64, macOS arm64 and Windows x64, or by okrun on
-  PATH elsewhere); otherwise `xlings install mcpp-ide`, or set `mcpp.ide.backendPath` (a program or
-  an `.okb`).
+The extension carries the [mcpp-ide](https://github.com/mcpp-community/mcpp-ide) backend
+(`backend/`: one ok-image bundle and okrun for Linux x64/arm64, macOS arm64 and Windows x64) and runs
+mcpp and mcppls through it; `mcpp.backendPath` names another. The CLion plugin shows the same pages
+over the same backend.
 
-## Upgrading from 0.9
+## Troubleshooting
 
-The extension ID is unchanged (`mcpp-community.mcpp-vscode`), and so are its command IDs and
-setting keys. Settings that described the removed TOML checks are kept and marked deprecated; the
-problems of mcpp.toml now come from mcpp.
+Look first at the **mcpp** output channel, then run **mcpp: Environment Self-check**
+(`mcpp.selfCheck`). The common cases — the dependency is missing, the language service stays on
+"no status yet", `mcpp.path` versus `PATH`, a build that finished without refreshing the language
+service — are in [docs/troubleshooting.md](docs/troubleshooting.md).
 
-## Untrusted workspaces
+## Development
 
-In an untrusted workspace mcpp runs with the effects listed in `mcpp.trust.denyEffects` denied
-(`mcpp --deny`): a command that needs one of them stops before it and says so.
+`npm ci`, `npm run compile`, `npm test` (the gates first, then the unit tests, the parity gates
+against 0.9.0 among them), `npm run test:e2e`, `npm run test:webui` (the CLion workbench in
+Chromium), `npm run gen` (the declarations from the repository's `spec/`), `npm run package`, and `node tools/dev-profile.mjs` for a throwaway profile under `.dev-profile/`
+that never touches your real one.
+
+Release: the extension is released with mcpp-ide (a `v<version>` tag of that repository). The
+workflow runs the tests, packages one VSIX with the backend, and publishes that same artifact to
+GitHub Releases and Open VSX. Upload that VSIX manually through the Visual Studio Marketplace
+publisher portal.
 
 ## License
 
-Apache-2.0
+Apache-2.0 — see [LICENSE](LICENSE).

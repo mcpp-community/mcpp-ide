@@ -1,0 +1,59 @@
+// A build program exercising every rule the analysis knows.
+import std;
+import mcpp;
+import mcpp.plugins.tool;
+import mcpp.rules.qt;
+export import mcpp.core;
+import <vector>;
+import :part;
+
+int main() {
+    obj.import(x);
+    mcpp::link_lib("z");
+    mcpp::unknown_thing("x");
+    mcpp::rules::qt::moc("a.h");
+    mcpp::cxxflag("-I/usr/include/foo");
+    mcpp::cflag("-L/opt/lib");
+    mcpp::link_flag("-Wl,-rpath,/opt/lib");
+    std::println("mcpp:link-flag=-L/x -Wl,-rpath,/y");
+    std::println("mcpp:cxxflag=-I/raw");
+    int big = 1'000'000;
+    /* mcpp::in_block_comment
+       mcpp::still_in_comment */
+    auto raw = R"x(mcpp::in_raw_string
+    mcpp::still_raw )x";
+    std::println("{}", "名字 mcpp::in_string");
+
+    mcpp::action untyped;
+    untyped.id = "u";
+    untyped.command("make").submit();
+
+    mcpp::action lit;
+    lit.id = "l";
+    lit.role = "prepare";
+    lit.command("gen").submit();
+
+    mcpp::action bogus;
+    bogus.role = "compile";
+    bogus.submit();
+
+    mcpp::action prep;
+    prep.id = "p";
+    prep.role = mcpp::roles::prepare;
+    prep.arg("FOO=bar")
+        .command("cd build && make")
+        .submit();
+
+    mcpp::action ok;
+    ok.role = mcpp::roles::prepare;
+    ok.output_dir("gen");
+    ok.command("gen").submit();
+
+    std::println("mcpp:action={{\"role\":\"prepare\",\"command\":[\"A=1 make\"]}}");
+    std::println("mcpp:action={\"role\":\"prepare\",\"command\":[\"A=1 make\"]}");
+    std::println("mcpp:action={\"command\":[\"cd x && make\"]}");
+    std::println("mcpp:action={\"role\":\"weird\"}");
+    std::println("mcpp:action={\"role\":\"object\",\"command\":[\"cc\"]}");
+    std::println("mcpp:action=not json");
+    mcpp::
+}

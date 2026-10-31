@@ -1,0 +1,36 @@
+[package]
+name = "broken"
+mcpp = "2026.9"
+colour = "blue"
+standard =
+a b = 1
+= "no key"
+[package] trailing
+[nosuch]
+[nosuch.deeper]
+[[build.flags]]
+[[package]]
+[language]
+edition = "2023"
+
+[dependencies]
+"xim:cmake" = "3.31.0"
+"xpm:ninja" = { version = "1.12" }
+
+[xlings]
+compat.zlib = "1.3.1"
+mcpplibs.os = { path = "../os" }
+tool.name = { version = "1.0" }
+
+[xlings.workspace]
+"mcpplibs.os" = "0.2.3"
+
+[targets.app]
+kind = "nonsense"
+colour = 1
+
+[profile.debug]
+unknown_knob = true
+
+[toolchain]
+anything = "goes"

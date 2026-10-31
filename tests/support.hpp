@@ -19,6 +19,11 @@
 namespace testsupport {
 // The repository, from this file's own path.
 inline std::filesystem::path repo() { return std::filesystem::path(__FILE__).parent_path().parent_path(); }
+// A path as the `file:` URI an LSP client names it by.
+inline std::string file_uri(const std::filesystem::path& p) {
+    const auto g = p.generic_string();
+    return "file://" + std::string(g.starts_with("/") ? "" : "/") + g;
+}
 inline std::filesystem::path fixtures() { return repo() / "protocol" / "fixtures"; }
 inline std::string read(const std::filesystem::path& p) {
     std::ifstream in(p, std::ios::binary);

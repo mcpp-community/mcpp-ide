@@ -16,6 +16,8 @@ class McppStartup : ProjectActivity {
         val base = project.basePath ?: return
         if (!File(base, "mcpp.toml").isFile) return
         val session = McppSession.get(project)
+        // mcpp.toml and build.mcpp reach the backend's rules layer as they are opened and edited.
+        io.github.mcppcommunity.mcppclion.editor.McppDocuments.get(project).install()
         session.start().thenAccept { init ->
             init.get("languageService")?.takeIf { it.isJsonObject }?.asJsonObject?.let { ls ->
                 if (ls["state"].asString == "ok") return@let
@@ -26,7 +28,6 @@ class McppStartup : ProjectActivity {
                 }
                 n.notify(project)
             }
-            session.root?.let { session.refreshTests(it) }
         }
         val stale = File(base, "compile_commands.json")
         if (stale.isFile) {

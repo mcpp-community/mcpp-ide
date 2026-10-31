@@ -1,0 +1,49 @@
+{
+  "description": "The test frameworks whose cases the editors show (mcpp design 2026-10-30 part 2 §7.2). A test program belongs to a framework when its plan holds one of the framework's packages and its source calls one of the framework's macros. `name` says how a case's full name is made from the macro's arguments; `list` lists the cases (run only for a program whose source calls a macro); `filter` selects cases, `{}` being the cases joined by `join`, each with the characters of `escape` preceded by a backslash (a GoogleTest name is two identifiers, which hold none of its filter's special characters); `report` writes the results to the file `{}`, read as `reportFormat`. boost-ext.ut is not here: its runner takes no filter from the command line, so its tests run as programs.",
+  "frameworks": [
+    {
+      "id": "gtest",
+      "title": "GoogleTest",
+      "packages": ["compat.gtest", "gtest", "gmock"],
+      "macros": ["TEST", "TEST_F", "TEST_P", "TYPED_TEST", "TYPED_TEST_P"],
+      "name": "suite.case",
+      "list": ["--gtest_list_tests"],
+      "listFormat": "gtest-list",
+      "filter": ["--gtest_filter={}"],
+      "join": ":",
+      "escape": "",
+      "report": ["--gtest_output=json:{}"],
+      "reportFormat": "gtest-json"
+    },
+    {
+      "id": "catch2",
+      "title": "Catch2",
+      "packages": ["compat.catch2", "catch2"],
+      "macros": ["TEST_CASE", "TEST_CASE_METHOD", "SCENARIO", "TEMPLATE_TEST_CASE"],
+      "name": "literal",
+      "scenarioPrefix": "Scenario: ",
+      "list": ["--list-tests", "--reporter", "json"],
+      "listFormat": "catch2-json",
+      "filter": ["{}"],
+      "join": ",",
+      "escape": ",[]*\\",
+      "report": ["--reporter", "json::out={}"],
+      "reportFormat": "catch2-json"
+    },
+    {
+      "id": "doctest",
+      "title": "doctest",
+      "packages": ["compat.doctest", "doctest"],
+      "macros": ["TEST_CASE", "TEST_CASE_FIXTURE", "SCENARIO"],
+      "name": "literal",
+      "scenarioPrefix": "  Scenario: ",
+      "list": ["--list-test-cases", "--no-intro", "--no-version"],
+      "listFormat": "lines",
+      "filter": ["--test-case={}"],
+      "join": ",",
+      "escape": ",",
+      "report": ["--reporters=junit", "--out={}"],
+      "reportFormat": "junit"
+    }
+  ]
+}

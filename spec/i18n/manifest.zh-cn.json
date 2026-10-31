@@ -4,6 +4,7 @@
   "colors.mcpp.cacheStaleForeground": "可清理产物的颜色。",
   "command.mcpp.autoConfigureModules.title": "一键构建并刷新模块语言服务",
   "command.mcpp.build.title": "构建",
+  "command.mcpp.editor.build.title": "构建",
   "command.mcpp.checkModuleSupport.title": "[已弃用] C++ Modules: 重启语言服务",
   "command.mcpp.clean.title": "清理 target",
   "command.mcpp.cleanLegacyCache.title": "清理遗留缓存",
@@ -16,6 +17,7 @@
   "command.mcpp.languageServer.collectReport.title": "C++ Modules: 收集诊断报告",
   "command.mcpp.languageServer.exportDiagnosticBundle.title": "C++ Modules: 导出诊断包",
   "command.mcpp.languageServer.installTools.title": "C++ Modules: 安装命令行工具",
+  "command.mcpp.languageServer.installKit.title": "C++ Modules: 安装语义套件",
   "command.mcpp.languageServer.manageConflicts.title": "C++ Modules: 关闭其他 C++ 语言服务",
   "command.mcpp.languageServer.openLogFolder.title": "打开 C++ Modules 日志目录",
   "command.mcpp.languageServer.refreshState.title": "C++ Modules: 刷新此视图",
@@ -264,5 +266,12 @@
   "mcpp.toml.diagnostics.unknownSection.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。",
   "mcpp.toml.diagnostics.unknownKey.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。",
   "mcpp.toml.diagnostics.planeSeparation.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。",
-  "mcpp.toml.diagnostics.legacyKeys.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。"
+  "mcpp.toml.diagnostics.legacyKeys.deprecationMessage": "mcpp.toml 的问题现在由 mcpp 自己报告并定位；这项检查已不存在。mcpp.toml.diagnostics.enabled 可整体关闭。",
+  "mcpp.backend.logLevel.title": "设置后端的日志级别",
+  "mcpp.backend.logLevel.description": "mcpp-ide 后端写入编辑器日志的内容：只写错误、写警告、写它所做的事（缺省），或写每一次运行 mcpp 与 mcppls 及其参数。",
+  "command.mcpp.exportReport.title": "导出 IDE 报告",
+  "mcpp.codeLens.enable.title": "在 main 上方显示运行与调试",
+  "mcpp.codeLens.enable.description": "在程序或测试的 main 上方显示 CodeLens：运行、调试。C++ Modules 服务该文件时位置取自语言服务，否则从文本读出行号。",
+  "mcpp.test.macros.title": "追加测试框架的宏",
+  "mcpp.test.macros.description": "书写测试框架用例的宏，每项写作 框架:宏名（gtest:MY_TEST）。测试程序的源文件调用了其框架的宏时才列举它的用例。"
 }

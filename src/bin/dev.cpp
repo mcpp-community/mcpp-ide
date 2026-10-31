@@ -5,12 +5,11 @@
 //       The golden fixtures under protocol/fixtures, from a real mcpp: the envelopes, streams and
 //       records the backend reads. The mock mcpp and both adapters' tests replay them, so a change in
 //       mcpp's contract shows up as a diff here first.
-//   mcpp-ide-dev gen vscode --out DIR [--stage] [--okb FILE] [--okrun DIR] [--backends DIR]
-//       The VS Code extension's declarations from spec/: package.json (mide-plugins/vscode/package.json
-//       with the generated commands, keybindings, menus and configuration), package.nls.json and
-//       package.nls.zh-cn.json. With --stage, also the files the extension ships (its out/, media,
-//       syntaxes, the webui, README, CHANGELOG, LICENSE, and the backend: see stage_backend): the
-//       directory `vsce package` packs.
+//   mcpp-ide-dev gen vscode
+//       The VS Code extension's declarations from spec/, written in place: mide-plugins/vscode's
+//       package.json (its commands, keybindings, menus and configuration), package.nls.json,
+//       package.nls.zh-cn.json and data/config-registry.json (the settings registry the extension
+//       reads). The rest of the manifest is the extension's own. CI regenerates and expects no change.
 //   mcpp-ide-dev gen jetbrains --out DIR
 //       The CLion plugin's declarations from spec/ (the IntelliJ platform's, editor id `jetbrains`):
 //       META-INF/mcpp-actions.xml (included by plugin.xml) and the message bundles
@@ -20,9 +19,10 @@
 //       entry in spec/i18n/runtime.zh-cn.json; every editor string a Chinese one in
 //       manifest.zh-cn.json.
 //
-// Nothing generated is written into the repository: the outputs go where the adapters' builds put
-// them (mide-plugins/vscode/dist, mide-plugins/clion/build). The Neovim plugin (mide-plugins/nvim)
-// declares nothing statically: it reads the command table from the backend at run time.
+// The VS Code declarations are kept in the repository (mcpp-vscode packs its own directory, and its
+// gates read the manifest); CI checks they are spec/'s. The CLion declarations go where its build
+// puts them (mide-plugins/clion/build). The Neovim plugin (mide-plugins/nvim) declares nothing
+// statically: it reads the command table from the backend at run time.
 import std;
 import nlohmann.json;
 import mcpplibs.os;
@@ -30,7 +30,7 @@ import mcppide.spec;
 
 namespace {
 
-using Json = nlohmann::json;
+using Json = nlohmann::ordered_json;
 namespace fs = std::filesystem;
 
 std::string slurp(const fs::path& p) {
@@ -197,13 +197,17 @@ Spec load_spec(const fs::path& root) {
 
 // Which rows an editor declares is the backend's rule (spec::offered_in), the one its command table
 // answers at run time.
-using mcppide::spec::offered_in;
+// The tool keeps files in their written order (ordered_json); the rule reads the backend's json.
+bool offered_in(const Json& c, std::string_view editor) {
+    return mcppide::spec::offered_in(nlohmann::json::parse(c.dump()), editor);
+}
 
 // The `contributes` that come from spec/: commands, keybindings, menus, configuration.
 void vscode_contributes(const Spec& spec, Json& contributes) {
     Json commands = Json::array(), keybindings = Json::array();
-    Json menus = contributes.contains("menus") ? contributes["menus"] : Json::object();
-    Json palette = menus.contains("commandPalette") ? menus["commandPalette"] : Json::array();
+    // Every menu entry names a command, so spec/ states them all.
+    Json menus = Json::object();
+    Json palette = Json::array();
     for (const auto& c : spec.commands["commands"]) {
         if (!offered_in(c, "vscode")) continue;
         const auto id = c.value("id", "");
@@ -223,8 +227,22 @@ void vscode_contributes(const Spec& spec, Json& contributes) {
                 if (m.contains("when")) entry["when"] = m["when"];
                 menus[m.value("menu", "")].push_back(entry);
             }
+        // Where else the command is offered (design 2026-10-30 part 2 §6.2): the editor's title
+        // bar beside 0.9.0's Run and Test, and the editor's context menu, each in its order. An
+        // entry 0.9.0 wrote is kept as written above; these are added after it.
+        if (c.contains("placements") && c["placements"].is_object()) {
+            const auto& at = c["placements"];
+            if (at.contains("title"))
+                menus["editor/title"].push_back(Json{{"command", id}, {"group", std::format("navigation@{}", at["title"].get<int>())},
+                                                     {"when", "mcpp.inProject && mcpp.editorTitleButtons"}});
+            if (at.contains("context"))
+                menus["editor/context"].push_back(Json{{"command", id}, {"group", std::format("mcpp@{}", at["context"].get<int>())},
+                                                       {"when", "mcpp.inProject && editorLangId == cpp"}});
+        }
+        // A command is in the palette everywhere unless its row says otherwise; `when` gates its
+        // keybinding and the backend's menus, not the palette.
         if (!c.value("palette", true)) palette.push_back(Json{{"command", id}, {"when", "false"}});
-        else if (c.contains("when")) palette.push_back(Json{{"command", id}, {"when", c["when"]}});
+        else if (c.contains("paletteWhen")) palette.push_back(Json{{"command", id}, {"when", c["paletteWhen"]}});
     }
     menus["commandPalette"] = palette;
     contributes["commands"] = commands;
@@ -239,84 +257,32 @@ void vscode_contributes(const Spec& spec, Json& contributes) {
         const auto key = s.value("key", "");
         Json p{{"type", s.value("type", "string")}, {"default", s.contains("default") ? s["default"] : Json(nullptr)}};
         if (s.contains("enum")) p["enum"] = s["enum"];
-        if (s.value("type", "") == "array") p["items"] = Json{{"type", "string"}};
+        if (s.contains("items")) p["items"] = s["items"];
         if (s.contains("minimum")) p["minimum"] = s["minimum"];
         if (s.contains("maximum")) p["maximum"] = s["maximum"];
         p["scope"] = s.value("scope", "resource");
         p["order"] = groupOrder[s.value("group", "")] * 1000 + s.value("order", 0);
         p["description"] = std::format("%{}.title%", key);
         p["markdownDescription"] = std::format("%{}.description%", key);
-        if (s.value("deprecated", false)) p["markdownDeprecationMessage"] = std::format("%{}.deprecationMessage%", key);
-        if (s.value("tier", "") == "advanced") p["tags"] = Json::array({"advanced"});
+        if (s.value("deprecated", false)) p["deprecationMessage"] = std::format("%{}.deprecationMessage%", key);
         properties[key] = p;
     }
     contributes["configuration"] = Json{{"title", "%mcpp.configuration.title%"}, {"properties", properties}};
 }
 
-void copy_tree(const fs::path& from, const fs::path& to, std::span<const std::string_view> skip = {}) {
-    std::error_code ec;
-    if (!fs::exists(from, ec)) return;
-    for (fs::recursive_directory_iterator it(from, ec), end; !ec && it != end; it.increment(ec)) {
-        const auto rel = fs::relative(it->path(), from, ec);
-        const auto relText = rel.generic_string();
-        if (std::ranges::any_of(skip, [&](std::string_view s) { return relText == s || relText.starts_with(std::string(s) + "/"); })) {
-            if (it->is_directory(ec)) it.disable_recursion_pending();
-            continue;
-        }
-        if (it->is_directory(ec)) { fs::create_directories(to / rel, ec); continue; }
-        fs::create_directories((to / rel).parent_path(), ec);
-        fs::copy_file(it->path(), to / rel, fs::copy_options::overwrite_existing, ec);
-        if (ec) throw std::runtime_error(std::format("copying {}: {}", it->path().generic_string(), ec.message()));
-    }
-}
-
-// What an editor package carries of the backend (mcpp design 2026-10-28 part 2 §15):
-//   --okb FILE (MCPP_IDE_OKB)      the ok-image bundle, as backend/mcpp-ide.okb: one for every system
-//   --okrun DIR (MCPP_IDE_OKRUN)   okrun for each system and architecture, laid out
-//                                  <os>-<arch>/okrun[.exe], as backend/okrun/
-void stage_backend(std::span<const std::string> args, const fs::path& out) {
-    auto from = [&](std::string_view flag, const char* variable) {
-        auto v = option(args, flag);
-        if (!v) v = mcpplibs::os::env::get(variable);
-        return v && !v->empty() ? std::optional<fs::path>(*v) : std::nullopt;
-    };
-    if (auto okb = from("--okb", "MCPP_IDE_OKB")) {
-        fs::create_directories(out / "backend");
-        fs::copy_file(*okb, out / "backend" / "mcpp-ide.okb", fs::copy_options::overwrite_existing);
-    }
-    if (auto okrun = from("--okrun", "MCPP_IDE_OKRUN")) copy_tree(*okrun, out / "backend" / "okrun");
-}
-
-int gen_vscode(std::span<const std::string> args) {
+int gen_vscode(std::span<const std::string>) {
     const auto root = repo();
     const auto ext = plugin(root, "vscode");
-    const auto out = fs::path(option(args, "--out").value_or((ext / "dist" / "extension").string()));
     const auto spec = load_spec(root);
     auto pkg = read_json(ext / "package.json");
     vscode_contributes(spec, pkg["contributes"]);
-    // npm's own fields stay in the development manifest.
-    pkg.erase("scripts");
-    pkg.erase("devDependencies");
-    spit(out / "package.json", pkg.dump(2) + "\n");
-    spit(out / "package.nls.json", spec.en.dump(2) + "\n");
     Json zh = spec.en;
     for (auto it = spec.zh.begin(); it != spec.zh.end(); ++it) zh[it.key()] = it.value();
-    spit(out / "package.nls.zh-cn.json", zh.dump(2) + "\n");
-    if (flag(args, "--stage")) {
-        copy_tree(ext / "out" / "src", out / "out" / "src");
-        copy_tree(ext / "media", out / "media");
-        copy_tree(ext / "syntaxes", out / "syntaxes");
-        static constexpr std::array<std::string_view, 3> webuiSkip{"tests", "tsconfig.json", "js/types.d.ts"};
-        copy_tree(root / "webui", out / "webui", webuiSkip);
-        for (const auto* f : {"README.md", "CHANGELOG.md", ".vscodeignore"})
-            if (fs::exists(ext / f)) fs::copy_file(ext / f, out / f, fs::copy_options::overwrite_existing);
-        fs::copy_file(root / "LICENSE", out / "LICENSE.txt", fs::copy_options::overwrite_existing);
-        // The runtime strings, for what the extension says before its backend runs.
-        fs::create_directories(out / "i18n");
-        fs::copy_file(root / "spec" / "i18n" / "runtime.zh-cn.json", out / "i18n" / "runtime.zh-cn.json", fs::copy_options::overwrite_existing);
-        stage_backend(args, out);
-    }
-    std::println("vscode declarations in {}", out.generic_string());
+    spit(ext / "package.json", pkg.dump(2) + "\n");
+    spit(ext / "package.nls.json", spec.en.dump(2) + "\n");
+    spit(ext / "package.nls.zh-cn.json", zh.dump(2) + "\n");
+    spit(ext / "data" / "config-registry.json", spec.settings.dump(2) + "\n");
+    std::println("vscode declarations in {}", ext.generic_string());
     return 0;
 }
 
@@ -385,8 +351,54 @@ int gen_jetbrains(std::span<const std::string> args) {
         }
         xml += "      </group>\n";
     }
-    xml += "    </group>\n  </actions>\n</idea-plugin>\n";
+    xml += "    </group>\n";
+    // The editor's context menu (§6.2): the rows placed there, in their order, as references to the
+    // actions above.
+    std::vector<std::pair<int, std::string>> popup;
+    for (const auto& c : spec.commands["commands"])
+        if (offered_in(c, "jetbrains") && c.contains("placements") && c["placements"].contains("context"))
+            popup.push_back({c["placements"]["context"].get<int>(), c.value("id", "")});
+    std::ranges::sort(popup);
+    if (!popup.empty()) {
+        xml += "    <group id=\"mcpp.EditorPopup\">\n      <separator/>\n";
+        for (const auto& [order, id] : popup) xml += std::format("      <reference ref=\"{}\"/>\n", xml_escape(id));
+        xml += "      <add-to-group group-id=\"EditorPopupMenu\" anchor=\"last\"/>\n    </group>\n";
+    }
+    xml += "  </actions>\n</idea-plugin>\n";
     spit(out / "META-INF" / "mcpp-actions.xml", xml);
+
+    // The editors' chords (§6.1) as JetBrains keymaps, one for the default keymap and one for
+    // macOS's: CLion's own keymaps keep their bindings (Ctrl+Alt+B is Go to Implementation there),
+    // and a person who wants the chords chooses this keymap in Settings | Keymap.
+    auto keystroke = [](std::string chord) {
+        std::string out;
+        std::size_t at = 0;
+        while (at <= chord.size()) {
+            const auto plus = chord.find('+', at);
+            auto part = chord.substr(at, plus == std::string::npos ? std::string::npos : plus - at);
+            if (part == "cmd") part = "meta";
+            else if (part.size() == 1) part = std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(part[0]))));
+            if (!out.empty()) out += ' ';
+            out += part;
+            if (plus == std::string::npos) break;
+            at = plus + 1;
+        }
+        return out;
+    };
+    for (const auto& [file, name, parent, key] : std::array<std::tuple<const char*, const char*, const char*, const char*>, 2>{{
+             {"mcpp.xml", "mcpp", "$default", "key"}, {"mcpp-macos.xml", "mcpp (macOS)", "Mac OS X 10.5+", "mac"}}}) {
+        std::string keymap = std::format("<!-- Generated by mcpp-ide-dev gen jetbrains from spec/commands.json. -->\n"
+                                         "<keymap version=\"1\" name=\"{}\" parent=\"{}\">\n", name, parent);
+        for (const auto& c : spec.commands["commands"]) {
+            if (!offered_in(c, "jetbrains") || !c.contains("keybinding")) continue;
+            const auto chord = c["keybinding"].value(key, c["keybinding"].value("key", ""));
+            if (chord.empty()) continue;
+            keymap += std::format("  <action id=\"{}\">\n    <keyboard-shortcut first-keystroke=\"{}\"/>\n  </action>\n",
+                                  xml_escape(c.value("id", "")), xml_escape(keystroke(chord)));
+        }
+        keymap += "</keymap>\n";
+        spit(out / "keymaps" / file, keymap);
+    }
 
     // The bundles: the actions' texts, the groups', and every editor string under its own key.
     auto bundle = [&](const Json& strings) {
@@ -457,9 +469,9 @@ int check_i18n(std::span<const std::string>) {
     const auto zh = read_json(root / "spec" / "i18n" / "runtime.zh-cn.json");
     std::set<std::string> missing;
     std::size_t seen = 0;
-    const std::array<std::pair<fs::path, std::vector<std::string>>, 5> trees{{
+    // The VS Code extension carries its own strings (data/i18n, checked by its l10n gate).
+    const std::array<std::pair<fs::path, std::vector<std::string>>, 4> trees{{
         {root / "src", {".cppm", ".cpp"}},
-        {plugin(root, "vscode") / "src", {".ts"}},
         {root / "webui", {".js"}},
         {plugin(root, "clion") / "src" / "main" / "kotlin", {".kt"}},
         {plugin(root, "nvim") / "lua", {".lua"}},
@@ -505,7 +517,7 @@ int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
     try {
         if (args.empty() || args[0] == "--help") {
-            std::println("mcpp-ide-dev capture | gen vscode|jetbrains --out DIR | check-i18n");
+            std::println("mcpp-ide-dev capture | gen vscode | gen jetbrains --out DIR | check-i18n");
             return args.empty() ? 2 : 0;
         }
         const std::span<const std::string> rest(args.begin() + 1, args.end());

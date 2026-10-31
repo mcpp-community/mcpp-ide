@@ -12,9 +12,11 @@
 每个编辑器各写一遍，这些决定就会分歧；从一个编辑器换到另一个，用户遇到的就是另一个工具。
 
 mcpp-ide 只做一次。它的后端 `mcpp-ide serve` 是一个 C++ 程序，只读取 mcpp 的机器契约（事件流、结果记录、启动描述、
-JSON 查询），通过 JSON-RPC 回答编辑器。VS Code 扩展与 CLion 插件把这些回答映射到各自的界面，并共用一套网页面板；
-Neovim 插件把它们映射到缓冲区、浮动窗口与 quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。
-C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-language-server)；mcpp-ide 不注册任何语言服务。
+JSON 查询），以 LSP 服务器（JSON-RPC，协议 2）回答编辑器。VS Code 扩展的视图与页面即 mcpp-vscode 0.9.0 的视图与页面；
+CLion 插件以 CLion 自己的树、列表与设置表单显示同样的信息（图在 JCEF 中）；Neovim 插件把这些回答映射到缓冲区、浮动窗口与
+quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。C++ 文件的语言功能来自
+[mcppls](https://github.com/Sunrisepeak/mcpp-language-server)；mcpp.toml 与 build.mcpp 的语言功能来自后端
+（[docs/rules.md](docs/rules.md)）。
 
 ## 功能
 
@@ -24,8 +26,9 @@ C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-lan
 | 测试树、单个测试重跑 | 测试视图 | IDE 测试运行器 | `:Mcpp test <filter>` |
 | 调试 | CodeLLDB、C/C++（gdb、lldb）、lldb-dap | CLion 的 GDB 或 LLDB | nvim-dap（codelldb、lldb-dap、cppdbg、gdb） |
 | 诊断 | 问题面板，来自 mcpp 带位置的诊断 | 控制台链接到报告的位置 | `vim.diagnostic`，`:Mcpp problems` 填入 quickfix 列表 |
-| mcpp.toml | 问题来自 mcpp；补全、悬停、大纲来自 mcpp 的键注册表 | 问题来自 mcpp | 问题来自 mcpp |
-| 目标与平台、库、依赖图、缓存、打包、设置 | 共享网页面板 | 同一套面板（JCEF） | 浮动窗口中的文本、`vim.ui.select`；设置在 `setup()` 中 |
+| mcpp.toml、build.mcpp | 补全、悬停、跳转与规则诊断来自后端（语言客户端）；问题来自 mcpp | 同上，经 CLion 的补全、文档、标注与跳转 | 同上，经 `vim.lsp`；mcpp 的问题在 `vim.diagnostic` |
+| 库、包页面、依赖图、缓存、设置 | mcpp-vscode 的视图与页面 | 原生的树与列表、由设置注册表生成的设置表单、JCEF 中的图 | 浮动窗口中的文本、`vim.ui.select`；设置在 `setup()` 中 |
+| 目标（含目标集合）、打包 | 快速选择 | 弹出列表 | `vim.ui.select` |
 | 语言功能 | mcppls（随扩展一并安装） | mcppls CLion 插件（依赖） | mcppls-nvim（`xlings install mcppls-nvim`） |
 
 - **处处同一答案**——构建运行什么、测试如何报告、清理的代价：都由后端决定
@@ -51,9 +54,9 @@ C++ 文件的语言功能来自 [mcppls](https://github.com/Sunrisepeak/mcpp-lan
 | 兼容 VS Code 的编辑器 | Open VSX，或 `.vsix` | 在扩展视图中安装 `.vsix` |
 | CLion 2026.1+ | JetBrains Marketplace（`mcpp-clion`），或 `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk；先安装 mcppls CLion 插件（本系统的包自带服务端） |
 | Neovim 0.10+ | release 源码树中的 `mide-plugins/nvim` | `xlings install mcpp-ide-nvim` 与 `xlings install mcpp-ide`，再 `require('mcpp').setup()`；或把该目录加入 runtimepath（[其 README](mide-plugins/nvim/README.md)） |
-| Agent、其他客户端 | `mcpp-ide-<version>-openkal.tar.gz`（两个架构的映像；Linux x64/arm64、macOS arm64、Windows x64 的 okrun），携带 okrun 的 `mcpp-ide-<version>.okb`，或 `xlings install mcpp-ide` | 运行 `bin/mcpp-ide serve`（Windows 上为 `bin\mcpp-ide.cmd`），或 `okrun mcpp-ide-<version>.okb serve` |
+| Agent、其他客户端 | `mcpp-ide-<version>-openkal-bundle-all.tar.gz`（两个架构的映像；Linux x64/arm64、macOS arm64、Windows x64 的 okrun），携带 okrun 的 `mcpp-ide-<version>.okb`，或 `xlings install mcpp-ide` | 运行 `bin/mcpp-ide serve`（Windows 上为 `bin\mcpp-ide.exe`），或 `okrun mcpp-ide-<version>.okb serve` |
 
-每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.17.3 上的
+每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.19.2 上的
 x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 的 okrun 携带。Neovim 插件不携带后端：
 它启动 xlings 安装的 `mcpp-ide` 命令（由 okrun 运行同一个映像包）。
 
@@ -62,7 +65,8 @@ x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 �
 ```bash
 mcpp build                                     # 后端、mock mcpp、mcpp-ide-dev
 mcpp test                                      # 后端测试
-cd mide-plugins/vscode && npm ci && npm test   # 扩展与面板的测试
+cd mide-plugins/vscode && npm ci && npm test   # 扩展的测试，含对 0.9.0 的一致性门
+npm run test:webui                             # CLion 的图页面在 Chromium 中、经后端运行
 npm run package                                # dist/mcpp-vscode-<version>.vsix
 cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
 cd ../.. && nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua   # Neovim 插件的测试

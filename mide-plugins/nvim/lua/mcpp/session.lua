@@ -1,8 +1,10 @@
--- The session with the backend: one `mcpp-ide serve` per Neovim, spoken to through Neovim's own
--- JSON-RPC client (vim.lsp.rpc, which frames each message with Content-Length as the protocol
--- does). Started for the nearest directory upward that holds an mcpp.toml, initialized as the
--- editor `nvim` with the locale, trust, folders and setup()'s settings; then the runtime strings and
--- the command table are read from it. Everything else reaches the backend through this module.
+-- The session with the backend: one `mcpp-ide serve` per Neovim, an LSP server (protocol 2, mcpp
+-- design 2026-10-30 part 2 §8) that Neovim's own LSP client starts and speaks to. Started for the
+-- nearest directory upward that holds an mcpp.toml, initialized as the editor `nvim` with the
+-- locale, trust, folders and setup()'s settings; then the runtime strings and the command table are
+-- read from it. The client serves mcpp.toml and build.mcpp buffers (completion, hover, the jumps,
+-- the diagnostics); mcpp-ide's own methods and notifications are under `mcpp-ide/`. Everything else
+-- reaches the backend through this module.
 local flow = require('mcpp.flow')
 
 local M = {}
@@ -11,7 +13,7 @@ local uv = vim.uv or vim.loop
 local is_windows = vim.fn.has('win32') == 1
 
 -- mcpp-nvim's version: mcpp-ide's, whose release carries it.
-M.version = '0.1.1'
+M.version = '0.2.0'
 
 -- Neovim's version, as its release names it.
 function M.nvim_version()
@@ -276,8 +278,49 @@ local function not_running()
   return { code = -32099, message = t('the mcpp-ide backend is not running') }
 end
 
+-- mcpp-ide's own methods and notifications, beside LSP's.
+local NAMESPACE = 'mcpp-ide/'
+
+-- The notifications the backend sends under its namespace (protocol/protocol.schema.json).
+local NOTIFICATIONS = {
+  'job/started', 'job/output', 'job/plan', 'job/progress', 'job/diagnostic', 'job/artifact', 'job/record',
+  'job/finished', 'test/result', 'test/summary', 'result/changed', 'manifest/changed', 'manifest/diagnostics',
+  'project/mcppChanged', 'languageService/changed', 'test/caseResult',
+}
+
+-- A method of Neovim's LSP client: `client:name(...)` since 0.11, `client.name(...)` before.
+local methods_take_self = vim.fn.has('nvim-0.11') == 1
+local function invoke(client, name, ...)
+  if methods_take_self then
+    return client[name](client, ...)
+  end
+  return client[name](...)
+end
+
+-- The session's client: Neovim's LSP client of the backend, as the rest of the plugin asks it.
+local function wrap(lsp)
+  return {
+    id = lsp.id,
+    request = function(method, params, handler)
+      return invoke(lsp, 'request', method, params, handler)
+    end,
+    notify = function(method, params)
+      return invoke(lsp, 'notify', method, params)
+    end,
+    is_closing = function()
+      return invoke(lsp, 'is_stopped')
+    end,
+    terminate = function()
+      invoke(lsp, 'stop', true)
+    end,
+    stop = function()
+      invoke(lsp, 'stop')
+    end,
+  }
+end
+
 -- A request; `callback(err, result)` on the main loop. A request still unanswered when the backend
--- ends is answered with that error (vim.lsp.rpc drops it).
+-- ends is answered with that error.
 function M.request(method, params, callback)
   local client = state.client
   if not client or client.is_closing() then
@@ -286,7 +329,7 @@ function M.request(method, params, callback)
   end
   local entry = { callback = callback }
   state.pending[entry] = true
-  local ok = client.request(method, object(params), function(err, result)
+  local ok = client.request(NAMESPACE .. method, object(params), function(err, result)
     if state.pending[entry] then
       state.pending[entry] = nil
       callback(denull(err), denull(result))
@@ -316,8 +359,15 @@ function M.value(key)
 end
 
 -- settings/update's parameters: setup()'s settings, the trust, the language.
+-- Whether mcppls (mcppls-nvim's client) runs: it then serves build.mcpp, and the backend leaves it
+-- what it answers better (the unknownSymbol rule, the module names after `import`).
+local function mcppls_serves()
+  local get = vim.lsp.get_clients or vim.lsp.get_active_clients
+  return #get({ name = 'mcppls' }) > 0
+end
+
 local function settings_params()
-  return { settings = object(state.options.settings), trusted = trusted(), locale = locale() }
+  return { settings = object(state.options.settings), trusted = trusted(), locale = locale(), mcpplsServes = mcppls_serves() }
 end
 
 -- The settings changed (setup again, a target chosen): the backend validates and resolves them.
@@ -361,18 +411,27 @@ local function report_rejected(resolved)
   end
 end
 
-local function initialize()
-  local info, err = M.call('initialize', {
-    client = { name = 'Neovim', version = M.nvim_version() },
-    editor = 'nvim',
-    locale = locale(),
-    trusted = trusted(),
-    settings = object(state.options.settings),
-    workspaceFolders = state.folder and { state.folder } or {},
-    languageService = { candidates = M.mcppls_candidates() },
-  })
+-- The rules layer's buffers: mcpp.toml and build.mcpp.
+local function served(buf)
+  local name = vim.fs.basename(vim.api.nvim_buf_get_name(buf))
+  return name == 'mcpp.toml' or name == 'build.mcpp'
+end
+
+-- A buffer of mcpp.toml or build.mcpp joins the session's client (completion, hover, the jumps and
+-- the diagnostics of the rules layer).
+function M.attach(buf)
+  buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
+  local client = state.client
+  if not state.ready or not client or client.is_closing() or not vim.api.nvim_buf_is_loaded(buf) or not served(buf) then
+    return
+  end
+  vim.lsp.buf_attach_client(buf, client.id)
+end
+
+-- Runs once the client is initialized: `info` is the backend's initialize answer.
+local function initialize(info)
   if not info then
-    vim.notify('mcpp-ide: initialize failed: ' .. tostring(err and err.message), vim.log.levels.ERROR)
+    vim.notify('mcpp-ide: initialize failed', vim.log.levels.ERROR)
     local client = state.client
     state.client = nil
     if client then
@@ -384,6 +443,17 @@ local function initialize()
   state.strings = M.call('i18n/bundle', {}) or {}
   local listed = M.call('commands/list', { editor = 'nvim' })
   state.commands = listed and listed.commands or {}
+  -- mcppls answered differently (another version, other actions): the commands are asked again,
+  -- since mcppls's actions are offered under the ids it states (§5.3).
+  if not state.listing then
+    state.listing = M.on('languageService/changed', function()
+      M.request('commands/list', { editor = 'nvim' }, function(err, again)
+        if not err and again and again.commands then
+          state.commands = again.commands
+        end
+      end)
+    end)
+  end
   local resolved = M.call('settings/update', settings_params())
   if resolved then
     state.values = resolved.values or {}
@@ -397,6 +467,9 @@ local function initialize()
   end
   -- A backend that ended while it was asked these has not started.
   finish_start(state.client ~= nil)
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    M.attach(buf)
+  end
 end
 
 local function on_exit(client, code, signal)
@@ -445,27 +518,56 @@ function M.start(folder, done)
   end
   state.starting, state.stopping, state.folder = true, false, folder
   cmd[#cmd + 1] = 'serve'
+  local handlers = {}
+  for _, name in ipairs(NOTIFICATIONS) do
+    handlers[NAMESPACE .. name] = function(_, params)
+      params = denull(params) or {}
+      if JOB_EVENTS[name] then
+        route(name, params)
+      end
+      emit(name, params)
+    end
+  end
   local client
-  local ok, err = pcall(function()
-    client = vim.lsp.rpc.start(cmd, {
-      notification = function(method, params)
-        params = denull(params) or {}
-        if JOB_EVENTS[method] then
-          route(method, params)
-        end
-        emit(method, params)
-      end,
-      on_exit = function(code, signal)
-        on_exit(client, code, signal)
-      end,
-    }, folder and { cwd = folder } or nil)
+  local config = {
+    name = 'mcpp-ide',
+    cmd = cmd,
+    cmd_cwd = folder,
+    root_dir = folder,
+    workspace_folders = folder and { { uri = vim.uri_from_fname(folder), name = vim.fs.basename(folder) } } or nil,
+    init_options = {
+      editor = 'nvim',
+      locale = locale(),
+      trusted = trusted(),
+      settings = object(state.options.settings),
+      languageService = { candidates = M.mcppls_candidates() },
+      mcpplsServes = mcppls_serves(),
+    },
+    handlers = handlers,
+    on_init = function(_, result)
+      vim.schedule(function()
+        flow.run(function()
+          initialize(denull(result))
+        end)
+      end)
+    end,
+    on_exit = function(code, signal)
+      on_exit(client, code, signal)
+    end,
+  }
+  local ok, id = pcall(function()
+    if vim.fn.has('nvim-0.11') == 1 then
+      return vim.lsp.start(config, { attach = false, reuse_client = function() return false end })
+    end
+    return vim.lsp.start_client(config)
   end)
-  if not ok then
-    vim.notify(t('The mcpp-ide backend could not be started: {0}', tostring(err)), vim.log.levels.ERROR)
+  local lsp = ok and id and vim.lsp.get_client_by_id(id) or nil
+  if not lsp then
+    vim.notify(t('The mcpp-ide backend could not be started: {0}', tostring(ok and 'no client' or id)), vim.log.levels.ERROR)
     return finish_start(false)
   end
+  client = wrap(lsp)
   state.client = client
-  flow.run(initialize)
 end
 
 -- Inside a flow: the session, started for the current project when it is not running; nil when it
@@ -477,22 +579,15 @@ function M.ensure(folder)
   return ok and M or nil
 end
 
--- Ends the backend as the protocol asks: shutdown, then exit. Neovim waits briefly for the answer.
+-- Ends the backend as the protocol asks: the client's shutdown, then exit. Neovim waits briefly.
 function M.stop()
   local client = state.client
   if not client or client.is_closing() then
     return
   end
   state.stopping = true
-  local answered = false
-  client.request('shutdown', vim.empty_dict(), function()
-    answered = true
-  end)
-  vim.wait(1000, function()
-    return answered
-  end, 10)
-  client.notify('exit', vim.empty_dict())
-  vim.wait(500, function()
+  client.stop()
+  vim.wait(1500, function()
     return client.is_closing()
   end, 10)
   if not client.is_closing() then
