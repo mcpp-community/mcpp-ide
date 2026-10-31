@@ -56,7 +56,7 @@ quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。C++ 文
 | Neovim 0.10+ | release 源码树中的 `mide-plugins/nvim` | `xlings install mcpp-ide-nvim` 与 `xlings install mcpp-ide`，再 `require('mcpp').setup()`；或把该目录加入 runtimepath（[其 README](mide-plugins/nvim/README.md)） |
 | Agent、其他客户端 | `mcpp-ide-<version>-openkal-bundle-all.tar.gz`（两个架构的映像；Linux x64/arm64、macOS arm64、Windows x64 的 okrun），携带 okrun 的 `mcpp-ide-<version>.okb`，或 `xlings install mcpp-ide` | 运行 `bin/mcpp-ide serve`（Windows 上为 `bin\mcpp-ide.exe`），或 `okrun mcpp-ide-<version>.okb serve` |
 
-每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.19.1 上的
+每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.19.2 上的
 x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 的 okrun 携带。Neovim 插件不携带后端：
 它启动 xlings 安装的 `mcpp-ide` 命令（由 okrun 运行同一个映像包）。
 
