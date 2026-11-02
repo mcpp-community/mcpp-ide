@@ -113,8 +113,8 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
 - **mcpp 2026.11.2.2.** One pack of the target set `openkal` writes the editor packages' tree and
   okb (`--target openkal --mode self-contained --systems all --pkg-format tar,okb`); CI reads
   `runs_on`; the Windows launcher is `bin/mcpp-ide.exe`. The backend is on mcpplibs.os 0.2.7 and
-  openkal-platform 0.21.0, ok images included (openkal 0.21, whose okrun maps an image's instructions
-  from its file, and whose C library's allocator is mimalloc).
+  openkal-platform 0.21.1, ok images included (openkal 0.21, whose okrun maps an image's instructions
+  from its file and admits an okb member it has compared before without reading it, and whose C library's allocator is mimalloc).
 - **CI and release.** 0.9.0's gates run in this repository (registry, translations, unit suite on
   three systems, manifest drift, parity, Extension Host on three systems, isolated install, the
   graph page in Chromium); the release publishes the VSIX to Open VSX beside the GitHub release.
