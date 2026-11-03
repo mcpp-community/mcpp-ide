@@ -23,62 +23,62 @@ targets = ["aarch64-openkal", "x86_64-openkal"]
 
 [package."openkal"]
 namespace = "mcpplibs"
-version = "0.21.0"
-source  = "index+mcpplibs@0.21.0"
-hash    = "fnv1a:4707ae0764444448"
+version = "0.23.0"
+source  = "index+mcpplibs@0.23.0"
+hash    = "fnv1a:3503e00759ddec3e"
 targets = ["aarch64-openkal", "x86_64-linux-gnu", "x86_64-openkal"]
 
 [package."openkal-ld"]
 namespace = "mcpplibs"
-version = "0.3.1"
-source  = "index+mcpplibs@0.3.1"
-hash    = "fnv1a:d518f77275c5bb94"
+version = "0.4.3"
+source  = "index+mcpplibs@0.4.3"
+hash    = "fnv1a:dda722727a966a97"
 origin  = "platform"
 targets = ["aarch64-openkal", "x86_64-openkal"]
 
 [package."openkal-linux"]
 namespace = "mcpplibs"
-version = "0.22.0"
-source  = "index+mcpplibs@0.22.0"
-hash    = "fnv1a:5fe0713332cb49ec"
+version = "0.24.1"
+source  = "index+mcpplibs@0.24.1"
+hash    = "fnv1a:2cce8833161f7421"
 
 [package."openkal-llvm-runtime"]
 namespace = "mcpplibs"
-version = "0.17.1"
-source  = "index+mcpplibs@0.17.1"
-hash    = "fnv1a:0a754d335bd6d845"
+version = "0.18.4"
+source  = "index+mcpplibs@0.18.4"
+hash    = "fnv1a:4768f5337e73a58b"
 origin  = "platform"
 targets = ["aarch64-openkal", "x86_64-openkal"]
 
 [package."openkal-musl"]
 namespace = "mcpplibs"
-version = "0.26.1"
-source  = "index+mcpplibs@0.26.1"
-hash    = "fnv1a:bb6bf5df70ee8e6a"
+version = "0.27.3"
+source  = "index+mcpplibs@0.27.3"
+hash    = "fnv1a:b2d032df6c1252c3"
 origin  = "platform"
 targets = ["aarch64-openkal", "x86_64-openkal"]
 
 [package."openkal-platform"]
 namespace = "mcpplibs"
-version = "0.21.1"
-source  = "index+mcpplibs@0.21.1"
-hash    = "fnv1a:59ca822a5ea5cb39"
+version = "0.23.3"
+source  = "index+mcpplibs@0.23.3"
+hash    = "fnv1a:6a1b522a679a9229"
 origin  = "platform"
 targets = ["aarch64-openkal", "x86_64-openkal"]
 
 [package."openkal-tools"]
 namespace = "mcpplibs"
-version = "0.3.1"
-source  = "index+mcpplibs@0.3.1"
-hash    = "fnv1a:4c7af473eb9cd27f"
+version = "0.4.3"
+source  = "index+mcpplibs@0.4.3"
+hash    = "fnv1a:212ba973d31508bc"
 origin  = "platform"
 targets = ["aarch64-openkal", "x86_64-openkal"]
 
 [package."mcpplibs.os"]
 namespace = "mcpplibs"
-version = "0.2.7"
-source  = "index+mcpplibs@0.2.7"
-hash    = "fnv1a:d0be99a500330ae4"
+version = "0.2.9"
+source  = "index+mcpplibs@0.2.9"
+hash    = "fnv1a:d0be8fa50032f9e6"
 targets = ["aarch64-openkal", "x86_64-linux-gnu", "x86_64-openkal"]
 
 [package."nlohmann.json"]
