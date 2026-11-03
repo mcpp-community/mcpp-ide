@@ -113,7 +113,7 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
 - **mcpp 2026.11.2.3.** One pack of the target set `openkal` writes the editor packages' tree and
   okb (`--target openkal --mode self-contained --systems all --pkg-format tar,okb`); CI reads
   `runs_on`; the Windows launcher is `bin/mcpp-ide.exe`. The backend is on mcpplibs.os 0.2.8 and
-  openkal-platform 0.23.0, ok images included (openkal 0.23: okrun places an image at a base of the
+  openkal-platform 0.23.1, ok images included (openkal 0.23: okrun places an image at a base of the
   boot, keeps its data as a prepared copy and starts it from a snapshot of its initialisers; every
   unit, the std module included, is compiled with frame pointers and hardening; mcpp design
   2026-11-03 part 4).
