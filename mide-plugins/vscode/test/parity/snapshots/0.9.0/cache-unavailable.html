@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="cache.htmlLang">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src vscode-webview://parity; script-src 'nonce-parity-nonce'; img-src vscode-webview://parity">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="vscode-webview://parity/media/page.css">
+<title>cache.title</title>
+</head>
+<body>
+<h1 class="sr-only">cache.title</h1>
+<main>
+<section class="block block-project" data-block="project">
+  <h2 class="block-heading">cache.project.title</h2>
+  <p class="metric"><span class="metric-value">cache.unknown</span></p>
+  <p class="metric-sub">mcpp.toml was not found</p>
+  <div class="actions" role="toolbar" aria-label="cache.project.title">
+    <button type="button" data-action="cleanStale" disabled title="cache.reason.project mcpp.toml was not found">cache.action.cleanStale</button>
+    <button type="button" data-action="cleanProject" disabled title="cache.reason.project mcpp.toml was not found">cache.action.cleanProject</button>
+  </div>
+</section>
+<section class="block block-shared" data-block="shared">
+  <h2 class="block-heading">cache.shared.title</h2>
+  <p class="metric-sub">mcpp cache list failed</p>
+<div class="actions actions-shared" role="toolbar" aria-label="cache.actions">
+  <button type="button" data-action="verify" disabled title="cache.reason.shared mcpp cache list failed">cache.action.verify</button>
+  <span class="budget">
+    <button type="button" data-action="collect" disabled title="cache.reason.shared mcpp cache list failed">cache.action.collect</button>
+    <input id="cache-budget" type="number" min="0" step="1" inputmode="numeric" aria-label="cache.budget.label" title="cache.budget.hint" value="10" disabled>
+    <span class="budget-unit">cache.budget.unit</span>
+  </span>
+  
+  <button type="button" data-action="prune" disabled title="cache.reason.shared mcpp cache list failed">cache.action.prune</button>
+</div>
+</section>
+<p class="boundary" role="note">cache.boundary</p>
+</main>
+<script nonce="parity-nonce">
+(function () {
+  "use strict";
+  var api = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
+  var saved = {};
+  if (api && typeof api.getState === "function") {
+    try { saved = api.getState() || {}; } catch (error) { saved = {}; }
+  }
+
+  function post(message) {
+    if (api) { api.postMessage(message); }
+  }
+
+  function detailsList() {
+    return document.querySelectorAll("details[data-details]");
+  }
+
+  function restoreOpen() {
+    var open = saved && typeof saved.open === "object" && saved.open !== null ? saved.open : {};
+    var all = detailsList();
+    for (var index = 0; index < all.length; index += 1) {
+      var id = all[index].getAttribute("data-details");
+      if (id && open[id] === true) { all[index].open = true; }
+    }
+  }
+
+  function rememberOpen() {
+    var open = {};
+    var all = detailsList();
+    for (var index = 0; index < all.length; index += 1) {
+      var id = all[index].getAttribute("data-details");
+      if (id) { open[id] = all[index].open === true; }
+    }
+    saved.open = open;
+    if (api && typeof api.setState === "function") { api.setState(saved); }
+  }
+
+  function budgetGiB() {
+    var input = document.getElementById("cache-budget");
+    if (!input) { return undefined; }
+    var text = String(input.value).trim();
+    if (text.length === 0) { return undefined; }
+    var value = Number(text);
+    if (!isFinite(value) || value < 0) { return undefined; }
+    return value;
+  }
+
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    if (!target || typeof target.closest !== "function") { return; }
+    var button = target.closest("button");
+    if (!button || button.disabled) { return; }
+    var entry = button.getAttribute("data-show-entry");
+    if (entry) { post({ type: "showEntry", label: entry }); return; }
+    var action = button.getAttribute("data-action");
+    if (!action) { return; }
+    if (action === "collect") {
+      var value = budgetGiB();
+      if (value === undefined) { return; }
+      post({ type: "collect", budgetGiB: value });
+      return;
+    }
+    post({ type: action });
+  });
+
+  // A toggle event does not bubble, so the listener captures it on the way down.
+  document.addEventListener("toggle", function (event) {
+    var target = event.target;
+    if (target && typeof target.getAttribute === "function" && target.hasAttribute("data-details")) {
+      rememberOpen();
+    }
+  }, true);
+
+  restoreOpen();
+})();
+</script>
+</body>
+</html>

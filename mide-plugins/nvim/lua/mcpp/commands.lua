@@ -347,6 +347,27 @@ function actions.selfCheck()
   vim.notify(table.concat(lines, '\n'), level)
 end
 
+-- The IDE report (design 2026-10-30 part 2 §3.2): what a bug report needs, written to a file the
+-- person names (default: beside the project).
+function actions.report(_, args, root)
+  local r, err = session.call('report/collect', root and { root = root } or {})
+  if err then
+    r = { kind = 'mcpp-ide.report', version = 1, error = err.message or tostring(err) }
+  end
+  local default = (root or vim.fn.getcwd()) .. '/mcpp-ide-report-' .. os.date('!%Y%m%dT%H%M%SZ') .. '.json'
+  local path = (args and args[1]) or flow.input({ prompt = t('Export IDE Report') .. ': ', default = default })
+  if not path or path == '' then
+    return
+  end
+  local file = io.open(path, 'w')
+  if not file then
+    return vim.notify('mcpp: ' .. t('cannot write {0}', path), vim.log.levels.ERROR)
+  end
+  file:write(vim.json.encode(r), '\n')
+  file:close()
+  vim.notify('mcpp: ' .. t('The IDE report is written to {0}', path), vim.log.levels.INFO)
+end
+
 -- Which mcppls answers C++ files (languageService/status), said: in Neovim a missing or older mcppls
 -- comes with its own plugin, mcppls-nvim.
 function M.language_service(s)
@@ -357,11 +378,20 @@ function M.language_service(s)
 end
 
 function actions.languageService()
-  local s, err = session.call('languageService/status', { candidates = session.mcppls_candidates() })
+  local s, err = session.call('languageService/status', { candidates = session.mcppls_candidates(), root = M.root() })
   if err then
     return report(err)
   end
   M.language_service(s)
+end
+
+-- One of mcppls's actions, by the user command of mcppls-nvim that mcppls states (§5.3).
+function actions.forward(row)
+  local command = row.action.command
+  if not command or vim.fn.exists(':' .. command) ~= 2 then
+    return vim.notify(t('This command is not available in this IDE.'), vim.log.levels.INFO)
+  end
+  vim.cmd(command)
 end
 
 function actions.rpc(row, _, root)
@@ -374,13 +404,15 @@ end
 
 -- ── the table ─────────────────────────────────────────────────────────────────────────────────
 
--- The rows Neovim offers now: not deprecated, not hidden from a palette, and the debugger only when
--- nvim-dap is there.
+-- The rows Neovim offers now: not deprecated, not hidden from a palette, the debugger only when
+-- nvim-dap is there, and mcppls's actions only where mcppls-nvim defines the command.
 function M.offered()
   local out = {}
   for _, row in ipairs(session.state.commands) do
     local debug = row.action and row.action.kind == 'debug'
-    if not row.deprecated and row.palette ~= false and (not debug or dap()) then
+    local forward = row.action and row.action.kind == 'forward'
+    if not row.deprecated and row.palette ~= false and (not debug or dap())
+      and (not forward or vim.fn.exists(':' .. (row.action.command or '')) == 2) then
       out[#out + 1] = row
     end
   end

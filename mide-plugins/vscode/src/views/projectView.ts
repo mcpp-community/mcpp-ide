@@ -1,0 +1,197 @@
+/**
+ * The project view: 「基本信息」, folded 「依赖」, then 「常用命令」.
+ *
+ * The first section is what the project is (identity, target, toolchain, the
+ * module graph and the folded C++ Modules block); the final section contains actions. The summary is read from `mcpp.toml` and refreshed when the
+ * manifest changes; anything unreadable is omitted rather than guessed, and
+ * `mcpp: Environment Self-check` is the place that reports what mcpp itself
+ * resolves.
+ */
+
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import * as vscode from "vscode";
+
+import { ProjectMetadataWatch } from "../projects/metadataWatch";
+import { RefreshCoordinator } from "../graphs/refresh";
+import { assertCompleteManifest, retainProjectDependencies } from "../projects/dependencyState";
+import { readProjectSummary } from "../projects/summary";
+import { MCPP_MANIFEST_GLOB } from "../projects/context";
+import type { McppProjectDiscovery } from "../projects/discovery";
+import type { LanguageServerBlockSource } from "./languageServerView";
+import {
+  buildProjectTree,
+  countSourceFiles,
+  keybindingsFromPackage,
+  readDependencies,
+  readLockfile,
+  type KeyboardPlatform,
+  type LockPackage,
+  type ProjectSummary,
+} from "./models";
+import { registerTreeView } from "./treeProvider";
+import { registerDependencyGraph } from "../projects/dependencyGraphPanel";
+
+export const PROJECT_VIEW_ID = "mcpp.project";
+
+export interface ProjectViewDeps {
+  currentProject: () => McppProjectDiscovery | undefined;
+  /**
+   * The folded C++ Modules block. Omit it and the block is never rendered, which
+   * is also what happens when `mcpp.views.languageServer.show` is off.
+   */
+  languageService?: LanguageServerBlockSource;
+}
+
+/** `mcpp.lock` sits next to `mcpp.toml`, and changes without the manifest changing. */
+const LOCKFILE_NAME = "mcpp.lock";
+const LOCKFILE_GLOB = "**/mcpp.lock";
+
+/** Read one manifest into a summary; a failure becomes `error`, never a throw. */
+export function summariseProject(project: McppProjectDiscovery | undefined): ProjectSummary | undefined {
+  if (project === undefined) {
+    return undefined;
+  }
+  try {
+    const text = readFileSync(project.manifestPath, "utf8");
+    assertCompleteManifest(text);
+    const lines = text.split(/\r?\n/);
+    const summary = readProjectSummary(project.root, lines);
+    const dependencies = readDependencies(lines).map((entry) => {
+      if (!entry.path || entry.version) { return entry; }
+      try {
+        const local = readProjectSummary(path.resolve(project.root, entry.path), readFileSync(path.resolve(project.root, entry.path, "mcpp.toml"), "utf8").split(/\r?\n/));
+        return { ...entry, ...(local.version ? { version: local.version } : {}) };
+      } catch { return entry; }
+    });
+    return dependencies.length === 0 ? summary : { ...summary, dependencies };
+  } catch (error) {
+    return {
+      root: project.root,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+interface ProjectSnapshot {
+  summary: ProjectSummary | undefined;
+  lock: LockPackage[];
+}
+
+export function registerProjectView(context: vscode.ExtensionContext, deps: ProjectViewDeps): void {
+  // Read from the manifest rather than copied into the source: a hint in the tree
+  // that disagrees with `package.json` is worse than no hint.
+  const keybindings = keybindingsFromPackage(context.extension.packageJSON);
+  const platform: KeyboardPlatform = process.platform === "darwin" ? "mac" : "other";
+  const bridge = deps.languageService;
+
+  // Counting source files walks the project, so it is not repeated for every
+  // active-editor change: the manifest watcher and a workspace-folder change ask
+  // for a fresh count, everything else reuses the last one.
+  let measured: { root: string; count: number } | undefined;
+  const withSources = (summary: ProjectSummary | undefined, fresh: boolean): ProjectSummary | undefined => {
+    if (summary === undefined || summary.error !== undefined) {
+      return summary;
+    }
+    if (fresh || measured === undefined || measured.root !== summary.root) {
+      measured = { root: summary.root, count: countSourceFiles(summary.root) };
+    }
+    return { ...summary, sourceFiles: measured.count };
+  };
+
+  const snapshot = (project: McppProjectDiscovery | undefined, freshSources: boolean): ProjectSnapshot => ({
+    summary: withSources(summariseProject(project), freshSources),
+    lock: project === undefined ? [] : readLockfile(path.join(project.root, LOCKFILE_NAME)),
+  });
+
+  let current = snapshot(deps.currentProject(), true);
+  const invalidateGraph = registerDependencyGraph(context, () => current.summary);
+  const metadata = new ProjectMetadataWatch();
+
+  const view = registerTreeView(PROJECT_VIEW_ID, () =>
+    buildProjectTree(current.summary, {
+      lock: current.lock,
+      keybindings,
+      platform,
+      languageService: bridge?.input(),
+    }),
+  );
+  context.subscriptions.push(view.disposable);
+
+  const reload = (freshSources: boolean): void => {
+    const active = vscode.window.activeTextEditor;
+    let project = (!active || active.document.uri.scheme !== "file") && current.summary
+      ? { root: current.summary.root, manifestPath: path.join(current.summary.root, "mcpp.toml") }
+      : deps.currentProject();
+    if (!project && current.summary && active?.document.uri.scheme === "file") {
+      const relative = path.relative(current.summary.root, active.document.uri.fsPath);
+      if (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
+        project = { root: current.summary.root, manifestPath: path.join(current.summary.root, "mcpp.toml") };
+      }
+    }
+    metadata.capture(project?.root);
+    const next = snapshot(project, freshSources);
+    next.summary = retainProjectDependencies(next.summary, current.summary);
+    const changed = JSON.stringify(next) !== JSON.stringify(current);
+    current = next;
+    if (changed) { view.provider.refresh(); }
+  };
+
+  let freshSourcesRequested = false;
+  const refresh = new RefreshCoordinator(async () => { const fresh = freshSourcesRequested; freshSourcesRequested = false; reload(fresh); });
+  const schedule = (fresh = false): void => { freshSourcesRequested ||= fresh; void refresh.request(); };
+  context.subscriptions.push(refresh);
+  let metadataTimer: ReturnType<typeof setInterval> | undefined;
+  const checkMetadata = (): void => {
+    const changes = metadata.changes(view.view.visible);
+    for (const file of changes) { invalidateGraph(vscode.Uri.file(file)); }
+    if (changes.length) { schedule(changes.some(file => path.basename(file) === "mcpp.toml")); }
+  };
+  const metadataVisibility = (): void => {
+    if (metadataTimer) { clearInterval(metadataTimer); metadataTimer = undefined; }
+    if (view.view.visible) { checkMetadata(); metadataTimer = setInterval(checkMetadata, 2000); }
+  };
+  context.subscriptions.push(view.view.onDidChangeVisibility(metadataVisibility), {dispose:()=>{if(metadataTimer)clearInterval(metadataTimer);}},
+    vscode.workspace.onDidSaveTextDocument(document => { if (["mcpp.toml","mcpp.lock"].includes(path.basename(document.uri.fsPath))) schedule(document.uri.fsPath.endsWith("mcpp.toml")); }));
+  const manifestWatcher = vscode.workspace.createFileSystemWatcher(MCPP_MANIFEST_GLOB);
+  const lockWatcher = vscode.workspace.createFileSystemWatcher(LOCKFILE_GLOB);
+  context.subscriptions.push(
+    manifestWatcher,
+    lockWatcher,
+    manifestWatcher.onDidCreate(() => schedule(true)),
+    manifestWatcher.onDidChange(() => schedule(true)),
+    manifestWatcher.onDidDelete(() => schedule(true)),
+    lockWatcher.onDidCreate(() => schedule()),
+    lockWatcher.onDidChange(() => schedule()),
+    lockWatcher.onDidDelete(() => schedule()),
+    vscode.tasks.onDidEndTaskProcess(() => schedule()),
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      const active = vscode.window.activeTextEditor;
+      if (active?.document.uri.scheme !== "file") { return; }
+      const project = deps.currentProject();
+      if (project?.root !== current.summary?.root) { reload(false); }
+    }),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => { current = snapshot(deps.currentProject(), true); view.provider.refresh(); }),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => schedule(true)),
+  );
+
+  if (bridge !== undefined) {
+    const tree = view.view;
+    context.subscriptions.push(
+      bridge.onDidChange(() => view.provider.refresh()),
+      // The folded block's poller only runs while this tree is on screen.
+      tree.onDidChangeVisibility(() => bridge.setVisible(tree.visible)),
+    );
+    bridge.setVisible(tree.visible);
+  }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("mcpp.internal.refreshProjectView", async () => {
+      reload(true);
+    }),
+  );
+
+  reload(true);
+  metadataVisibility();
+}

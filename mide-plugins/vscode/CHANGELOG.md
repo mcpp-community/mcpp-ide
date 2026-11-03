@@ -1,18 +1,450 @@
-# Changelog
+## Unreleased
 
-## 1.0.0
+## 1.1.0
 
-- The extension is the VS Code adapter of mcpp-ide: its decisions are the mcpp-ide backend's
-  (`mcpp-ide serve`, shipped inside the extension), which reads mcpp's control contract. The same
-  features exist in CLion through mcpp-clion.
-- Builds and tests run as tasks in a pseudoterminal that shows mcpp's own narration; closing the
-  terminal cancels the build. Problems come from mcpp's located diagnostics, not from a pattern.
-- The Testing view lists every test of every project (`mcpp test --list`) and runs one or all.
-- Debugging through a launch configuration of type `mcpp`, for CodeLLDB, the C/C++ extension,
-  lldb-dap or Native Debug; an ok image is debugged through `okrun`.
-- Targets and platforms: the targets mcpp knows, their toolchains and the platform that configures
-  each; `mcpp.build.target` chooses the target build, run, test, debug and pack use.
-- mcpp.toml's problems come from mcpp; the extension's own TOML checks are removed and their
-  settings deprecated.
-- mcppls is installed with the extension as an extension pack rather than required; the project
-  view reports whether the installed mcppls reads mcpp's result record (0.0.18 and later).
+- The extension is mcpp-vscode 0.9.0 in everything a user sees and does: the same views (Project,
+  Libraries, Cache), pages (a package's page, the settings page, the dependency and module graphs),
+  commands, menus, keybindings, settings and strings. 1.0's simplified panels are gone.
+- mcpp runs through the mcpp-ide backend (`mcpp/exec`) and mcppls through it
+  (`languageService/exec`); the backend is bundled (`backend/`, an ok image with okrun for Linux,
+  macOS and Windows) and located as 1.0 located it (`mcpp.backendPath`, the bundle, PATH).
+- Kept from 1.0, in 0.9.0's style: **Debug** (`mcpp.debug`, the `mcpp` launch type through CodeLLDB,
+  the C/C++ extension or lldb-dap), the **Testing** tree, **Select Target** with rows for target
+  sets (mcpp 2026.10.30.1 and later), **Pack**, build on save (`mcpp.build.onSave`), the build's
+  profile and target (`mcpp.build.profile`, `mcpp.build.target`), and cancelling a running job.
+- A launch without a debugger extension is refused at once; the message offers to install CodeLLDB.
+- mcpp.toml's and build.mcpp's completion, hover, jumps and diagnostics are the mcpp-ide backend's,
+  connected through VS Code's language client (`docs/rules.md` of mcpp-ide): every table and key of
+  mcpp 2026.10.27.1 and the build-script API of 2026.10.29.1, dependency versions from mcpp's
+  catalogue (`mcpp.toml.indexCompletion`), and diagnostics at the columns VS Code counts (0.9.0 placed
+  manifest diagnostics one column late).
+- Where the backend's runner does not run (macOS x86_64, Windows arm64, Linux armhf) the extension
+  says so and goes on with build, run, test and the project pages.
+- Releases are published to Open VSX beside the GitHub release.
+
+## 0.9.0 - 2026-10-20
+
+- Node operations use a keyboard-accessible right-click menu. Refresh/Export use theme colors, aligned chevrons and matching control heights; depth selectors align in View options.
+- Visible project metadata checks recover Dependencies updates when native file events are dropped, without repeated CLI reads for unchanged files.
+
+- Group module entries into Main, Library, Tests and Other, with paged test entries and a connected default view for large projects.
+- Separate selection, focus and camera navigation: click to select, double-click to open source, locate either selection or focus, and explore two importer levels alongside three dependency levels. Local expansion advances repeatedly and preserves shared branches.
+- Coalesce graph refresh events, cancel obsolete queries, reuse unchanged layouts and pause hidden graph work. Preserve dependency rows through transient manifest failures and show a status line when no declarations are available.
+- Keep entry/search controls visible and group export formats, view settings and node actions into compact menus.
+- Export the visible graph as offline SVG or bounded PNG without expanding or querying the full project. Add Chromium coverage for graph interaction, layout reuse and exports.
+- Release VSIX remains available on GitHub and Open VSX; Visual Studio Marketplace upload is manual.
+
+## 0.8.0 - 2026-10-19
+
+- Package details use the available editor width on fullscreen displays, with bounded side gutters and a compact metadata column.
+- Add C++ Modules Deps backed by mcppls JSON, with entry/source cards, one-hop external boundaries and read-only source navigation. Share the package graph canvas with depth/branch folding, hidden-node search, focused views and 150-node/300-edge layout budgets. Move direct Dependencies after Basics as a collapsed sibling.
+
+- Example code uses a uniform background and compact heading actions; local and bundled example sources both open read-only. Direct dependency rows now resolve namespaces correctly, show package coordinates and sources, and focus the selected node in the simplified colored graph.
+- Usage pages restore real index test examples even when the installed index omits tests, using a pinned offline snapshot with full read-only source access. Focused search shows a single clear button.
+- Project dependencies offer a Mermaid graph of the nearest three levels, based on manifests and local index metadata, with refresh, zoom and Mermaid copy controls.
+- Libraries now defaults to the official `mcpp-index` in `<mcpp home>/indices/mcpplibs`, with support for the old location. The xlings tool index is no longer substituted for the library catalog.
+- Package details put usage, standard and license tags beside the name, and project selection in the header. A split action chooses project, development or build dependencies. The CLI handles project/development additions; build dependencies and group migrations provide a TOML preview and a manifest editing entry point.
+- Search and detail updates preserve the document, selection and scroll state. Cross-registry hits have explicit limited previews. Stale searches and results from another package/project cannot update the current page.
+- Dependency state is refreshed independently from cached descriptors, including external file changes. Local rereads and index updates are separate actions; failures retain usable results.
+
+## 0.7.0 - 2026-10-14
+
+`build.mcpp` is C++ again, compiled by C++ Modules as the build program it is, and the project
+view says when another C++ language service is answering the same files.
+
+### Changed
+
+- **`build.mcpp` is a `cpp` document.** 0.6.0 gave it a language of its own, `mcpp-build`.
+  VS Code prefers a filename match over an extension match, so that hid the file from C++
+  Modules, which selects `cpp`: the build program got a line-by-line text check instead of a
+  compiler. The `mcpp-build` language, its grammar and its language configuration are gone;
+  this extension's build-script help now registers on `cpp` documents named `build.mcpp`, and
+  the C++ module grammar is injected into `source.cpp` only.
+- **While C++ Modules serves `build.mcpp`, it answers what it answers better**: the
+  `unknownSymbol` check and the module names after `import` (completion and hover) are left to
+  it. The SPEC-007 rule checks, the `mcpp::…` directive completion and hover, and the snippets
+  stay. "Serves" means the extension is installed and enabled and `mcppls.enable` is not
+  `false` here; the open files are re-checked when that changes.
+- **`unknownSymbol` reads the file's imports** when it does run: `import mcpp.rules.qt;` makes
+  `mcpp::rules::…` a name the snapshot cannot judge, so it is no longer reported
+  (`unknown mcpp::rules` on every Qt build program).
+- The diagnostics' owner is `mcpp-build-script` (was `mcpp-build`).
+- The build-script snapshot and the `mcpp.toml` schema are regenerated from mcpp 2026.10.11.1.
+  The schema generator reads the `[build]` keys from mcpp's key registry, where 2026.10.11.1
+  moved them.
+
+### Added
+
+- **Project → Basics → Language service → "Other C++ language services".** While C/C++
+  IntelliSense, clangd or ccls is active next to C++ Modules, the row shows a warning and their
+  names, and one click runs C++ Modules' own **Turn Off Other C++ Language Services** (it asks
+  whether for this workspace or everywhere, and writes the other extensions' own settings).
+  With none, the row is a dimmed check mark, "Only C++ Modules is serving C++". When C++
+  Modules remembers what it turned off, the row's context menu offers **Restore**. The list is
+  C++ Modules' own answer (0.0.16+); with an older one, a read-only look at the same three
+  extensions.
+- `mcpp.languageServer.restoreConflicts` ("C++ Modules: Restore Other C++ Language Services").
+  `mcpp.languageServer.manageConflicts` is now titled "Turn Off Other C++ Language Services",
+  which is what it always ran.
+
+### Migrating
+
+- A setting written for the old language id, `"[mcpp-build]": { … }` in `settings.json`, no
+  longer applies. Move it under `"[cpp]"`.
+- Turning other C++ services off or restoring them no longer asks a second time in this
+  extension: C++ Modules' command asks where to act, and closing that question does nothing.
+
+## 0.6.0 - 2026-10-02
+
+The sidebar was reorganised around one rule: **the body shows state, the actions sit
+next to it, and the two are visually separate.**
+
+### Changed
+
+- **Three views instead of four**: 工程 / mcpp 库生态 / 缓存. The C++ Modules view is
+  gone as a view; its state is now one row inside 工程 → 基本信息, collapsed by
+  default. **The collapsed row always carries a status icon**, so a degraded language
+  service is visible without expanding it.
+- **The project view** is two labelled sections: 基本信息 (identity, target, toolchain,
+  dependencies, the language service) — collapsed by default — and 常用命令, which opens
+  with the nine things you can do, creation first (`new project`, then build/run/test/
+  clean/toolchain/search-and-add/self-check/settings). Rows carry a keybinding hint where
+  one exists, and their icons are coloured by what they act on (blue builds or adds, green
+  runs or verifies, purple tests, red deletes, yellow manages the toolchain).
+- **Dependencies are shown as two levels**: what `mcpp.toml` declares, and the version
+  `mcpp.lock` resolved for it. No connector lines — `mcpp.lock` has no parent/child
+  edges, and drawing them would be inventing a tree.
+- **The cache view is a sidebar webview**, not an editor tab, and it starts **collapsed**
+  so the library list gets the height. 项目缓存 is always visible inside it; 全局缓存 is
+  collapsed and shows its summary on one line. The composition and age bars are drawn once,
+  with a single-line legend, and the age bar is a four-stop ramp (blue → green → yellow →
+  red) so four buckets do not read as one block.
+- **The mcpp status bar menu** groups its commands under one heading per area (project /
+  library / toolchain / cache / C++ Modules / settings) with a codicon per command, and it
+  carries the C++ Modules actions that used to be reachable only from the removed view —
+  including **capture the logs** (`mcppls.exportDiagnosticBundle`) and the two places the
+  logs and the last bundle live.
+- **`mcpp.views.enabled` hides the mcpp views' contents.** It does *not* remove the
+  activity bar icon: VS Code only hides a container that a built-in registered with
+  `hideIfEmpty`, and an extension cannot mark its own container that way. Right-click the
+  icon to remove it from the activity bar.
+- `package.json`'s marketplace icon is still mcpp's official logo — the same file the C++
+  Modules extension uses. The **activity bar** icon is a derived monochrome stencil of that
+  logo's wordmark, because VS Code paints a container icon as an alpha mask in the theme's
+  foreground colour (the badge would have been a solid block).
+
+### Added
+
+- **mcpp 库生态** — browse the package index already on this machine, offline: search
+  (a row's haystack carries its namespace, so typing `compat` filters to that namespace),
+  the `已添加` state on the row itself, and a per-package detail page in the editor with the
+  real **example code** the index's CI builds and runs (172 example projects), the version
+  matrix per platform, licence and repository. The page opens with what it is for: one row
+  of buttons — **Add to mcpp.toml** / **Switch to &lt;version&gt;** / Open the repository /
+  Open on the index site — and a clickable version matrix that aims that command. For a
+  package the workspace already depends on it reads `mcpp.toml` (then `mcpp.lock`), marks
+  the version in hand, and offers the switch instead of a blind add. `mcpp add` is still the
+  only thing that writes `mcpp.toml`.
+- Searching the *other* registries is a separate switch, `mcpp.library.networkSearch`,
+  **off by default**: that tier runs `mcpp search`, which may use the network and can
+  only be read from human output on a best-effort basis.
+- Labels use the official index site's own vocabulary — `import` / `#include` / `tool`
+  / 上游 mcpp.toml — read from `mcpp xpkg parse --json`, so the editor and the site say
+  the same thing.
+
+### Fixed during acceptance testing
+
+Every one of these was found by running the extension in a real profile, and each was
+traced to its cause rather than to its symptom.
+
+- **The library view reloaded itself forever** (flicker, rows that could not be clicked, a
+  pegged CPU). The document announced its own load with a `ready` message and the host
+  answered it with a repaint; assigning `webview.html` reloads the document, and every
+  render minted a fresh CSP nonce, so no two documents ever matched. The handshake is gone,
+  the nonce is per view, and an identical document is never pushed. The same dead `ready`
+  shape was removed from the detail page, and both the reload rule and the missing
+  `registerWebviewViewProvider` now have tests.
+- **Every cache bar was solid black.** The stylesheet selected `rect[data-kind=…]`, but the
+  renderer stamps those attributes on the `<g>` that wraps the rectangle, so no rule matched
+  and every segment took the SVG default fill. `fill` is now set on the group (which the
+  rectangle inherits), and a test compares the document against the stylesheet.
+- **The activity bar icon was a white block.** VS Code draws a container icon as an alpha
+  mask, and the official logo is an opaque badge: as a stencil it is a filled square. The
+  icon is now a derived, transparent-background wordmark, regenerated from `logo.png` by
+  `tools/generate-activitybar-icon.mjs`, with `npm run check:icon` as the drift gate.
+- **Quick menu rows had no icons, then no colour.** Icons needed a table and a rendering
+  path; colour cannot come from a `ThemeIcon` at all (VS Code 1.132 drops its colour in a
+  quick pick), so the rows ship generated coloured SVG assets — one per icon and palette
+  word, light and dark — built from `@vscode/codicons` by
+  `tools/generate-quick-menu-icons.mjs`. The project tree's `charts.orange` turned out to be
+  33%-alpha, and was replaced by `charts.red` for destructive rows.
+- **`mcpp.languageServer.exportDiagnosticBundle` was nearly registered twice** (once through
+  the table, once by hand after a change), which makes `activate()` throw and the whole
+  extension fail to start. A source gate now rejects a command id registered twice, and the
+  gate was verified by reintroducing the bug.
+- **A detail-page link click said nothing.** `void vscode.env.openExternal(…)` dropped the
+  boolean that says whether the browser opened, so a failure was indistinguishable from a
+  dead button. The click now writes a `pending` line immediately, and the host answers with
+  either the result, or the URL on the clipboard plus a note in the output channel.
+
+### Security & platform (found in external review)
+
+- **The workspace-trust boundary is closed again.** Three mcpp calls the new library
+  views had added (`xpkg parse` on the detail page, `mcpp search` behind the
+  cross-registry switch, the self-check's protocol probe) ran without checking trust,
+  and `mcpp.path` is a `resource`-scoped setting — so a repository could name any
+  program and have it run in a workspace the user had explicitly marked untrusted.
+  `mcpp.path` and `mcpp.clangd.path` are now `restrictedConfigurations`, every
+  non-controller call goes through a trust-gated seam (`runMcpp`), and an
+  architecture test keeps new call sites from bypassing it. Untrusted workspaces
+  degrade in place: the detail page falls back to the descriptor's own text, the
+  search keeps its local results, the self-check says it did not probe.
+- **Windows: arguments are quoted on the `.cmd`/`.bat` path.** Node joins shell
+  arguments without quoting, so an index path containing a space split in two and a
+  search term like `foo & calc` became two commands. Arguments now follow the
+  `CommandLineToArgvW` quoting rules.
+- **One render seam for all four webviews** (`WebviewDocument`): a per-view CSP nonce
+  and an assign-only-on-change rule, with gates holding every host to it. The cache
+  view was the real winner: a refresh that changes nothing no longer reloads the
+  page, so the budget input and the scroll position survive.
+- **The release pipeline publishes to two markets.** A version tag tests, packages one
+  VSIX, publishes it to GitHub Releases and Open VSX (required), and to the
+  Visual Studio Marketplace when its token is configured (skipped with a notice
+  otherwise) — always the same artifact the Release carries.
+
+> From 0.5.0 on, entries are written in English. Earlier entries remain as they
+> were written.
+
+## 0.5.0 - 2026-10-02
+
+A groundwork release: the extension now says what it is doing, in the user's
+language, and every claim about mcpp or the C++ Modules extension is checked by a
+test or a generated snapshot rather than by a comment.
+
+### Added
+
+- **Three views** under a new `mcpp` Activity Bar container: **Project** (identity,
+  toolchain, targets and the build/run/test buttons), **Cache** (project artifacts
+  and the shared build cache, with its size, age distribution, largest packages
+  and incomplete entries) and **C++ Modules** (the language service's state,
+  issues and every action, forwarded to `sunrisepeak.mcpp-language-server`).
+- **A settings panel** (`mcpp: Open Settings Panel`) built from a single registry:
+  search, "only modified", per-section collapse, four presets, each row showing
+  where its value comes from, when it takes effect, and a link to the native
+  Settings editor.
+- **64 settings**, 29 of them public and the rest behind "show advanced". A new
+  `data/config-registry.json` is the single source of truth; `package.json` and
+  `docs/settings.md` are held to it by CI.
+- **Cache cleanup as a table of plans**, with five levels of confirmation: reading
+  is free, `mcpp clean` asks once, `--stale`/`gc`/`prune` show a preview first,
+  `mcpp cache clean --all` additionally requires an explicit acknowledgement naming
+  every project on the machine, and emptying the shared cache during a project
+  clean is a separate, unticked choice.
+- **`mcpp: Environment Self-check`**: one copyable snapshot of every version, the
+  mcpp protocol and advertised kinds, each C++ Modules capability and its fate,
+  the cache figures and every setting changed from its default.
+- **`build.mcpp` intelligence** without a language server: completion and hover for
+  the 31 build directives and the five action roles, snippets, document symbols and
+  seven static SPEC-007 diagnostics, generated from mcpp's own directive table.
+  `import std;` and `import mcpp;` are recognised and never reported as missing —
+  measured behaviour, see `docs/build-script.md`.
+- **`mcpp.toml` editing**: key completion, enum values, hover with the type, default,
+  plane and legacy advice, seven manifest diagnostics and navigation for
+  `workspace = true`, `path = …` and `features = […]`.
+- **English and Chinese**: every command title, setting and runtime message follows
+  the editor's language. `mcpp.ui.language` can override the runtime messages and
+  our panels; the Command Palette and the Settings UI always follow VS Code.
+
+### Changed
+
+- User-visible strings in `package.json` are now `%nls%` references; the text lives
+  in `package.nls.json` and `package.nls.zh-cn.json`.
+- Activation is narrower: the `onCommand:*` events are gone (VS Code derives them
+  from `contributes.commands` since 1.74), as is `onLanguage:cpp`.
+- `mcpp template`-free: `mcpp: Clean` is now `mcpp: Clean Project Artifacts`, and
+  the language-service commands moved under the `mcpp.languageServer.*` namespace.
+
+### Fixed
+
+- The toolchain inventory is read from `mcpp toolchain list --format json` when mcpp
+  speaks the machine-output protocol, instead of scraping the human table — the
+  human table no longer prints the line the old parser depended on.
+- A failing C++ Modules call can no longer be mistaken for a failing mcpp build, and
+  a command that a newer or older mcppls does not offer is remembered and hidden
+  rather than retried on every click.
+
+### Removed
+
+- `src/configureOnly.ts` and `src/ideWorkflow.ts`: dead since 0.4.0 moved the build
+  database to the language service, and at odds with the documented boundary.
+
+### Migration
+
+Nothing has to be changed by hand: every 0.4.x command id and setting key below still
+works, a keybinding that names an old id keeps firing, and the old setting key is read
+as an alias. A one-time prompt offers to move renamed setting values to their new
+names (dismiss it and it comes back next session; the old key is never deleted without
+your say-so).
+
+| 0.4.x | Now |
+| --- | --- |
+| `mcpp.tomlCompletion` (setting) | `mcpp.toml.completion` |
+| `mcpp.configureLanguageServer` | `mcpp.languageServer.selectContext` |
+| `mcpp.configureClangd` | `mcpp.languageServer.selectContext` |
+| `mcpp.refreshCompilationDatabase` | runs `mcpp build` (which refreshes the database) |
+| `mcpp.checkModuleSupport` | `mcpp.languageServer.restartServer` |
+| `mcpp.showModuleGraph` | `mcpp.languageServer.showModuleGraph` |
+| `mcpp.showLanguageServerLogs` | `mcpp.languageServer.showLogs` |
+| `mcpp.clean` | alias of `mcpp.cleanProjectArtifacts` |
+
+Removed outright in 0.6.0: `mcpp.showCachePanel` (the cache view is now in the sidebar
+— `mcpp.cache.focus` brings it up) and the standalone C++ Modules view (its state and
+actions live in 工程 → 基本信息 and the status bar menu).
+
+## 0.3.1 - 2026-08-11
+
+- 修复缺少 CDB 时 IDE 命令看似无响应的问题：配置 clangd、刷新编译数据库、检查模块支持和一键配置现在会立即显示进度并打开 `mcpp` 输出频道；clangd 重启与 `mcpp build --configure-only` 增加超时，避免异步操作永久占用 IDE 队列。
+- 增加删除 `compile_commands.json` 后刷新 CDB、配置 clangd、检查模块支持和一键配置的 Extension Host 回归测试。
+
+## 0.3.0 - 2026-08-11
+
+- 将编译数据库刷新迁移到 `mcpp build --configure-only`：不解析 stdout 人类文本，以退出码
+  和可解析 CDB 作为成功条件，失败时保留 last-known-good CDB。
+- 删除旧 `mcpp ide configure --format ndjson` 解析层和重复的 `mcpp.configureIde` 命令；
+  configure-only 与 build/run/test 共用项目操作锁，manifest 与 `mcpp.path` 变化按工程协调。
+- CDB watcher 只重读已发布数据库，不反向触发 configure-only；多根工作区按事件 URI 路由，
+  显式刷新会分别报告 CDB 生成与 clangd 协调结果。
+- 对齐 mcpp #387 的最终 workspace 契约：virtual workspace 根不作为单一 clangd 工程，
+  扩展消费当前活动 member 根的 CDB；rooted workspace 仍按根 package 处理。
+## 0.4.0 - 2026-09-26
+
+### Changed
+
+- 将 C++ 模块语言服务依赖从官方 `llvm-vs-code-extensions.vscode-clangd` 切换为
+  `sunrisepeak.mcpp-language-server`（C++ Modules Language Server / mcppls）；VS Code 最低版本
+  提升到 1.91。
+- 删除本扩展中的 clangd 解析、匹配、配置、PCM 检查、CDB 监听和自动重启逻辑。mcpp-vscode
+  不再启动第二个 LSP 客户端，也不再打包语言服务 payload。
+- mcpp build 完成后只通过 mcppls 公开命令刷新语言服务；新增模块图、语言服务日志和分析
+  上下文转发命令。
+- 一键模块配置改为一次确认后执行 `mcpp build` 并刷新 mcppls，不再安装 llvm-tools、切换
+  LLVM 全局默认或修改 clangd 配置。
+
+### Fixed
+
+- 移除 mcpp 已删除的 `[xlings.envs]` manifest 补全，并将 `[xlings.workspace]` 示例版本更新为
+  当前索引可用的 Node 条目。
+
+## 0.2.7
+
+- 修复「一键配置模块代码提示」在标准 mcpp 安装（install.sh / AUR）下无法发现 mcpp 内置
+  xlings 的问题：xlings 发现以 `mcpp self env` 为权威来源（项目级契约），路径探测仅作回退；
+  为 `mcpp self env` 调用增加超时保护，并补齐测试（PR #11）。
+
+## 0.2.6
+
+- 新增 **mcpp: 一键配置模块代码提示** 向导：按「安装/切换工具链 → 构建 → 重载 → clangd
+  配置 → 模块检查」链恢复 IDE，支持取消与失败降级；仅在受信任工作区执行（issues #6/#7，
+  PR #10）。
+- 新增 `mcpp.toml` 结构补全：段头 snippet（26 段）与依赖/feature 等写法模板，所有建议
+  携带显式替换范围并经真实 mcpp 契约测试；由 `mcpp.tomlCompletion` 设置控制（默认开启），
+  未受信任工作区仅纯文本分析（PR #9）。
+
+## 0.2.5
+
+- 编辑器标题栏的 mcpp 运行/测试操作按当前活动文件所属的 mcpp member 作用域执行；工作区外
+  打开的文件不会显示这些按钮。
+- 将状态栏快捷菜单名称明确为 `$(tools) mcpp: 快捷菜单`，与模块可用性状态按钮区分。
+
+## 0.2.4
+
+- 修复 hermetic mcpp 编译数据库被插件追加 `--query-driver` 后导致的 clangd 标准库和
+  模块误诊断；仅在编译命令未自带 `--no-default-config`、`-nostdinc++` 和显式 libc++
+  路径时补充 query driver。
+- 模块检查优先选择项目源码，避免误选 `.mcpp` 依赖缓存或 `target` 生成源码，改善补全、
+  跳转和诊断稳定性。
+- 将 `build.mcpp` 作为独立的语法高亮语言处理，不再让 clangd 把 mcpp 构建脚本当作普通
+  C++ 翻译单元。
+
+## 0.2.3
+
+- 为精确文件名 `build.mcpp` 增加 C++ 语言关联，复用 VS Code 内置 C++ 高亮和现有模块
+  语法注入；不扩大到所有 `*.mcpp` 文件。
+- 为精确文件名 `mcpp.toml` 内置独立 TOML 语法高亮，不依赖额外扩展，也不接管普通
+  `*.toml` 文件。
+
+## 0.2.2
+
+- 新增 **mcpp: 一键配置模块代码提示**：自动检测匹配的 clangd，缺失时通过 xlings 下载
+  对应版本的 llvm-tools，配置 clangd 并刷新模块状态，无需重启 VS Code。
+- 检测 PCM 版本不匹配（`ast_file_version_too_new`、`ast_file_version_too_old`、
+  `ast_file_different_branch`），并在诊断信息中引导一键配置。
+- 非 LLVM 工具链（GCC/MSVC）项目提供清晰的引导说明而非催促安装：状态栏点击弹出
+  QuickPick，一键配置向导显示原因并提供工具链安装/选择入口。
+- 优化编辑器标签切换性能：相同工程内切换文件不再重复协调 clangd。
+- 序列执行器使用 AsyncLocalStorage 范围标记替代全局深度计数，修复不相关并发调用
+  绕过队列的问题。
+- 完善 xlings 检测：检查 PATH 中是否实际存在 xlings 而非无条件返回路径名，确保
+  未安装时的引导分支可达。
+
+## 0.2.1
+
+- 修复项目任务已经结束后，clangd/CDB 重协调仍占用项目锁，导致下一条 CLI 命令误报
+  “已有 mcpp 操作正在运行”的问题。
+- 增加 GitHub tag Release 工作流：校验 tag 与扩展版本，运行测试和打包，并发布 VSIX
+  及其 SHA-256 校验文件。
+
+## 0.2.0
+
+- 新增 `$(tools) mcpp` 状态栏快捷菜单和命令面板命令：构建、运行、测试、清理 target、
+  查看工具链、安装工具链、选择全局默认工具链。
+- 项目任务使用 VS Code 的无 shell `ProcessExecution`，显示实时任务终端；同一工程任务
+  互斥，工具链安装/默认值操作共享全局锁，取消不会误报成功。
+- 项目任务结束后复用 CDB/clangd 自动协调；`mcpp.refreshCompilationDatabase` 与构建
+  命令共用同一任务路径，避免并发写入工程构建目录。
+- 按 mcpp 官方工具链契约解析 `Toolchains:`、`System:`、`Targets:` 和可安装列表：
+  toolchain 与 target 分轴处理，首版 UI 不提供结构化 `--target` 选择器。
+- 全局默认选择过滤普通 target-only payload，保留 mcpp 在 Windows 上将 host GCC 映射到
+  MinGW payload 的官方规则，并明确设置 host 默认会清空 `default_target`；
+  安装入口接受省略版本和 namespace，把兼容 spec 安全规范化为单个参数后交给 mcpp 最终解析；
+  MSVC 走系统检测，已知 target 别名走对应 payload，泛化 triple 由 mcpp 校验。
+- 工具链安装和全局默认修改均需要用户确认；Restricted Mode 不执行 mcpp 或其他外部工具。
+
+## 0.1.5
+
+- 打开已有编译数据库的 LLVM mcpp 工程时自动执行 `clangd --check`，状态栏无需点击即可显示“模块可用”或“模块不可用”。
+- 编译数据库创建或变化后自动重新检查模块支持；工程内合并重复事件，共享 clangd 操作全局串行，只允许当前活动工程接管窗口级配置，并且只接受最新检查结果。
+- 修改 `mcpp.clangd.path` 或模块支持模式后自动复查，并为直接 clangd 检查增加 60 秒超时。
+- 收紧 Restricted Mode：未受信任工作区不执行 CDB 编译器、mcpp 或 clangd，也不修改 clangd 配置；授予信任后自动协调。
+- 补充独立安装 mcpp 的配置说明；`mcpp.path`、CDB 中的编译器与 `mcpp.clangd.path` 相互独立，`clang-tidy` 和 `clang-format` 不是当前扩展的运行依赖。
+
+## 0.1.4
+
+- 缺少编译数据库时，状态栏改为直接执行“刷新编译数据库”；CDB 创建或变化后会自动重新配置并重启 clangd，不再要求重载窗口。
+- 增加 `mcpp.path` 设置，允许 macOS GUI 环境显式指定 mcpp 可执行文件。
+- `mcpp build` 失败后仍会检查现有 CDB；IDE 配置成功与构建失败分别提示，不再误报 clangd 已刷新。
+- Restricted Mode 下不会执行 `mcpp build`、依赖安装或 `build.mcpp`。
+- 在 README 中记录无需正式构建即可获得模块语义能力的长期核心接口、CDB 合同和插件演进计划。
+
+## 0.1.3
+
+- 修复 C++ 模块语法未实际注入 `source.cpp` 的问题，`import`、模块名和模块分区现在会使用扩展提供的 TextMate scope。
+- 增加扩展清单回归测试，防止语法注入注册字段再次写错。
+
+## 0.1.2
+
+- 在扩展激活和刷新编译数据库时自动配置匹配的 clangd，避免官方 clangd 扩展启动到 xlings shim。
+- 模块语法高亮支持未输入分号的编辑中间态，并补充 `.mpp`、`.ccm` 文件关联。
+- 避免重载窗口期间异步检查向已关闭的输出频道写入。
+
+## 0.1.1
+
+- 修复 `clangd.arguments` 中 `${workspaceFolder}` 未解析导致 clangd 忽略编译数据库的问题。
+- 从 mcpp 的 `.mcpp` 工具链路径自动查找用户目录下 `.xlings` 中匹配版本的 clangd。
+
+## 0.1.0
+
+- 为 LLVM 后端的 mcpp 工程配置官方 clangd 扩展。
+- 通过直接执行 `clangd --check` 诊断 PCM 和工具链不匹配。
+- 将 GCC、MSVC 模块工程降级为语法高亮，并显示明确的能力提示。
+- 增加覆盖声明、导入、模块名和分区的 C++ 模块注入语法。

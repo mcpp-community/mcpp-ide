@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-parity-nonce'; style-src vscode-webview://parity 'unsafe-inline'; img-src vscode-webview://parity data: blob:; font-src vscode-webview://parity;">
+  <link rel="stylesheet" href="vscode-webview://parity/media/page.css"></head><body>
+  <header class="graph-header"><div class="graph-heading"><h1>Dependency graph</h1><span id="project-name" class="project-name"></span></div>
+    <nav><span id="feedback" role="status"></span><button data-action="refresh" title="Refresh" aria-label="Refresh">↻</button>
+    <details id="graph-export" class="graph-menu"><summary>Export</summary><div class="graph-menu-items">
+      <button data-export="svg">Export SVG</button><button data-export="png">Export PNG</button><button data-action="copy">Copy Mermaid</button>
+    </div></details></nav></header>
+  <div class="graph-tools"><div class="graph-tabs" role="group" aria-label="Graph view"><button data-mode="packages">Packages</button><button data-mode="modules">C++ Modules</button></div>
+    <select id="graph-entries" aria-label="Entry group"></select><button id="entry-previous" aria-label="Previous entries">‹</button><span id="entry-page"></span><button id="entry-next" aria-label="Next entries">›</button>
+    <input id="graph-search" type="text" list="graph-options" placeholder="Find a node…" aria-label="Find a node…"><datalist id="graph-options"></datalist>
+    <button id="graph-search-focus" hidden>Focus this result</button>
+    <details id="graph-view-menu" class="graph-menu"><summary>View options</summary><div class="graph-menu-items">
+      <label>Dependencies depth <select id="graph-depth"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option><option value="all">All</option></select></label>
+      <label>Importers depth <select id="graph-upstream"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>5</option></select></label>
+      <button data-action="locateFocus">Locate focus</button><button data-action="overview" hidden>Back to project</button>
+    </div></details><button data-action="back" title="Back" aria-label="Back">←</button>
+  </div>
+  <div class="graph-selection"><div class="graph-context"><span id="focus-node"></span><span id="selected-node">Select a node to explore its relationships.</span></div>
+    <div class="graph-node-actions"><button data-action="focus">Focus</button><button data-action="locate">Locate selected</button>
+    </div></div>
+  <main class="graph-stage"><div id="graph" tabindex="0" title="Scroll to zoom · drag to pan" aria-label="Project dependency graph"></div><div id="graph-state" role="status"></div>
+    <div class="zoom"><button data-zoom="-" aria-label="Zoom out">−</button><button data-zoom="fit">Fit</button><button data-zoom="+" aria-label="Zoom in">+</button></div></main>
+  <div id="graph-node-context" class="graph-menu-items graph-context-menu" role="menu" aria-label="Node actions" hidden>
+    <button role="menuitem" tabindex="-1" data-context-action="focus">Focus</button>
+    <button role="menuitem" tabindex="-1" data-context-action="locate">Locate selected</button>
+    <button role="menuitem" tabindex="-1" data-context-action="open">Open source</button>
+    <button role="menuitem" tabindex="-1" data-context-action="expand">Expand next level</button>
+    <button role="menuitem" tabindex="-1" data-context-action="collapse">Collapse</button>
+    <button role="menuitem" tabindex="-1" data-context-action="expandParents">Expand importers</button>
+    <button role="menuitem" tabindex="-1" data-context-action="collapseParents">Collapse importers</button>
+  </div>
+  <p id="graph-notice" role="status" hidden></p>
+  <details class="graph-help"><summary>Legend and source</summary><div class="graph-legend"><span class="legend-project">Project</span><span class="legend-path">path / partition</span><span class="legend-index">index / external</span><span class="legend-unknown">Unavailable</span></div><p>Packages show declarations; modules show mcppls imports. External modules stop after one hop.</p><button data-action="manifest">Open mcpp.toml</button><pre id="graph-source"></pre></details>
+  <script id="graph-labels" type="application/json" nonce="parity-nonce">{"copied":"Copied","error":"Could not render the graph. Copy Mermaid source or refresh to retry.","loading":"Reading project dependencies…","empty":"No module relationships were found for this project.","limited":"View limit reached. Focus a node to explore its dependencies.","partial":"The source graph is incomplete. Some modules may be omitted.","exportError":"Could not export this graph. Try SVG or a smaller view.","focus":"Focus","group":"Entry group","selectedPrefix":"Selected","expand":"Expand next level","selected":"Selected node"}</script>
+  <script nonce="parity-nonce" src="vscode-webview://parity/vendor/mermaid.js"></script><script nonce="parity-nonce" src="vscode-webview://parity/media/graph.js"></script></body></html>

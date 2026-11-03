@@ -21,8 +21,9 @@
     <depends>com.intellij.modules.clion</depends>
     <depends>com.intellij.modules.cidr.debugger</depends>
     <depends>io.github.sunrisepeak.mcppls</depends>
-    <!-- Since 2026.1 the panels' browser and the test tree are plugins of their own; in 2025.2 they are
-         the platform's. Optional, so the classes are found either way. -->
+    <!-- The graph page's browser is a module of its own (com.intellij.modules.jcef). The test tree is the
+         platform's in CLion 2026.1 and a plugin of its own from 2026.2 on (intellij.testRunner.plugin);
+         optional, so the classes are found either way. -->
     <depends optional="true" config-file="mcpp-jcef.xml">com.intellij.modules.jcef</depends>
     <depends optional="true" config-file="mcpp-testrunner.xml">intellij.testRunner.plugin</depends>
 
@@ -36,7 +37,7 @@
         <notificationGroup id="mcpp" displayType="BALLOON"/>
 
         <toolWindow id="mcpp" anchor="right" icon="io.github.mcppcommunity.mcppclion.McppIcons.Logo"
-                    factoryClass="io.github.mcppcommunity.mcppclion.webui.McppPanels$Factory"/>
+                    factoryClass="io.github.mcppcommunity.mcppclion.ui.McppPanels$Factory"/>
 
         <configurationType implementation="io.github.mcppcommunity.mcppclion.run.McppRunConfigurationType"/>
         <runConfigurationProducer implementation="io.github.mcppcommunity.mcppclion.run.McppConfigurationProducer"/>
@@ -45,5 +46,24 @@
         <runLineMarkerContributor language="C++" implementationClass="io.github.mcppcommunity.mcppclion.run.McppRunLineMarker"/>
         <runLineMarkerContributor language="ObjectiveC" implementationClass="io.github.mcppcommunity.mcppclion.run.McppRunLineMarker"/>
         <consoleFilterProvider implementation="io.github.mcppcommunity.mcppclion.run.McppConsoleFilterProvider"/>
+        <!-- The hammer (Build | Build Project) of an mcpp project is `mcpp build` (part 2 §6.1). -->
+        <projectTaskRunner implementation="io.github.mcppcommunity.mcppclion.run.McppProjectTaskRunner" order="first"/>
+        <statusBarWidgetFactory id="io.github.mcppcommunity.mcppclion.status" implementation="io.github.mcppcommunity.mcppclion.McppStatusBarFactory"/>
+        <!-- VS Code's chords (Ctrl+Alt+B/R/T) as keymaps of their own, generated from spec/commands.json. -->
+        <bundledKeymap file="mcpp.xml"/>
+        <bundledKeymap file="mcpp-macos.xml"/>
+
+        <!-- mcpp.toml (TOML, or plain text without the TOML plugin) and build.mcpp (C++ under either
+             engine, or plain text): the backend's rules layer (part 2 §8) over the session. -->
+        <completion.contributor language="any" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppCompletion"/>
+        <externalAnnotator language="TOML" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppAnnotator"/>
+        <externalAnnotator language="TEXT" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppAnnotator"/>
+        <externalAnnotator language="C++" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppAnnotator"/>
+        <externalAnnotator language="ObjectiveC" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppAnnotator"/>
+        <lang.documentationProvider language="TOML" order="first" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppDocumentation"/>
+        <lang.documentationProvider language="TEXT" order="first" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppDocumentation"/>
+        <lang.documentationProvider language="C++" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppDocumentation"/>
+        <lang.documentationProvider language="ObjectiveC" implementationClass="io.github.mcppcommunity.mcppclion.editor.McppDocumentation"/>
+        <gotoDeclarationHandler implementation="io.github.mcppcommunity.mcppclion.editor.McppGotoDeclaration"/>
     </extensions>
 </idea-plugin>

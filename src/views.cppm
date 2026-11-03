@@ -49,7 +49,10 @@ Json project_summary(const Json& buildDatabaseEnvelope, const Json& lastResult);
 // The targets mcpp knows, one row each, with the toolchains installed for it and, where mcpp
 // reports one (design 2026-10-28 §9), the platform that configures it. `selected` is the target the
 // adapter builds for ("" for the host).
-Json targets(const Json& toolchainListEnvelope, std::string_view selected);
+// `sets`: the installed mcpp names a target set by its triple without the architecture (mcpp
+// SPEC-015, 2026.10.30.1): one more row per group of two or more targets of one platform that differ
+// only in the architecture, `openkal (x86_64, aarch64)`, before its members.
+Json targets(const Json& toolchainListEnvelope, std::string_view selected, bool sets = false);
 // "openkal-platform 0.17.3 (built-in)", "host conventions (built-in)"; "" for null or a non-object.
 std::string platform_text(const Json& platform);
 
@@ -392,7 +395,7 @@ std::string platform_text(const Json& p) {
     return out;
 }
 
-Json targets(const Json& envelope, std::string_view selected) {
+Json targets(const Json& envelope, std::string_view selected, bool sets) {
     const auto& data = data_of(envelope);
     const auto host = data.value("host", "");
     std::map<std::string, Json> rows;
@@ -419,6 +422,19 @@ Json targets(const Json& envelope, std::string_view selected) {
         }
     Json out = Json::array();
     const std::string chosen = selected.empty() ? host : std::string(selected);
+    // The sets: the triple past its architecture, among the targets that are not planned, grouped by
+    // platform; a group of two or more is a set.
+    auto rest_of = [](const std::string& t) { const auto d = t.find('-'); return d == std::string::npos ? std::string{} : t.substr(d + 1); };
+    std::map<std::string, std::vector<std::string>> members;     // set name -> member targets, in table order
+    if (sets)
+        for (const auto& name : order) {
+            // A planned row (every toolchain of it `planned`) is no member.
+            bool planned = !rows[name]["toolchains"].empty();
+            for (const auto& tc : rows[name]["toolchains"]) planned = planned && tc.value("status", "") == "planned";
+            if (planned || rest_of(name).empty()) continue;
+            members[rest_of(name)].push_back(name);
+        }
+    std::set<std::string> emitted;
     for (const auto& name : order) {
         auto row = rows[name];
         row["platformText"] = platform_text(row["platform"]);
@@ -426,6 +442,30 @@ Json targets(const Json& envelope, std::string_view selected) {
         bool installed = false;
         for (const auto& tc : row["toolchains"]) installed = installed || tc.value("status", "") == "installed";
         row["installed"] = installed;
+        const auto set = rest_of(name);
+        if (auto it = members.find(set); it != members.end() && it->second.size() >= 2 && !emitted.contains(set)) {
+            bool samePlatform = true, allInstalled = true;
+            std::vector<std::string> archs;
+            for (const auto& m : it->second) {
+                samePlatform = samePlatform && rows[m]["platform"] == rows[it->second.front()]["platform"];
+                bool any = false;
+                for (const auto& tc : rows[m]["toolchains"]) any = any || tc.value("status", "") == "installed";
+                allInstalled = allInstalled && any;
+                archs.push_back(m.substr(0, m.find('-')));
+            }
+            if (samePlatform) {
+                emitted.insert(set);
+                std::string list;
+                for (const auto& a : archs) list += (list.empty() ? "" : ", ") + a;
+                Json setRow{{"target", set}, {"set", true}, {"members", it->second},
+                            {"label", std::format("{} ({})", set, list)}, {"note", ""}, {"pin", ""}, {"tier", ""},
+                            {"host", false}, {"toolchains", Json::array()}, {"platform", rows[it->second.front()]["platform"]}};
+                setRow["platformText"] = platform_text(setRow["platform"]);
+                setRow["selected"] = set == chosen;
+                setRow["installed"] = allInstalled;
+                out.push_back(std::move(setRow));
+            }
+        }
         out.push_back(std::move(row));
     }
     Json result{{"host", host}, {"selected", chosen}, {"rows", out}, {"hostPlatform", nullptr}};

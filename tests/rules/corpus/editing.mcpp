@@ -1,0 +1,4 @@
+import mcpp.pl
+import st
+export import mcpp.deps.
+  mcpp::link_lib("x");

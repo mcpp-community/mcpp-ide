@@ -90,6 +90,28 @@ int main() {
     for (const auto& r : withPlatform["rows"])
         if (r["target"] == "x86_64-openkal") CHECK(r["selected"] == true);
     CHECK(withPlatform["hostPlatformText"] == "host conventions (built-in)");
+    // Target sets (mcpp SPEC-015): offered only when the installed mcpp names them; one row per
+    // group of targets of one platform that differ only in the architecture, before its members.
+    for (const auto& r : t["rows"]) CHECK(!r.contains("set"));
+    auto withSets = views::targets(list, "openkal", true);
+    std::size_t setAt = 0, memberAt = 0, i = 0;
+    bool setSelected = false;
+    for (const auto& r : withSets["rows"]) {
+        if (r["target"] == "openkal") {
+            setAt = i;
+            CHECK(r["set"] == true);
+            CHECK(r["members"].size() >= 2);
+            // The members in the target table's order.
+            CHECK(r["label"] == "openkal (aarch64, x86_64)");
+            setSelected = r["selected"].get<bool>();
+        }
+        if (r["target"] == "x86_64-openkal" && memberAt == 0) memberAt = i;
+        ++i;
+    }
+    CHECK(setSelected && setAt < memberAt);
+    // A planned row is no member: linux-musl is x86_64 and aarch64, not the planned riscv64.
+    for (const auto& r : withSets["rows"])
+        if (r["target"] == "linux-musl") CHECK(r["members"].size() == 2);
 
     // Stream records: each line of a build and of a test, normalised.
     std::istringstream build(testsupport::read(testsupport::fixtures() / "build-failed.ndjson"));

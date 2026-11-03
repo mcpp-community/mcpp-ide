@@ -43,6 +43,9 @@ struct Request {
     std::string client = "mcpp-ide";
     // Variables set (or, with no value, removed) for this run, over the backend's environment.
     std::vector<std::pair<std::string, std::optional<std::string>>> env;
+    // Called once when the job has ended, however it ended, before the editors are told: what the
+    // run wrote is read here (a test framework's report).
+    std::function<void(std::string_view jobId, const Json& summary)> after;
 };
 
 struct Sink {
@@ -82,6 +85,8 @@ private:
     };
     void run_lane(std::string key);
     void execute(const std::shared_ptr<Job>& job);
+    // The request's own hook, then the editors.
+    void finish(const Job& job, const Json& summary);
 
     mutable std::mutex mutex_;
     std::condition_variable_any wake_;
@@ -152,8 +157,7 @@ std::string Jobs::submit(Request request) {
             std::erase_if(lane.queue, [&](const std::shared_ptr<Job>& waiting) {
                 if (waiting->request.kind != job->request.kind) return false;
                 waiting->cancelled = true;
-                if (sink_.finished)
-                    sink_.finished(waiting->id, Json{{"status", "superseded"}, {"exitCode", nullptr}});
+                finish(*waiting, Json{{"status", "superseded"}, {"exitCode", nullptr}});
                 return true;
             });
             if (job->request.supersede && lane.running && lane.running->request.kind == job->request.kind &&
@@ -180,7 +184,7 @@ bool Jobs::cancel(std::string_view jobId) {
         }
         for (auto it = lane.queue.begin(); it != lane.queue.end(); ++it)
             if ((*it)->id == jobId) {
-                if (sink_.finished) sink_.finished((*it)->id, Json{{"status", "cancelled"}, {"exitCode", nullptr}});
+                finish(**it, Json{{"status", "cancelled"}, {"exitCode", nullptr}});
                 lane.queue.erase(it);
                 return true;
             }
@@ -261,8 +265,7 @@ void Jobs::execute(const std::shared_ptr<Job>& job) {
     if (!spawned) {
         const auto why = spawned.error().message();
         if (sink_.narration) sink_.narration(job->id, why + "\n");
-        if (sink_.finished) sink_.finished(job->id, Json{{"status", "failed"}, {"exitCode", nullptr},
-                                                         {"error", why}});
+        finish(*job, Json{{"status", "failed"}, {"exitCode", nullptr}, {"error", why}});
         return;
     }
     auto process = std::make_shared<mcpplibs::os::process::process>(std::move(*spawned));
@@ -328,7 +331,12 @@ void Jobs::execute(const std::shared_ptr<Job>& job) {
     }
     Json summary{{"status", status}, {"exitCode", code}, {"durationMs", ms.count()}};
     if (!envelope.is_null()) summary["envelope"] = envelope;
-    if (sink_.finished) sink_.finished(job->id, summary);
+    finish(*job, summary);
+}
+
+void Jobs::finish(const Job& job, const Json& summary) {
+    if (job.request.after) job.request.after(job.id, summary);
+    if (sink_.finished) sink_.finished(job.id, summary);
 }
 
 }  // namespace mcppide::jobs

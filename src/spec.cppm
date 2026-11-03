@@ -32,9 +32,12 @@ const Json& toml_schema();
 const Json& buildscript_api();
 // spec/commands.json: the command table the editors offer (groups, commands).
 const Json& commands();
+// spec/test-frameworks.json: the frameworks whose cases the editors show.
+const Json& test_frameworks();
 // Whether an editor (the protocol's `editor`: vscode, jetbrains, nvim, cli) offers a command: the
 // row's `editors` when it has them (`omitted` says why an editor is left out), else every editor;
-// a forward to mcppls's own commands or an editor's own command only where those exist (VS Code).
+// a forward to one of mcppls's actions in every editor (the backend offers it where mcppls names an
+// id for that editor), an editor's own command only in VS Code.
 bool offered_in(const Json& command, std::string_view editor);
 // The name a command line types for a command (`:Mcpp <name>` in Neovim): the row's `subcommand`,
 // else its id after `mcpp.`.
@@ -113,11 +116,17 @@ const Json& commands() {
     return c;
 }
 
+const Json& test_frameworks() {
+    static const Json t = Json::parse(generated::kTestFrameworksJson);
+    return t;
+}
+
 bool offered_in(const Json& c, std::string_view editor) {
     if (c.contains("editors") && c["editors"].is_array())
         return std::ranges::any_of(c["editors"], [&](const Json& e) { return e.is_string() && e.get<std::string>() == editor; });
     const auto kind = c.contains("action") && c["action"].is_object() ? c["action"].value("kind", "") : std::string{};
-    if (kind == "forward" || kind == "editor") return editor == "vscode";
+    if (kind == "forward") return editor != "cli";
+    if (kind == "editor") return editor == "vscode";
     return true;
 }
 

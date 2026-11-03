@@ -9,7 +9,14 @@
 //                        project's `.mock-mcpp-fail`)
 //   MOCK_MCPP_SLOW_MS    the build waits this long before it ends, so a test can
 //                        cancel it; SIGTERM then leaves the record `cancelled`
-//   MOCK_MCPP_LOG        every argv is appended here, one line each
+//   MOCK_MCPP_LOG        every argv is appended here, one line each, and the value of
+//                        XLINGS_PROJECT_DIR the run received (`<unset>` when none)
+//
+// AND A VERSION MANAGER'S SHIM, per directory (design 2026-10-30 part 2 §4.2): in the directory a
+// command runs in, `.mock-mcpp-version` names the version that answers (every output's version is
+// that one), `.mock-mcpp-features` the features its envelopes state (comma-separated; without
+// it the envelopes state none, as an mcpp before 2026.10.31.1), and `.mock-mcpp-missing` a pinned
+// version that is not installed: the run ends as the shim ends, with its words.
 import std;
 import mcpplibs.os;
 
@@ -61,12 +68,36 @@ std::string json_path(const std::filesystem::path& p) {
     return out;
 }
 
+std::string here_file(std::string_view name) {
+    std::error_code ec;
+    auto text = slurp(std::filesystem::current_path(ec) / std::string(name));
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
+    return text;
+}
+
 std::string fixture(std::string_view name) {
     const auto dir = fixtures_dir();
     auto text = slurp(std::filesystem::path(dir) / name);
     std::error_code ec;
     text = replace_all(std::move(text), "@ROOT@", json_path(std::filesystem::current_path(ec)));
     text = replace_all(std::move(text), "@HOME@", json_path(env("HOME")));
+    // The version this directory's shim chose, and the features that version states.
+    if (const auto version = here_file(".mock-mcpp-version"); !version.empty()) {
+        auto captured = slurp(std::filesystem::path(dir) / "version.txt");
+        if (auto at = captured.find(' '); at != std::string::npos) captured = captured.substr(at + 1);
+        while (!captured.empty() && (captured.back() == '\n' || captured.back() == '\r')) captured.pop_back();
+        if (!captured.empty()) text = replace_all(std::move(text), captured, version);
+    }
+    if (const auto features = here_file(".mock-mcpp-features"); !features.empty()) {
+        std::string list;
+        for (std::size_t at = 0; at <= features.size();) {
+            auto end = features.find(',', at);
+            if (end == std::string::npos) end = features.size();
+            list += std::format("{}\"{}\"", list.empty() ? "" : ", ", features.substr(at, end - at));
+            at = end + 1;
+        }
+        text = replace_all(std::move(text), "\"protocol\": {", std::format("\"features\": [{}], \"protocol\": {{", list));
+    }
     return text;
 }
 
@@ -123,7 +154,14 @@ int main(int argc, char** argv) {
     if (const auto log = env("MOCK_MCPP_LOG"); !log.empty()) {
         std::ofstream out(log, std::ios::app);
         for (const auto& a : args) out << a << ' ';
-        out << '\n';
+        const char* pinned = std::getenv("XLINGS_PROJECT_DIR");
+        out << "XLINGS_PROJECT_DIR=" << (pinned ? pinned : "<unset>") << '\n';
+    }
+    // A pinned version that is not installed: the shim refuses, in its own words.
+    if (const auto missing = here_file(".mock-mcpp-missing"); !missing.empty()) {
+        err(std::format("[error] xlings: executable 'mcpp' not found\n[error]   path: /x/xpkgs/xim-x-mcpp/{0}/bin\n"
+                        "[error]   hint: install with xlings install mcpp@{0}\n", missing));
+        return 1;
     }
     auto has = [&](std::string_view a) { return std::ranges::find(args, a) != args.end(); };
     auto first = [&](std::size_t i) { return i < args.size() ? args[i] : std::string{}; };

@@ -5,19 +5,35 @@
 | Layer | Holds | Does not hold |
 |---|---|---|
 | mcpp | the machine contract: event streams, result records, launch descriptors, JSON queries, `--deny` (mcpp docs/50) | any IDE concept |
-| mcpp-ide backend (`src/`) | sessions and projects (which mcpp.toml a file belongs to), watching (result records, manifests), jobs (one at a time per project, cancellation, a newer job replacing a waiting one), view models (project, targets and platforms, cache, libraries, graphs), cleanup plans and their danger levels, settings validation and migration, the command table, runtime strings, the self-check, the handshakes with mcpp (`--protocol-version`) and mcppls (`--version`) | parsing mcpp.toml, resolving dependencies |
-| adapters (`mide-plugins/`) | declarations generated from `spec/`, the protocol mapped onto native UI, the panels' host, the backend process, finding the backend, workspace trust | any decision |
+| mcpp-ide backend (`src/`) | sessions and projects (which mcpp.toml a file belongs to), watching (result records, manifests), jobs (one at a time per project, cancellation, a newer job replacing a waiting one), view models (project, targets and platforms, cache, libraries, graphs), cleanup plans and their danger levels, settings validation and migration, the command table, runtime strings, the self-check, the handshakes with mcpp (`--protocol-version`) and mcppls (`--version`), the rules layer of mcpp.toml and build.mcpp as an LSP server ([rules.md](rules.md)) | a manifest's meaning, resolving dependencies |
+| adapters (`mide-plugins/`) | declarations generated from `spec/`, the protocol mapped onto native UI, the pages' host, the backend process, finding the backend, workspace trust | any decision |
 
-The panels (`webui/`) are one set of classic scripts that the VS Code extension and the CLion
-plugin load: a VS Code webview and a JCEF page. A panel speaks the backend's protocol through its
-host and asks the host only for what the editor does (open a file, confirm, store a setting).
+## The pages
+
+The views and pages of VS Code -- the project tree, the libraries and a package's page, the cache,
+the settings page, the dependency and module graphs -- are mcpp-vscode's (`mide-plugins/vscode/src`),
+as mcpp-vscode 0.9.0 drew them; `registerPages` registers them. They read projects and the index
+from disk and run mcpp through the backend's `mcpp-ide/mcpp/exec` and mcppls through its
+`mcpp-ide/languageService/exec`; the extension starts no other process for either. The parity gates
+hold them to 0.9.0: the manifest's contributions and strings contain 0.9.0's exactly, and every
+page's document, rendered by the extension's generators, is byte-identical to the snapshot 0.9.0's
+generators render (`test/parity`).
+
+CLion has the same information in its own components (design 2026-10-30 part 2 §9): the "mcpp"
+tool window's Project, Libraries and Cache tabs are native trees and lists over the backend's view
+models (`projects/list`, `project/summary`, `project/mcpp`, `library/search`, `cache/inventory`),
+a package's page is HTML in the Libraries tab, the cleanups are the command table's with their
+confirmations, and Settings | Tools | mcpp is a form generated from `settings/registry`. A graph is
+the one page in JCEF: `webui/graph.html` draws the backend's `graph/packages` or `graph/modules`
+with mermaid and asks the IDE to open a module's source; a Chromium test runs it over a real
+backend (`webui/tests`). The strings are the backend's (`i18n/bundle`), the ones VS Code shows.
 
 ## The adapters
 
 | Directory | Plugin | `editor` | Declares | Holds |
 |---|---|---|---|---|
-| `mide-plugins/vscode` | mcpp-vscode | `vscode` | package.json's contributes, from `mcpp-ide-dev gen vscode` | tasks, the Testing view, debug configurations, Problems, the panels' webviews |
-| `mide-plugins/clion` | mcpp-clion | `jetbrains` (the IntelliJ platform) | actions and message bundles, from `mcpp-ide-dev gen jetbrains` | run configurations, the test tree, CLion's debugger, the panels in JCEF |
+| `mide-plugins/vscode` | mcpp-vscode | `vscode` | package.json's contributes, from `mcpp-ide-dev gen vscode` | the pages, tasks, the Testing view, debug configurations, Problems |
+| `mide-plugins/clion` | mcpp-clion | `jetbrains` (the IntelliJ platform) | actions and message bundles, from `mcpp-ide-dev gen jetbrains` | run configurations, the test tree, CLion's debugger, the tool window's native views, the settings form, the graph page in JCEF |
 | `mide-plugins/nvim` | mcpp-nvim | `nvim` | nothing: `:Mcpp` reads the command table from the backend | jobs in a buffer, a terminal for the program, `vim.diagnostic` and the quickfix list, the view models as text, nvim-dap |
 
 `spec/commands.json` says which editors offer a command (`editors`, every editor when absent; a
@@ -25,22 +41,28 @@ forward to mcppls's commands only VS Code) and, where an editor is left out, why
 backend answers each editor's table (`commands/list`) with the rows it offers, their titles in the
 session's language and their subcommands, the names Neovim types.
 
-The Neovim plugin is Lua over Neovim's own JSON-RPC client (`vim.lsp.rpc`, the LSP base protocol's
-framing). It carries no backend and no web view: a panel's view model is text in a floating window
+The Neovim plugin is Lua over Neovim's own LSP client (`vim.lsp`), attached to mcpp.toml and
+build.mcpp buffers. It carries no backend and no web view: a panel's view model is text in a floating window
 or a choice in `vim.ui.select`, and a panel with no textual equivalent (the settings, edited in
 `setup()`) is left out of its table.
 
 ## Language features
 
-mcppls provides every language feature of C++ files; mcpp-ide registers no language service. The
-VS Code extension installs mcppls as an extension pack (it can be removed); the CLion plugin depends
-on the mcppls CLion plugin; in Neovim mcppls has its own plugin (`xlings install mcppls-nvim`), whose
-client's server the Neovim plugin names to the backend. The backend reads `mcppls --version`: 0.0.18 and later refresh after any
-build through mcpp's result record, and an older or missing mcppls is reported with what to do.
+mcppls provides every language feature of C++ files; mcpp-ide registers no C++ language service.
+The VS Code extension installs mcppls as an extension pack (it can be removed); the CLion plugin
+depends on the mcppls CLion plugin; in Neovim mcppls has its own plugin (`xlings install
+mcppls-nvim`), whose client's server the Neovim plugin names to the backend. The backend reads
+`mcppls --version`: 0.0.18 and later refresh after any build through mcpp's result record, and an
+older or missing mcppls is reported with what to do.
+
+mcpp.toml and build.mcpp are the backend's: the session is an LSP server (protocol 2), and its rules
+layer answers their completion, hover, jumps and diagnostics in every editor
+([rules.md](rules.md)). In build.mcpp, which mcppls compiles as a build program, the backend leaves
+mcppls what a compiler answers better.
 
 ## A build, end to end
 
-1. The user runs Build. The adapter sends `job/start {kind: "build", root}`.
+1. The user runs Build. The adapter sends `mcpp-ide/job/start {kind: "build", root}`.
 2. The backend queues it on the project's lane and runs `mcpp build --message-format json` with
    `MCPP_CLIENT`, colour for a terminal, and `MCPP_DENY_EFFECTS` in an untrusted workspace.
 3. mcpp's narration becomes `job/output`; each event becomes `job/plan`, `job/progress`,
@@ -55,28 +77,28 @@ build through mcpp's result record, and an older or missing mcppls is reported w
 
 The backend is one program for every editor, and one file for every system: an ok image per
 architecture (`mcpp build --target <arch>-openkal`, openkal-platform's toolchain and C library),
-packed as one ok-image bundle (`mcpp pack mcpp-ide --target x86_64-openkal --pkg-format okb`). Each
+packed as one ok-image bundle (`--pkg-format okb`). Each
 editor package carries that bundle and the runner that starts it on each system:
 
 | Layout in the package | Holds | Started as |
 |---|---|---|
 | `backend/mcpp-ide.okb` | the x86_64 and aarch64 images | |
-| `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`mcpp pack --mode self-contained --systems linux,macos,windows`: each okrun built over the platform's hosted arrangement) | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
+| `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`--mode self-contained --systems all`: each okrun built over the platform's hosted arrangement); one command packs both, `mcpp pack mcpp-ide --target openkal --mode self-contained --systems all --pkg-format tar,okb`, and the package's `runs_on.self` names the systems it runs on | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
 
 Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after it, an
 installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. The Neovim
 plugin carries no package of the backend: it starts setup()'s `backend`, else `mcpp-ide` on PATH,
 and `xlings install mcpp-ide-nvim` installs it from the release's source tree, with the backend's
 package as its dependency. CI packs the
-bundle and the universal package (`mcpp-ide-<version>-openkal.tar.gz`, a release asset) once, on
-Linux, takes okrun from that package, opens both editor packages and the universal package on every
+bundle and the target set's tree (`mcpp-ide-<version>-openkal-bundle-all.tar.gz`, a release asset) in
+one pack on Linux, takes okrun from that tree, opens both editor packages and the tree on every
 system and starts what they carry for it (`.github/scripts/check-package.sh`).
 
 ## Generated declarations
 
 `spec/` is the source of everything the editors declare statically. `mcpp-ide-dev gen vscode` writes
-the extension's package.json (commands, keybindings, menus, configuration) and its message bundles
-into `mide-plugins/vscode/dist`; `mcpp-ide-dev gen jetbrains` writes the CLion plugin's actions and
+the extension's package.json (commands, keybindings, menus, configuration), its message bundles and
+its settings registry in place, in `mide-plugins/vscode` (CI regenerates them and expects no change); `mcpp-ide-dev gen jetbrains` writes the CLion plugin's actions and
 message bundles into `mide-plugins/clion/build`. The backend embeds the same files (build.mcpp), so
 the commands an editor registers at run time are the ones it declared; which rows an editor offers
 is one rule (`spec::offered_in`) for both. The Neovim plugin declares nothing and offers what the

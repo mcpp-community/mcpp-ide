@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="panel.htmlLang">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src vscode-webview://parity; script-src 'nonce-parity-nonce'; img-src vscode-webview://parity">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="vscode-webview://parity/media/page.css">
+<title>panel.title</title>
+</head>
+<body>
+<header class="panel-header">
+  <h1 class="panel-title">panel.title</h1>
+  <p class="boundary" role="note">panel.boundary <button type="button" id="panel-open-mcppls" class="link-button">panel.openMcpplsSettings</button></p>
+  <p class="resource-label">panel.resourceLabel</p>
+</header>
+<div class="toolbar">
+  <input id="panel-search" type="search" class="search" placeholder="panel.search" aria-label="panel.search">
+  <label class="toggle"><input id="panel-only-modified" type="checkbox"><span>panel.onlyModified</span></label>
+  <label class="toggle"><input id="panel-show-advanced" type="checkbox"><span>panel.showAdvanced</span></label>
+  <label class="target"><span>panel.target</span>
+    <select id="panel-target">
+      <option value="user">panel.target.user</option>
+      <option value="workspace" selected title="panel.target.workspaceUnavailable">panel.target.workspace</option>
+    </select>
+  </label>
+</div>
+<nav class="presets" aria-label="panel.presets">
+  <span class="presets-title">panel.presets</span>
+  <div class="preset-buttons">
+    <button type="button" class="preset" data-preset="quiet" title="Fewer notifications.">Quiet</button>
+  </div>
+</nav>
+<main id="panel-sections">
+<section class="section" data-section="project" data-collapsed="false">
+  <h2 class="section-head">
+    <button type="button" class="section-toggle" data-section-toggle aria-expanded="true" title="panel.toggleSection">
+      <span class="section-title">Project</span>
+    </button>
+  </h2>
+  <div class="rows">
+<div class="row" data-row="mcpp.path" data-tier="public" data-source="default" data-modified="false" data-deprecated="false">
+  <div class="row-head">
+    <span class="row-title">Set the mcpp executable path</span>
+    <span class="badge badge-modified" data-badge="modified" hidden>panel.modified</span>
+    <span class="badge badge-deprecated" data-badge="deprecated" hidden>panel.deprecated</span>
+    <span class="badge badge-invalid" data-badge="invalid" hidden>panel.invalid</span>
+    <span class="badge badge-source" data-badge="source">panel.source.default</span>
+  </div>
+  <p class="row-description">Path to the mcpp CLI.</p>
+  <p class="row-deprecation" hidden></p>
+  <p class="row-applies" hidden></p>
+  <div class="row-control"><input type="text" data-control data-kind="string" data-key="mcpp.path" aria-label="Set the mcpp executable path" value=""></div>
+  <div class="row-actions">
+    <button type="button" class="link-button" data-action="reset" title="panel.reset">panel.reset</button>
+    <button type="button" class="link-button" data-action="openNative" title="panel.openNative">panel.openNative</button>
+  </div>
+</div>
+<div class="row" data-row="mcpp.task.revealTerminal" data-tier="public" data-source="workspace" data-modified="true" data-deprecated="false">
+  <div class="row-head">
+    <span class="row-title">Reveal the task terminal</span>
+    <span class="badge badge-modified" data-badge="modified">panel.modified</span>
+    <span class="badge badge-deprecated" data-badge="deprecated" hidden>panel.deprecated</span>
+    <span class="badge badge-invalid" data-badge="invalid" hidden>panel.invalid</span>
+    <span class="badge badge-source" data-badge="source">panel.source.workspace</span>
+  </div>
+  <p class="row-description">When to show the terminal.</p>
+  <p class="row-deprecation" hidden></p>
+  <p class="row-applies">panel.applies.nextBuild</p>
+  <div class="row-control"><select data-control data-kind="string" data-key="mcpp.task.revealTerminal" aria-label="Reveal the task terminal"><option value="always">always</option><option value="onFailure" selected>onFailure</option><option value="never">never</option></select></div>
+  <div class="row-actions">
+    <button type="button" class="link-button" data-action="reset" title="panel.reset">panel.reset</button>
+    <button type="button" class="link-button" data-action="openNative" title="panel.openNative">panel.openNative</button>
+  </div>
+</div>
+<div class="row" data-row="mcpp.cache.warnAboveGiB" data-tier="advanced" data-source="user" data-modified="true" data-deprecated="false" hidden>
+  <div class="row-head">
+    <span class="row-title">Warn above</span>
+    <span class="badge badge-modified" data-badge="modified">panel.modified</span>
+    <span class="badge badge-deprecated" data-badge="deprecated" hidden>panel.deprecated</span>
+    <span class="badge badge-invalid" data-badge="invalid" hidden>panel.invalid</span>
+    <span class="badge badge-source" data-badge="source">panel.source.user</span>
+  </div>
+  <p class="row-description">A size in GiB.</p>
+  <p class="row-deprecation" hidden></p>
+  <p class="row-applies" hidden></p>
+  <div class="row-control"><input type="number" data-control data-kind="number" data-key="mcpp.cache.warnAboveGiB" aria-label="Warn above" value="20" min="1" max="1024"></div>
+  <div class="row-actions">
+    <button type="button" class="link-button" data-action="reset" title="panel.reset">panel.reset</button>
+    <button type="button" class="link-button" data-action="openNative" title="panel.openNative">panel.openNative</button>
+  </div>
+</div>
+<div class="row" data-row="mcpp.task.buildArgs" data-tier="public" data-source="default" data-modified="false" data-deprecated="false">
+  <div class="row-head">
+    <span class="row-title">Build arguments</span>
+    <span class="badge badge-modified" data-badge="modified" hidden>panel.modified</span>
+    <span class="badge badge-deprecated" data-badge="deprecated" hidden>panel.deprecated</span>
+    <span class="badge badge-invalid" data-badge="invalid" hidden>panel.invalid</span>
+    <span class="badge badge-source" data-badge="source">panel.source.default</span>
+  </div>
+  <p class="row-description">Extra arguments.</p>
+  <p class="row-deprecation" hidden></p>
+  <p class="row-applies">panel.applies.nextBuild</p>
+  <div class="row-control"><textarea data-control data-kind="array" data-key="mcpp.task.buildArgs" aria-label="Build arguments" rows="2" spellcheck="false">-j
+4</textarea><p class="control-hint">panel.arrayHint</p></div>
+  <div class="row-actions">
+    <button type="button" class="link-button" data-action="reset" title="panel.reset">panel.reset</button>
+    <button type="button" class="link-button" data-action="openNative" title="panel.openNative">panel.openNative</button>
+  </div>
+</div>
+<div class="row" data-row="mcpp.clangd.path" data-tier="advanced" data-source="default" data-modified="false" data-deprecated="true" hidden>
+  <div class="row-head">
+    <span class="row-title">clangd path</span>
+    <span class="badge badge-modified" data-badge="modified" hidden>panel.modified</span>
+    <span class="badge badge-deprecated" data-badge="deprecated">panel.deprecated</span>
+    <span class="badge badge-invalid" data-badge="invalid" hidden>panel.invalid</span>
+    <span class="badge badge-source" data-badge="source">panel.source.default</span>
+  </div>
+  <p class="row-description">Deprecated.</p>
+  <p class="row-deprecation">No longer read.</p>
+  <p class="row-applies" hidden></p>
+  <div class="row-control"><input type="text" data-control data-kind="string" data-key="mcpp.clangd.path" aria-label="clangd path" value=""></div>
+  <div class="row-actions">
+    <button type="button" class="link-button" data-action="reset" title="panel.reset">panel.reset</button>
+    <button type="button" class="link-button" data-action="openNative" title="panel.openNative">panel.openNative</button>
+  </div>
+</div>
+  </div>
+</section>
+</main>
+<p id="panel-empty" class="empty" hidden>panel.noMatches</p>
+<script nonce="parity-nonce">
+(function () {
+  "use strict";
+  var api = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
+  var state = {"ui":{"panel.htmlLang":"panel.htmlLang","panel.title":"panel.title","panel.boundary":"panel.boundary","panel.openMcpplsSettings":"panel.openMcpplsSettings","panel.resourceLabel":"panel.resourceLabel","panel.search":"panel.search","panel.onlyModified":"panel.onlyModified","panel.showAdvanced":"panel.showAdvanced","panel.target":"panel.target","panel.target.user":"panel.target.user","panel.target.workspace":"panel.target.workspace","panel.target.workspaceUnavailable":"panel.target.workspaceUnavailable","panel.presets":"panel.presets","panel.modified":"panel.modified","panel.deprecated":"panel.deprecated","panel.invalid":"panel.invalid","panel.applies.nextBuild":"panel.applies.nextBuild","panel.applies.nextClean":"panel.applies.nextClean","panel.applies.viewReload":"panel.applies.viewReload","panel.source.default":"panel.source.default","panel.source.user":"panel.source.user","panel.source.workspace":"panel.source.workspace","panel.source.workspaceFolder":"panel.source.workspaceFolder","panel.source.invalid":"panel.source.invalid","panel.reset":"panel.reset","panel.resetInvalid":"panel.resetInvalid","panel.openNative":"panel.openNative","panel.arrayHint":"panel.arrayHint","panel.noMatches":"panel.noMatches","panel.toggleSection":"panel.toggleSection"},"resourceLabel":"app","presets":[{"id":"quiet","title":"Quiet","description":"Fewer notifications."}],"sections":[{"id":"project","title":"Project","rows":[{"key":"mcpp.path","title":"Set the mcpp executable path","description":"Path to the mcpp CLI.","type":"string","value":"","scope":"resource","applies":"immediate","source":"default","tier":"public","since":"0.1.0"},{"key":"mcpp.task.revealTerminal","title":"Reveal the task terminal","description":"When to show the terminal.","type":"string","value":"onFailure","options":[{"value":"always","label":"always"},{"value":"onFailure","label":"onFailure"},{"value":"never","label":"never"}],"scope":"resource","applies":"next-build","source":"workspace","tier":"public","since":"0.5.0"},{"key":"mcpp.cache.warnAboveGiB","title":"Warn above","description":"A size in GiB.","type":"number","value":20,"minimum":1,"maximum":1024,"scope":"window","applies":"immediate","source":"user","tier":"advanced","since":"0.6.0"},{"key":"mcpp.task.buildArgs","title":"Build arguments","description":"Extra arguments.","type":"array","value":["-j","4"],"scope":"resource","applies":"next-build","source":"default","tier":"public","since":"0.5.0"},{"key":"mcpp.clangd.path","title":"clangd path","description":"Deprecated.","type":"string","value":"","scope":"resource","applies":"immediate","source":"default","tier":"advanced","deprecated":true,"deprecationMessage":"No longer read.","since":"0.1.0"}]}]};
+  var ui = (state && state.ui) || {};
+  var SOURCE_KEYS = { default: "panel.source.default", user: "panel.source.user", workspace: "panel.source.workspace", workspaceFolder: "panel.source.workspaceFolder", invalid: "panel.source.invalid" };
+  var APPLIES_KEYS = { "next-build": "panel.applies.nextBuild", "next-clean": "panel.applies.nextClean", "view-reload": "panel.applies.viewReload" };
+  var rowElements = {};
+  var sectionElements = [];
+  var presetElements = {};
+  var searchInput = document.getElementById("panel-search");
+  var onlyModifiedInput = document.getElementById("panel-only-modified");
+  var showAdvancedInput = document.getElementById("panel-show-advanced");
+  var targetSelect = document.getElementById("panel-target");
+  var emptyState = document.getElementById("panel-empty");
+
+  var allRows = document.querySelectorAll("[data-row]");
+  for (var rowIndex = 0; rowIndex < allRows.length; rowIndex += 1) {
+    rowElements[allRows[rowIndex].getAttribute("data-row")] = allRows[rowIndex];
+  }
+  var allSections = document.querySelectorAll("[data-section]");
+  for (var sectionIndex = 0; sectionIndex < allSections.length; sectionIndex += 1) {
+    sectionElements.push(allSections[sectionIndex]);
+  }
+  var allPresets = document.querySelectorAll("[data-preset]");
+  for (var presetIndex = 0; presetIndex < allPresets.length; presetIndex += 1) {
+    presetElements[allPresets[presetIndex].getAttribute("data-preset")] = allPresets[presetIndex];
+  }
+
+  function post(message) {
+    if (api) { api.postMessage(message); }
+  }
+
+  function setText(element, value) {
+    if (element) { element.textContent = value; }
+  }
+
+  function setHidden(element, hidden) {
+    if (element) { element.hidden = hidden; }
+  }
+
+  function readControl(element) {
+    var kind = element.getAttribute("data-kind");
+    if (kind === "boolean") { return element.checked; }
+    if (kind === "number") {
+      if (element.value.trim().length === 0) { return undefined; }
+      var parsed = Number(element.value);
+      return isFinite(parsed) ? parsed : undefined;
+    }
+    if (kind === "array") {
+      return element.value.split("\n").map(function (line) { return line.trim(); }).filter(function (line) { return line.length > 0; });
+    }
+    return element.value;
+  }
+
+  function writeControl(element, row) {
+    var kind = element.getAttribute("data-kind");
+    if (kind === "boolean") { element.checked = row.value === true; }
+    else if (kind === "array") { element.value = (row.value || []).join("\n"); }
+    else { element.value = row.value === undefined || row.value === null ? "" : String(row.value); }
+    element.disabled = row.source === "invalid";
+  }
+
+  function applyRow(row) {
+    var element = rowElements[row.key];
+    if (!element) { return; }
+    element.setAttribute("data-source", row.source);
+    element.setAttribute("data-modified", row.source === "default" ? "false" : "true");
+    setText(element.querySelector('[data-badge="source"]'), ui[SOURCE_KEYS[row.source]] || row.source);
+    setHidden(element.querySelector('[data-badge="modified"]'), row.source === "default");
+    setHidden(element.querySelector('[data-badge="deprecated"]'), row.deprecated !== true);
+    setHidden(element.querySelector('[data-badge="invalid"]'), row.source !== "invalid");
+    var deprecation = element.querySelector(".row-deprecation");
+    var message = typeof row.deprecationMessage === "string" ? row.deprecationMessage : "";
+    setText(deprecation, message);
+    setHidden(deprecation, message.length === 0);
+    var applies = element.querySelector(".row-applies");
+    var appliesKey = APPLIES_KEYS[row.applies];
+    var hint = appliesKey ? (ui[appliesKey] || "") : "";
+    setText(applies, hint);
+    setHidden(applies, hint.length === 0);
+    var input = element.querySelector("[data-control]");
+    if (input) { writeControl(input, row); }
+  }
+
+  function rowVisible(key, element, query, onlyChanged, advanced) {
+    if (!advanced && element.getAttribute("data-tier") === "advanced") { return false; }
+    if (onlyChanged && element.getAttribute("data-modified") !== "true") { return false; }
+    if (query.length === 0) { return true; }
+    var title = element.querySelector(".row-title");
+    var description = element.querySelector(".row-description");
+    var haystack = key + " " + (title ? title.textContent : "") + " " + (description ? description.textContent : "");
+    return haystack.toLowerCase().indexOf(query) >= 0;
+  }
+
+  function filter() {
+    var query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    var onlyChanged = onlyModifiedInput ? onlyModifiedInput.checked : false;
+    var advanced = showAdvancedInput ? showAdvancedInput.checked : false;
+    var anySection = false;
+    for (var index = 0; index < sectionElements.length; index += 1) {
+      var section = sectionElements[index];
+      var rows = section.querySelectorAll("[data-row]");
+      var anyRow = false;
+      for (var inner = 0; inner < rows.length; inner += 1) {
+        var element = rows[inner];
+        var shown = rowVisible(element.getAttribute("data-row"), element, query, onlyChanged, advanced);
+        element.hidden = !shown;
+        if (shown) { anyRow = true; }
+      }
+      section.hidden = !anyRow;
+      if (anyRow) { anySection = true; }
+    }
+    if (emptyState) { emptyState.hidden = anySection; }
+  }
+
+  function applyModel(next) {
+    if (!next) { return; }
+    state = next;
+    ui = next.ui || {};
+    var sections = next.sections || [];
+    for (var index = 0; index < sections.length; index += 1) {
+      var rows = sections[index].rows || [];
+      for (var inner = 0; inner < rows.length; inner += 1) { applyRow(rows[inner]); }
+    }
+    var presets = next.presets || [];
+    for (var presetIndex = 0; presetIndex < presets.length; presetIndex += 1) {
+      var button = presetElements[presets[presetIndex].id];
+      if (button) {
+        setText(button, presets[presetIndex].title);
+        if (typeof presets[presetIndex].description === "string") { button.title = presets[presetIndex].description; }
+      }
+    }
+    filter();
+  }
+
+  if (searchInput) { searchInput.addEventListener("input", filter); }
+  if (onlyModifiedInput) { onlyModifiedInput.addEventListener("change", filter); }
+  if (showAdvancedInput) { showAdvancedInput.addEventListener("change", filter); }
+
+  document.addEventListener("change", function (event) {
+    var element = event.target;
+    if (!element || typeof element.getAttribute !== "function") { return; }
+    if (!element.hasAttribute("data-control")) { return; }
+    var row = element.closest("[data-row]");
+    if (!row) { return; }
+    var value = readControl(element);
+    if (value === undefined) { return; }
+    post({ type: "update", key: row.getAttribute("data-row"), value: value, target: targetSelect ? targetSelect.value : "user" });
+  });
+
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    if (!target || typeof target.closest !== "function") { return; }
+    var button = target.closest("button");
+    if (!button) { return; }
+    var preset = button.getAttribute("data-preset");
+    if (preset) { post({ type: "preset", id: preset }); return; }
+    if (button.hasAttribute("data-section-toggle")) {
+      var section = button.closest("[data-section]");
+      if (section) {
+        var collapsed = section.getAttribute("data-collapsed") === "true";
+        section.setAttribute("data-collapsed", collapsed ? "false" : "true");
+        button.setAttribute("aria-expanded", collapsed ? "true" : "false");
+      }
+      return;
+    }
+    var action = button.getAttribute("data-action");
+    if (action === "reset" || action === "openNative") {
+      var row = button.closest("[data-row]");
+      if (row) {
+        if (action === "reset") { post({ type: "reset", key: row.getAttribute("data-row") }); }
+        else { post({ type: "openNative", key: row.getAttribute("data-row") }); }
+      }
+      return;
+    }
+    if (button.id === "panel-open-mcppls") { post({ type: "openMcpplsSettings" }); }
+  });
+
+  window.addEventListener("message", function (event) {
+    var data = event.data;
+    if (data && data.type === "model" && data.model) { applyModel(data.model); }
+  });
+
+  filter();
+  post({ type: "ready" });
+})();
+</script>
+</body>
+</html>

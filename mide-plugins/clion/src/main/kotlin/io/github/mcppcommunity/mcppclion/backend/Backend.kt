@@ -1,6 +1,8 @@
-// The backend's wire, as the plugin speaks it: `mcpp-ide serve` as a child process, JSON-RPC 2.0
-// framed as the LSP base protocol on its standard streams. Requests answer futures; notifications
-// go to the listeners of their method ("*" receives every one).
+// The backend's wire, as the plugin speaks it: `mcpp-ide serve` as a child process, an LSP server
+// (protocol 2, mcpp design 2026-10-30 part 2 §8) on its standard streams. LSP's methods go as they
+// are named; mcpp-ide's own are under `mcpp-ide/`, which this class adds to a request and takes off
+// a notification. Requests answer futures; notifications go to the listeners of their method ("*"
+// receives every one).
 package io.github.mcppcommunity.mcppclion.backend
 
 import com.google.gson.JsonElement
@@ -61,6 +63,16 @@ fun encode(message: JsonObject): ByteArray {
     return "Content-Length: ${body.size}\r\n\r\n".toByteArray(StandardCharsets.US_ASCII) + body
 }
 
+/** mcpp-ide's methods and notifications are under this namespace; LSP's are not. */
+const val NAMESPACE = "mcpp-ide/"
+
+/** The name a method has on the wire: LSP's own as it is, mcpp-ide's under its namespace. */
+fun wireName(method: String): String =
+    if (method in setOf("initialize", "initialized", "shutdown", "exit") || method.startsWith("$/") ||
+        method.startsWith("textDocument/") || method.startsWith("workspace/") || method.startsWith("window/") ||
+        method.startsWith(NAMESPACE)) method
+    else NAMESPACE + method
+
 class Backend(command: List<String>, private val log: (String) -> Unit = {}) : AutoCloseable {
     private val process: Process = ProcessBuilder(command).redirectErrorStream(false).start()
     private val input: OutputStream = process.outputStream
@@ -109,7 +121,7 @@ class Backend(command: List<String>, private val log: (String) -> Unit = {}) : A
             } else future.complete(message.get("result") ?: JsonNull.INSTANCE)
             return
         }
-        val method = message.get("method")?.asString ?: return
+        val method = message.get("method")?.asString?.removePrefix(NAMESPACE) ?: return
         val params = message.get("params") ?: JsonObject()
         listeners[method]?.forEach { runCatching { it(method, params) }.onFailure { e -> log("$method: ${e.message}") } }
         listeners["*"]?.forEach { runCatching { it(method, params) } }
@@ -123,12 +135,12 @@ class Backend(command: List<String>, private val log: (String) -> Unit = {}) : A
         }
         val id = nextId.getAndIncrement()
         pending[id] = method to future
-        send(JsonObject().apply { addProperty("jsonrpc", "2.0"); addProperty("id", id); addProperty("method", method); add("params", params) })
+        send(JsonObject().apply { addProperty("jsonrpc", "2.0"); addProperty("id", id); addProperty("method", wireName(method)); add("params", params) })
         return future
     }
 
     fun notify(method: String, params: JsonElement = JsonObject()) {
-        if (process.isAlive) send(JsonObject().apply { addProperty("jsonrpc", "2.0"); addProperty("method", method); add("params", params) })
+        if (process.isAlive) send(JsonObject().apply { addProperty("jsonrpc", "2.0"); addProperty("method", wireName(method)); add("params", params) })
     }
 
     private fun send(message: JsonObject) {

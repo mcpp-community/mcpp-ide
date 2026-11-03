@@ -69,6 +69,9 @@ public:
     explicit Server(std::function<bool(std::string_view)> write = write_stdout);
 
     void on(std::string method, Handler handler);
+    // A request answered on the reading thread, before the next message is read: one whose answer
+    // must see the documents as the messages before it left them (completion, hover), and is quick.
+    void on_inline(std::string method, Handler handler);
     void on_notification(std::string method, NotificationHandler handler);
     // Sends a notification to the adapter.
     void notify(std::string_view method, Json params);
@@ -87,6 +90,7 @@ private:
     void reply(const Json& id, std::expected<Json, Error> result);
     std::function<bool(std::string_view)> write_;
     std::map<std::string, Handler, std::less<>> handlers_;
+    std::set<std::string, std::less<>> inline_;
     std::map<std::string, NotificationHandler, std::less<>> notifications_;
     std::mutex inflightMutex_;
     std::map<std::string, std::shared_ptr<std::atomic<bool>>> inflight_;
@@ -145,6 +149,11 @@ std::string encode(const Json& message) {
 Server::Server(std::function<bool(std::string_view)> write) : write_(std::move(write)) {}
 
 void Server::on(std::string method, Handler handler) { handlers_[std::move(method)] = std::move(handler); }
+
+void Server::on_inline(std::string method, Handler handler) {
+    inline_.insert(method);
+    handlers_[std::move(method)] = std::move(handler);
+}
 
 void Server::on_notification(std::string method, NotificationHandler handler) {
     notifications_[std::move(method)] = std::move(handler);
@@ -217,7 +226,7 @@ void Server::dispatch(std::string_view body) {
     };
     // `initialize` answers before anything else is read: the adapter waits
     // for it, and the capabilities it carries decide what the adapter sends.
-    if (method == "initialize") { run(); return; }
+    if (method == "initialize" || inline_.contains(method)) { run(); return; }
     auto done = std::make_shared<std::atomic<bool>>(false);
     std::lock_guard lock(workersMutex_);
     // Finished workers are joined here, so the list holds the requests in

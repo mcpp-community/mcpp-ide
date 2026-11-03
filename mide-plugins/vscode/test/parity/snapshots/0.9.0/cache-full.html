@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="cache.htmlLang">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src vscode-webview://parity; script-src 'nonce-parity-nonce'; img-src vscode-webview://parity">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="vscode-webview://parity/media/page.css">
+<title>cache.title</title>
+</head>
+<body>
+<h1 class="sr-only">cache.title</h1>
+<main>
+<section class="warnings">
+<p class="warning" role="note"><span class="marker" aria-hidden="true">&#9888;</span> cache.warn.incomplete</p>
+</section>
+<section class="block block-project" data-block="project">
+  <h2 class="block-heading">cache.project.title</h2>
+  <p class="metric"><span class="metric-value">3145728</span><span class="metric-unit">B</span></p>
+  <p class="metric-sub">cache.project.files</p>
+  <svg class="viz-bar viz-bar-thin project-bar" viewBox="0 0 1000 22" preserveAspectRatio="none" role="img" aria-label="cache.project.stale" focusable="false">
+<g data-segment="stale" data-bytes="1048576" data-percent="33.3">
+  <rect x="0" y="0" width="333.333" height="22"></rect>
+  <title>cache.project.stale: 33.3%</title>
+</g>
+<g data-segment="current" data-bytes="2097152" data-percent="66.7">
+  <rect x="333.333" y="0" width="666.6669999999999" height="22"></rect>
+  <title>cache.project.title: 66.7%</title>
+</g>
+</svg>
+  <p class="metric-note">cache.project.stale</p>
+  <div class="actions" role="toolbar" aria-label="cache.project.title">
+    <button type="button" data-action="cleanStale" title="cache.action.cleanStale">cache.action.cleanStale</button>
+    <button type="button" data-action="cleanProject" title="cache.action.cleanProject">cache.action.cleanProject</button>
+  </div>
+</section>
+<details class="block block-shared" data-block="shared" data-details="shared">
+  <summary class="block-summary">
+    <span class="summary-title">cache.shared.title</span>
+    <span class="summary-value">7340032 B · cache.shared.entries</span>
+  </summary>
+  <div class="block-body">
+<section class="viz" data-viz="composition" aria-label="cache.composition.title">
+  <svg class="viz-bar" viewBox="0 0 1000 22" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+<g data-kind="package" data-segment="kind" data-bytes="6291456" data-percent="80">
+  <rect x="0" y="0" width="800" height="22"></rect>
+  <title>package: 80%</title>
+</g>
+<g data-kind="bmi" data-segment="kind" data-bytes="1048576" data-percent="13.3">
+  <rect x="800" y="0" width="133.33299999999997" height="22"></rect>
+  <title>bmi: 13.3%</title>
+</g>
+<g data-kind="legacy" data-segment="legacy" data-bytes="524288" data-percent="6.7">
+  <rect x="933.333" y="0" width="66.66700000000003" height="22"></rect>
+  <title>cache.legacy.title: 6.7%</title>
+</g>
+</svg>
+  <ul class="legend legend-inline" data-legend="composition" role="list"><li class="legend-item" data-kind="package" data-segment="kind" data-percent="80" role="listitem" title="package · 80% · 6291456 B · 30"><span class="swatch" data-kind="package" data-segment="kind" aria-hidden="true"></span><span class="legend-label">package</span><span class="legend-value">80%</span></li><li class="legend-item" data-kind="bmi" data-segment="kind" data-percent="13.3" role="listitem" title="bmi · 13.3% · 1048576 B · 12"><span class="swatch" data-kind="bmi" data-segment="kind" aria-hidden="true"></span><span class="legend-label">bmi</span><span class="legend-value">13.3%</span></li><li class="legend-item" data-kind="legacy" data-segment="legacy" data-percent="6.7" role="listitem" title="cache.legacy.title · 6.7% · 524288 B"><span class="swatch" data-kind="legacy" data-segment="legacy" aria-hidden="true"></span><span class="legend-label">cache.legacy.title</span><span class="legend-value">6.7%</span></li></ul>
+</section>
+<section class="viz" data-viz="age">
+  <h3 class="viz-heading">cache.age.title</h3>
+  <svg class="viz-bar viz-bar-thin" viewBox="0 0 1000 22" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+<g data-bucket="recent" data-bucket-index="0" data-age-step="0" data-bytes="4194304" data-percent="57.1">
+  <rect x="0" y="0" width="571.429" height="22"></rect>
+  <title>cache.age.under: 57.1%</title>
+</g>
+<g data-bucket="recent" data-bucket-index="1" data-age-step="2" data-bytes="2097152" data-percent="28.6">
+  <rect x="571.429" y="0" width="285.71400000000006" height="22"></rect>
+  <title>cache.age.range: 28.6%</title>
+</g>
+<g data-bucket="oldest" data-bucket-index="2" data-age-step="3" data-bytes="1048576" data-percent="14.3">
+  <rect x="857.143" y="0" width="142.85699999999997" height="22"></rect>
+  <title>cache.age.overflow: 14.3%</title>
+</g>
+</svg>
+  <ul class="legend legend-inline" data-legend="age" role="list"><li class="legend-item" data-bucket="recent" data-bucket-index="0" data-age-step="0" data-percent="57.1" role="listitem" title="cache.age.under · 57.1% · 4194304 B · 20"><span class="swatch" data-bucket="recent" data-bucket-index="0" data-age-step="0" aria-hidden="true"></span><span class="legend-label">cache.age.under</span><span class="legend-value">57.1%</span></li><li class="legend-item" data-bucket="recent" data-bucket-index="1" data-age-step="2" data-percent="28.6" role="listitem" title="cache.age.range · 28.6% · 2097152 B · 15"><span class="swatch" data-bucket="recent" data-bucket-index="1" data-age-step="2" aria-hidden="true"></span><span class="legend-label">cache.age.range</span><span class="legend-value">28.6%</span></li><li class="legend-item" data-bucket="oldest" data-bucket-index="2" data-age-step="3" data-percent="14.3" role="listitem" title="cache.age.overflow · 14.3% · 1048576 B · 7"><span class="swatch" data-bucket="oldest" data-bucket-index="2" data-age-step="3" aria-hidden="true"></span><span class="legend-label">cache.age.overflow</span><span class="legend-value">14.3%</span></li></ul>
+</section>
+<details class="viz viz-details" data-viz="top" data-details="top">
+  <summary class="viz-summary">cache.top.title</summary>
+  <table class="top-table">
+    <thead><tr><th scope="col">cache.col.label</th><th scope="col">cache.col.entries</th><th scope="col">cache.col.bytes</th><th scope="col">cache.col.oldest</th></tr></thead>
+    <tbody>
+<tr data-label="compat.zlib@1.3.2">
+  <td class="cell-label" data-head="cache.col.label"><button type="button" class="link" data-show-entry="compat.zlib@1.3.2" title="cache.action.detailsFor" aria-label="cache.action.detailsFor">compat.zlib@1.3.2</button></td>
+  <td data-head="cache.col.entries">4</td>
+  <td data-head="cache.col.bytes">2097152 B</td>
+  <td data-head="cache.col.oldest"><time datetime="2025-10-09T08:53:20.000Z" data-oldest="1760000000">2025-10-09</time></td>
+</tr>
+<tr data-label="nlohmann.json@3.12.0">
+  <td class="cell-label" data-head="cache.col.label"><button type="button" class="link" data-show-entry="nlohmann.json@3.12.0" title="cache.action.detailsFor" aria-label="cache.action.detailsFor">nlohmann.json@3.12.0</button></td>
+  <td data-head="cache.col.entries">2</td>
+  <td data-head="cache.col.bytes">1048576 B</td>
+  <td data-head="cache.col.oldest"><time datetime="2025-10-20T22:40:00.000Z" data-oldest="1761000000">2025-10-20</time></td>
+</tr>
+    </tbody>
+  </table>
+</details>
+<div class="actions actions-shared" role="toolbar" aria-label="cache.actions">
+  <button type="button" data-action="verify" title="cache.action.verify">cache.action.verify</button>
+  <span class="budget">
+    <button type="button" data-action="collect" title="cache.action.collect">cache.action.collect</button>
+    <input id="cache-budget" type="number" min="0" step="1" inputmode="numeric" aria-label="cache.budget.label" title="cache.budget.hint" value="10">
+    <span class="budget-unit">cache.budget.unit</span>
+  </span>
+  <span class="budget-estimate">about 2 MiB would be dropped</span>
+  <button type="button" data-action="prune" title="cache.action.prune">cache.action.prune</button>
+  <button type="button" data-action="cleanLegacy" title="cache.action.cleanLegacy">cache.action.cleanLegacy</button>
+</div>
+<p class="viz-note">cache.shared.root</p>
+<p class="viz-note">cache.legacy.path</p>
+  </div>
+</details>
+<p class="boundary" role="note">cache.boundary</p>
+</main>
+<script nonce="parity-nonce">
+(function () {
+  "use strict";
+  var api = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
+  var saved = {};
+  if (api && typeof api.getState === "function") {
+    try { saved = api.getState() || {}; } catch (error) { saved = {}; }
+  }
+
+  function post(message) {
+    if (api) { api.postMessage(message); }
+  }
+
+  function detailsList() {
+    return document.querySelectorAll("details[data-details]");
+  }
+
+  function restoreOpen() {
+    var open = saved && typeof saved.open === "object" && saved.open !== null ? saved.open : {};
+    var all = detailsList();
+    for (var index = 0; index < all.length; index += 1) {
+      var id = all[index].getAttribute("data-details");
+      if (id && open[id] === true) { all[index].open = true; }
+    }
+  }
+
+  function rememberOpen() {
+    var open = {};
+    var all = detailsList();
+    for (var index = 0; index < all.length; index += 1) {
+      var id = all[index].getAttribute("data-details");
+      if (id) { open[id] = all[index].open === true; }
+    }
+    saved.open = open;
+    if (api && typeof api.setState === "function") { api.setState(saved); }
+  }
+
+  function budgetGiB() {
+    var input = document.getElementById("cache-budget");
+    if (!input) { return undefined; }
+    var text = String(input.value).trim();
+    if (text.length === 0) { return undefined; }
+    var value = Number(text);
+    if (!isFinite(value) || value < 0) { return undefined; }
+    return value;
+  }
+
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    if (!target || typeof target.closest !== "function") { return; }
+    var button = target.closest("button");
+    if (!button || button.disabled) { return; }
+    var entry = button.getAttribute("data-show-entry");
+    if (entry) { post({ type: "showEntry", label: entry }); return; }
+    var action = button.getAttribute("data-action");
+    if (!action) { return; }
+    if (action === "collect") {
+      var value = budgetGiB();
+      if (value === undefined) { return; }
+      post({ type: "collect", budgetGiB: value });
+      return;
+    }
+    post({ type: action });
+  });
+
+  // A toggle event does not bubble, so the listener captures it on the way down.
+  document.addEventListener("toggle", function (event) {
+    var target = event.target;
+    if (target && typeof target.getAttribute === "function" && target.hasAttribute("data-details")) {
+      rememberOpen();
+    }
+  }, true);
+
+  restoreOpen();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+import std;
+import mcpp;
+
+int main() {
+    mcpp::link_search("lib");
+    mcpp::include_dir("include");
+    mcpp::runtime_search_dir("lib");
+    mcpp::action a;
+    a.id = "obj";
+    a.role = mcpp::roles::object;
+    a.input("x.c").output("x.o").submit();
+    mcpp::li
+    mcpp::
+}

@@ -3,7 +3,8 @@
 -- in a terminal, mcpp's diagnostics, targets, toolchains, libraries, the cache and the graphs, a
 -- statusline component. Every decision is the backend's, the one mcpp-vscode and mcpp-clion ask.
 --
--- It registers no language service: C++ files are mcppls's, through its own plugin (mcppls-nvim).
+-- C++ files are mcppls's, through its own plugin (mcppls-nvim). mcpp.toml and build.mcpp are the
+-- backend's: its LSP client serves their completion, hover, jumps and diagnostics.
 --
 --   require('mcpp').setup({ backend = ..., settings = { ['mcpp.build.target'] = ... }, trusted = true })
 --   :Mcpp [subcommand]                the backend's command table; no subcommand: the quick menu
@@ -62,7 +63,8 @@ end
 
 -- A buffer of an mcpp project: the backend starts for its project, or learns of it. A backend that
 -- could not start is tried again by `:Mcpp`, not by every buffer entered.
-local function enter()
+local function enter(a)
+  session.attach(a and a.buf)
   local root = commands.root()
   if not root or known[root] then
     return
@@ -122,7 +124,27 @@ function M.setup(opts)
     end,
   })
   vim.api.nvim_create_autocmd('User', { group = group, pattern = 'McppStatus', callback = on_started })
+  -- mcppls attached: it serves build.mcpp now, and the backend leaves it what it answers better.
+  vim.api.nvim_create_autocmd('LspAttach', {
+    group = group,
+    callback = function(a)
+      local client = vim.lsp.get_client_by_id(a.data and a.data.client_id or -1)
+      if client and client.name == 'mcppls' then
+        session.push_settings()
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd('VimLeavePre', { group = group, callback = session.stop })
+  -- The editor regained focus: a `xlings use` or a changed pin happened outside it (§4.2).
+  vim.api.nvim_create_autocmd('FocusGained', {
+    group = group,
+    callback = function()
+      if session.state.ready then
+        session.request('project/refresh', {}, function() end)
+        session.request('languageService/status', { candidates = session.mcppls_candidates(), root = commands.root() }, function() end)
+      end
+    end,
+  })
   if session.state.ready then
     session.push_settings()
   elseif vim.v.vim_did_enter == 1 then
