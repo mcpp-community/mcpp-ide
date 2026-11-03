@@ -1,62 +1,43 @@
-name: Release
-
-# A release: CI on the commit (which builds the backend's ok-image bundle, its universal package with
-# every system's okrun, and both editor packages carrying the bundle), then a GitHub release with the
-# editor packages, the bundle, the universal package and their checksums. The two Marketplaces are
-# uploaded to by the maintainer, from those assets.
+name: Publish released CLion 0.2.0
 
 on:
   workflow_dispatch:
-  push:
-    tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: jetbrains-mcpp-ide-0.2.0
+  cancel-in-progress: false
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-
-  release:
-    needs: ci
+  publish-existing:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
-        with:
-          path: artifacts
-      - name: Release
+      - name: Fetch the immutable GitHub release archive
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
-          mkdir -p dist
-          cp artifacts/mcpp-vscode-vsix/*.vsix artifacts/mcpp-clion-zip/*.zip dist/
-          cp artifacts/backend/mcpp-ide.okb "dist/mcpp-ide-${version}.okb"
-          cp "artifacts/backend/mcpp-ide-${version}"-openkal*.tar.gz dist/
-          (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
-          gh release create "v${version}" dist/* --target "$GITHUB_SHA" --title "mcpp-ide ${version}" --notes-file CHANGELOG.md
-      # Open VSX receives the exact VSIX attached to the GitHub Release; the Visual Studio
-      # Marketplace and the JetBrains Marketplace receive the same assets through their portals.
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-      - name: Publish to Open VSX
+          set -euo pipefail
+          test "$(gh api repos/mcpp-community/mcpp-ide/git/ref/tags/v0.2.0 --jq .object.sha)" = 421613a98e1868fc295262a67f322e49c6f90a99
+          gh release download v0.2.0 -R mcpp-community/mcpp-ide -p mcpp-clion-0.2.0.zip -p SHA256SUMS -D published
+          (cd published && sha256sum -c --ignore-missing SHA256SUMS)
+      - name: Submit the verified existing plugin update
+        shell: bash
         env:
-          OPENVSX_TOKEN: ${{ secrets.OPENVSX_TOKEN }}
+          JETBRAINS_TOKEN: ${{ secrets.JETBRAINS_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${OPENVSX_TOKEN:-}" ]; then
-            echo "OPENVSX_TOKEN is not set: Open VSX is a required destination of a release."
-            echo "Create a token with the publish scope at open-vsx.org (Settings, Access Tokens) and add it"
-            echo "as the OPENVSX_TOKEN secret of this repository (Settings, Secrets and variables, Actions)."
-            exit 1
-          fi
-          (cd mide-plugins/vscode && npm ci --ignore-scripts)
-          vsix="$(ls dist/mcpp-vscode-*.vsix)"
-          (cd mide-plugins/vscode && npx ovsx publish "$GITHUB_WORKSPACE/$vsix" --pat "$OPENVSX_TOKEN")
-      - name: The Marketplaces
-        run: echo "Upload the GitHub Release VSIX manually to Visual Studio Marketplace, and the CLion zip to JetBrains Marketplace."
+          python3 .github/scripts/publish-jetbrains.py --archive published/mcpp-clion-0.2.0.zip \
+            --xml-id io.github.mcpp-community.mcpp-clion --version 0.2.0 \
+            --sha256 6daccbaa5b52eb30c784da4ebc14fdaa333d6a769e00e4707b9ac74f8b6a3c8b \
+            --output published/jetbrains-receipt.json
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: jetbrains-mcpp-ide-0.2.0-receipt
+          path: published/jetbrains-receipt.json
+          if-no-files-found: warn
