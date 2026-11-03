@@ -94,11 +94,6 @@ mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 
   (`spec/` states them; `mcpp-ide-dev gen vscode` writes the manifest); every page's document,
   rendered by the extension's generators, is byte-identical to the snapshot rendered by 0.9.0's;
   the Extension Host suite runs over the bundled backend.
-- **One page library for VS Code and CLion.** The workbench (`webui/`) runs mcpp-vscode's page
-  modules unchanged in a browser host: the `vscode` module and Node's built-ins are answered by
-  the host's bridge, views are tabs, webviews are iframes with the IDE's `--vscode-*` theme.
-  mcpp-clion's tool window and its settings page are this workbench in JCEF; the earlier panels
-  (`webui/js`) are removed. A Chromium test runs the workbench over a real backend.
 - **Backend methods.** `mcpp/exec` (a bounded mcpp run: timeout, output limit, truncation reported),
   `languageService/exec` (the located mcppls with arguments), `project/files` (manifest, lock and
   the source count 0.9.0 shows); `targets` rows for target sets (`set`, `members`, `label`) when mcpp
