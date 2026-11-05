@@ -64,3 +64,41 @@ Plugin Verifier remains a separate static compatibility check. These runtime che
 Linux startup and views on the two stable IDE families; native Windows/macOS GUI behavior,
 dynamic uninstall/reinstall, debugging and every project action require their own evidence.
 The null CodeSource reproduction uses a cold IDE start and does not depend on dynamic installation.
+
+## Functional and user-experience coverage
+
+The denominator is the current command registry and the adapter's additional UI surfaces.
+`spec/commands.json` declares 59 commands, of which 55 include JetBrains (five are deprecated).
+The runtime table can offer fewer entries according to the language service's advertised
+capabilities. Every offered command and each forwarded action must resolve to a registered
+IDE action; hidden or deprecated commands are not counted as executed functionality.
+
+The local 2026.1.5.2 experiment also invokes the actual Build, Run and Test actions, waits for
+their IDE process handlers, requires exit code zero, and checks a file written by the program.
+These results establish real action execution; test-tree presentation and debugging need
+additional assertions. Compilation uses the installed GCC 16.1.0 toolchain. CI installs the
+same compiler before running this functional scenario.
+
+| Area | Required scenario | Current local evidence |
+|---|---|---|
+| Backend/session | Bundle lookup, protocol mismatch, missing backend, restart and recovery | Original lookup failure and corrected startup reproduced; protocol data validation passes; recovery pending |
+| Command integration | Registry, context menu, shortcuts, forwarded mcppls commands | All offered actions resolve; individual forwarded operations and interactive discoverability pending |
+| Build | Success, compilation failure, incremental build, cancellation, console source links | Successful IDE action; negative, cancellation and links pending |
+| Run | Executable selection, arguments, working directory, PTY, stop | Successful IDE action and program-produced file; other interactions pending |
+| Test | Discovery, success, failure, filter, test tree and rerun | Successful IDE action; tree details and negative/filter/rerun pending |
+| Debug | Native breakpoint, variables, step, continue, stop; runner-backed program boundary | Pending actual debugger session |
+| Project | Data rows, targets, result/artifact links, refresh | Three views instantiate; populated rows and links pending |
+| Libraries | Search, detail, add dependency, index update, error feedback | Pending functional interaction |
+| Cache | Inventory, plan, confirmation/cancel, isolated apply, refused untrusted actions | Pending; no global user cache deletion is part of this test |
+| Settings | Registry form, persist/reload, invalid value, locale | Pending interactive validation |
+| Graphs | Package/module graph render, source navigation, empty/error view, no-JCEF fallback | Pending actual JCEF rendering |
+| Editor | Manifest/buildscript completion, hover, diagnostics, navigation, snippets; C++ module handoff | Pending actual editor interaction |
+| Project/toolchain setup | New project, target/profile choice, install/default toolchain | Compiler installation is test setup; plugin flows pending |
+| Diagnostics | Self-check, report export/redaction, logs, degraded operation | Startup logging implemented; export and recovery interactions pending |
+
+Availability requires an observed operation and its expected effect. Completeness additionally
+requires the specified negative and recovery paths. User experience requires checking visible
+feedback, discoverability, absence of stalled progress, selection persistence and actionable
+errors. Static API compatibility and registered actions alone do not satisfy these criteria.
+The two stable IDE versions run the same candidate; platform-specific GUI behavior remains
+separately bounded. Findings and fixes continue in the same review PR.

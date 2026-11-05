@@ -79,6 +79,29 @@ interface ToolWindowRemote {
 @Remote("com.intellij.ui.content.ContentManager")
 interface ContentManagerRemote { fun getContentCount(): Int }
 
+@Remote("com.intellij.openapi.actionSystem.ActionManager")
+interface ActionManagerFactory { fun getInstance(): ActionManagerRemote }
+@Remote("com.intellij.openapi.actionSystem.ActionManager")
+interface ActionManagerRemote { fun getAction(id: String): ActionRemote? }
+@Remote("com.intellij.openapi.actionSystem.AnAction")
+interface ActionRemote
+
+@Remote("com.intellij.execution.ui.RunContentManager")
+interface RunContentManagerFactory { fun getInstance(project: Project): RunContentManagerRemote }
+@Remote("com.intellij.execution.ui.RunContentManager")
+interface RunContentManagerRemote { fun getAllDescriptors(): List<RunDescriptorRemote> }
+@Remote("com.intellij.execution.ui.RunContentDescriptor")
+interface RunDescriptorRemote {
+    fun getDisplayName(): String
+    fun getExecutionId(): Long
+    fun getProcessHandler(): ProcessHandlerRemote?
+}
+@Remote("com.intellij.execution.process.ProcessHandler")
+interface ProcessHandlerRemote {
+    fun isProcessTerminated(): Boolean
+    fun getExitCode(): Int?
+}
+
 class PackagedPluginTest {
     init {
         // A successful process exit alone cannot prove the plugin loaded:
@@ -100,10 +123,13 @@ class PackagedPluginTest {
         val version = System.getProperty("mcpp.clion.ideVersion") ?: error("ideVersion is required")
         val output = Path.of(System.getProperty("mcpp.clion.output") ?: "build/stable-smoke").toAbsolutePath()
         Files.createDirectories(output)
-        val fixture = output.resolve("project")
+        Files.deleteIfExists(output.resolve("result.json"))
+        val fixture = Files.createTempDirectory(output, "project-")
         Files.createDirectories(fixture.resolve("src"))
         Files.writeString(fixture.resolve("mcpp.toml"), "[package]\nname = \"clion-smoke\"\nversion = \"0.1.0\"\n")
-        Files.writeString(fixture.resolve("src/main.cpp"), "int main() { return 0; }\n")
+        Files.writeString(fixture.resolve("src/main.cpp"), "#include <cstdio>\nint main() { auto* f = std::fopen(\"clion-run-ok.txt\", \"w\"); if (!f) return 1; std::fputs(\"run-ok\\n\", f); std::fclose(f); return 0; }\n")
+        Files.createDirectories(fixture.resolve("tests"))
+        Files.writeString(fixture.resolve("tests/check.cpp"), "int main() { return 0; }\n")
         val localHome = System.getProperty("mcpp.clion.ideHome")?.let(Path::of)
         var ide = IdeInfo(productCode = "CL", platformPrefix = "CLion", executableFileName = "clion", fullName = "CLion", version = version, buildType = "release")
         if (localHome != null) {
@@ -140,6 +166,16 @@ class PackagedPluginTest {
                 assertEquals(2, initialized.get("protocol").getAsInt())
                 val backendVersion = initialized.get("serverInfo").getAsJsonObject().get("version").getAsString()
                 assertFalse(session.getCommands().isEmpty(), "i18n/bundle and commands/list complete before startup succeeds")
+                val actions = utility<ActionManagerFactory>().getInstance()
+                for (command in session.getCommands()) {
+                    val id = command.get("id").getAsString()
+                    assertNotNull(actions.getAction(id), "offered command $id is registered in this IDE")
+                    val action = command.get("action").getAsJsonObject()
+                    if (action.get("kind").getAsString() == "forward") {
+                        val target = action.get("command").getAsString()
+                        assertNotNull(actions.getAction(target), "forwarded command $id resolves to $target")
+                    }
+                }
                 assertFalse(session.getDegraded())
                 invokeAction("ActivatemcppToolWindow")
                 val window = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("mcpp")
@@ -148,9 +184,31 @@ class PackagedPluginTest {
                 while (!window!!.isVisible() && System.nanoTime() < visibleDeadline) Thread.sleep(100)
                 assertTrue(window!!.isVisible(), "the tool window opens")
                 assertEquals(3, window.getContentManager().getContentCount(), "Project, Libraries and Cache views load")
+                val runs = utility<RunContentManagerFactory>().getInstance(singleProject())
+                val actionResults = mutableMapOf<String, Long>()
+                for (command in listOf("build", "run", "test")) {
+                    val before = runs.getAllDescriptors().map { it.getExecutionId() }.toSet()
+                    val startedAt = System.nanoTime()
+                    invokeAction("mcpp.$command")
+                    val deadline = startedAt + java.util.concurrent.TimeUnit.SECONDS.toNanos(180)
+                    var completed: RunDescriptorRemote? = null
+                    while (System.nanoTime() < deadline) {
+                        completed = runs.getAllDescriptors().firstOrNull {
+                            it.getDisplayName().startsWith("mcpp $command ") &&
+                                it.getExecutionId() !in before && it.getProcessHandler()?.isProcessTerminated() == true
+                        }
+                        if (completed != null) break
+                        Thread.sleep(100)
+                    }
+                    assertNotNull(completed, "the real $command action finishes in the IDE")
+                    assertEquals(0, completed!!.getProcessHandler()!!.getExitCode(), "$command exits successfully")
+                    actionResults[command] = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
+                }
+                assertEquals("run-ok\n", Files.readString(fixture.resolve("clion-run-ok.txt")), "the program actually ran")
                 // Store only public versions and assertions. Raw IDE logs can
                 // contain usernames, private paths or workspace details.
-                Files.writeString(output.resolve("result.json"), """{"ideVersion":"$version","ideBuild":"$ideBuild","backendVersion":"$backendVersion","protocol":2,"startup":true,"commands":true,"toolWindowVisible":true,"toolWindowTabs":3}""" + "\n")
+                val actionJson = actionResults.entries.joinToString(",") { "\"${it.key}\":${it.value}" }
+                Files.writeString(output.resolve("result.json"), """{"ideVersion":"$version","ideBuild":"$ideBuild","backendVersion":"$backendVersion","protocol":2,"startup":true,"commands":true,"registeredCommands":${session.getCommands().size},"toolWindowVisible":true,"toolWindowTabs":3,"actionDurationMs":{$actionJson},"programExecuted":true}""" + "\n")
             }
         }
     }
