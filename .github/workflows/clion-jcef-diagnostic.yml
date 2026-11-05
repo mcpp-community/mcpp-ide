@@ -1,0 +1,89 @@
+name: CLion hosted JCEF diagnosis
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run:
+        description: Existing canonical package run
+        required: true
+        default: '42121961776'
+      package_sha256:
+        description: Exact inner plugin ZIP SHA256
+        required: true
+        default: 'a24379740611d8cc1e24deebfccf9aaf32b2125c39931e48252d7fd2fbd652f0'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  XLINGS_NON_INTERACTIVE: '1'
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['2026.1.5.2', '2026.2.4.1']
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+      - name: Existing test tools and display
+        run: |
+          xlings install gradle -y -g
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb
+          mcpp toolchain install gcc 16.1.0
+          mcpp toolchain default gcc@16.1.0
+      - uses: actions/cache@v5
+        with:
+          path: ~/.gradle/caches/modules-2
+          key: clion-stable-runtime-${{ hashFiles('mide-plugins/clion/integration-tests/*.gradle.kts') }}
+      - uses: actions/download-artifact@v5
+        with:
+          name: mcpp-clion-zip
+          run-id: ${{ inputs.candidate_run }}
+          github-token: ${{ github.token }}
+          path: stable-plugin
+      - name: Exact package and pinned language service
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_SHA: ${{ inputs.package_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$PACKAGE_SHA" =~ ^[0-9a-f]{64}$ ]]
+          plugin=$(find stable-plugin -maxdepth 1 -name 'mcpp-clion-*.zip' -print)
+          test "$(sha256sum "$plugin" | cut -d' ' -f1)" = "$PACKAGE_SHA"
+          version=$(sed -n 's/^mcpplsPluginVersion *= *//p' mide-plugins/clion/gradle.properties)
+          gh release download "v$version" --repo Sunrisepeak/mcpp-language-server \
+            --pattern "mcppls-clion-$version-linux-x64.zip" --dir stable-plugin
+      - name: Reproduce without changing browser or sandbox settings
+        env:
+          IDE_VERSION: ${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          plugin=$(find stable-plugin -maxdepth 1 -name 'mcpp-clion-*.zip' -print)
+          language=$(find stable-plugin -maxdepth 1 -name 'mcppls-clion-*.zip' -print)
+          xvfb-run -a gradle --no-daemon --max-workers=4 \
+            -p mide-plugins/clion/integration-tests test \
+            -PpluginZip="$GITHUB_WORKSPACE/$plugin" \
+            -PmcpplsZip="$GITHUB_WORKSPACE/$language" \
+            -PideVersion="$IDE_VERSION" \
+            -Poutput="$RUNNER_TEMP/clion-stable-result"
+      - name: Classify the runtime failure without publishing logs
+        if: always()
+        run: python3 .github/scripts/clion-public-diagnostics.py
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: clion-diagnosis-${{ matrix.version }}
+          path: |
+            ${{ runner.temp }}/clion-public-diagnostics.json
+            ${{ runner.temp }}/clion-stable-result/**/checks.json
+            ${{ runner.temp }}/clion-stable-result/**/result.json
+            ${{ runner.temp }}/clion-stable-result/settings/observations.json
