@@ -15,6 +15,7 @@ parser.add_argument('--plugin',required=True,type=Path)
 parser.add_argument('--language',required=True,type=Path)
 parser.add_argument('--sha256',required=True)
 parser.add_argument('--ide-version',required=True)
+parser.add_argument('--focus',choices=['policy-control','packaged-262'],default='policy-control')
 args=parser.parse_args()
 root=Path.cwd()
 output=Path(os.environ['RUNNER_TEMP'])/'clion-userns-control'
@@ -25,6 +26,10 @@ graph_source=root/'mide-plugins/clion/integration-tests/src/test/kotlin/GraphInt
 report={'ide_version':args.ide_version,'plugin_sha256':args.sha256,'phases':[],
         'scope':'Same canonical ZIP, stable IDE and test source. JCEF flags and all test assertions unchanged. No raw logs, messages or paths.'}
 started=time.monotonic()
+
+def context_directories(test_root):
+    prefixes=('mcpp-graphs-','mcpp-settings-','mcpp-clion-stable-')
+    return {p.resolve() for p in test_root.rglob('*') if p.is_dir() and p.name.startswith(prefixes)} if test_root.is_dir() else set()
 
 def save():
     public.write_text(json.dumps(report,indent=2)+'\n')
@@ -50,7 +55,7 @@ def phase(name,patterns):
     if digest(args.plugin)!=args.sha256:
         raise RuntimeError('canonical ZIP identity changed')
     test_root=root/'out/ide-tests/tests'
-    before={p.resolve() for p in test_root.iterdir()} if test_root.is_dir() else set()
+    before=context_directories(test_root)
     directory=output/name
     directory.mkdir(exist_ok=True)
     source_hash=digest(graph_source)
@@ -71,7 +76,7 @@ def phase(name,patterns):
     entry['seconds']=time.monotonic()-begin
     if digest(graph_source)!=source_hash or digest(args.plugin)!=args.sha256:
         raise RuntimeError('controlled input changed')
-    current=[str(p.resolve()) for p in test_root.iterdir() if p.resolve() not in before] if test_root.is_dir() else []
+    current=[str(p) for p in sorted(context_directories(test_root)-before)]
     contexts=directory/'contexts-private.json'
     contexts.write_text(json.dumps(current))
     env=os.environ.copy()
@@ -87,6 +92,18 @@ def phase(name,patterns):
         if checks.is_file():
             values=json.loads(checks.read_text()).get('passed',[])
             entry['graph_checks'][kind]=[s for s in values if isinstance(s,str) and re.fullmatch(r'[A-Za-z0-9 _-]{1,120}',s)]
+    checks=directory/'checks.json'
+    allowed_checks={'protocol2-startup','offered-actions-and-forward-targets','visible-three-view-tool-window',
+                    'program-executed','compiler-error-visible','native-debugger-process-and-view',
+                    'debug-variable-40','debug-variable-42','debug-breakpoint','debug-step-over',
+                    'debug-resume-program-output','debug-stop-prevents-program-work','view-Libraries','view-Cache',
+                    'mouse-tab-Libraries','mouse-tab-Cache','manifest-completion-and-insertion',
+                    'manifest-completion-during-indexing','cache-inventory-visible'}
+    allowed_checks.update('action-'+s for s in ['build','run','test','build-failure','build-recovery',
+                          'test-failure','test-recovery','debug-native-launch','debug-breakpoint-step-resume','debug-stop'])
+    allowed_checks.update('native-test-tree-'+s for s in ['test','test-failure','test-recovery'])
+    entry['packaged_checks']=[v for v in json.loads(checks.read_text()).get('passed',[]) if v in allowed_checks] if checks.is_file() else []
+    entry['packaged_result_published']=(directory/'result.json').is_file()
     report['phases'].append(entry)
     save()
     return entry
@@ -99,6 +116,16 @@ try:
     report['language_zip_sha256']=digest(args.language)
     original=policy.read_text().strip()
     report['original_policy']=original
+    if args.focus=='packaged-262':
+        if args.ide_version!='2026.2.4.1':
+            raise ValueError('focused diagnosis requires stable 262')
+        set_policy('0')
+        if probe()['exit']!=0:
+            raise RuntimeError('user namespace permission did not change')
+        packaged=phase('packaged-only',['PackagedPluginTest'])
+        status=int(packaged['exit']!=0)
+        report['focused_packaged_passed']=status==0
+        raise SystemExit(status)
     baseline=phase('baseline',['GraphInteractionTest.graphRendersNavigatesAndRecoversInJcef'])
     set_policy('0')
     enabled=probe()
@@ -123,6 +150,8 @@ try:
         report['optional_all_scenarios']='not run: graph failure or remaining resource/time budget'
         status=int(controlled['exit']!=0)
     report['causality']='supported' if reproduced and transitioned and controlled['exit']==0 else 'not established'
+except SystemExit:
+    pass
 except BaseException as error:
     status=1
     report['diagnostic_error_class']=type(error).__name__

@@ -11,6 +11,11 @@ on:
         description: Exact inner plugin ZIP SHA256
         required: true
         default: 'a24379740611d8cc1e24deebfccf9aaf32b2125c39931e48252d7fd2fbd652f0'
+      focus:
+        description: Controlled scenario to diagnose
+        type: choice
+        options: ['policy-control', 'packaged-262']
+        default: policy-control
 
 permissions:
   contents: read
@@ -26,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['2026.1.5.2', '2026.2.4.1']
+        version: ${{ fromJSON(inputs.focus == 'packaged-262' && '["2026.2.4.1"]' || '["2026.1.5.2","2026.2.4.1"]') }}
     defaults:
       run:
         shell: bash
@@ -66,6 +71,7 @@ jobs:
         env:
           IDE_VERSION: ${{ matrix.version }}
           PACKAGE_SHA: ${{ inputs.package_sha256 }}
+          DIAGNOSTIC_FOCUS: ${{ inputs.focus }}
         run: |
           set -euo pipefail
           plugin=$(find stable-plugin -maxdepth 1 -name 'mcpp-clion-*.zip' -print)
@@ -75,7 +81,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/clion-userns-control.py \
             --plugin "$GITHUB_WORKSPACE/$plugin" \
             --language "$GITHUB_WORKSPACE/$language" \
-            --sha256 "$PACKAGE_SHA" --ide-version "$IDE_VERSION"
+            --sha256 "$PACKAGE_SHA" --ide-version "$IDE_VERSION" --focus "$DIAGNOSTIC_FOCUS"
       - uses: actions/upload-artifact@v5
         if: always()
         with:

@@ -34,8 +34,14 @@ for p in test_root.glob('TEST-*.xml'):
         failure=test.find('failure')
         text=failure.text or '' if failure is not None else ''
         lines=[int(v) for v in re.findall(r'GraphInteractionTest\.kt:(\d+)',text)]
+        source_lines={name:sorted({int(v) for v in re.findall(name+r'\.kt:(\d+)',text)})
+                      for name in ['PackagedPluginTest','SettingsInteractionTest','GraphInteractionTest']}
+        failure_markers={name:text.count(name) for name in ['IDE failure:','ExecutionFinishedException',
+                         'reportTestFailure','ErrorReporterToCI','the real debug action finishes in the IDE',
+                         'the native debugger did not suspend at fixture line','the native variables view shows answer']}
         tests.append(dict(classname=test.get('classname'),name=test.get('name'),failed=failure is not None,
-                          graph_source_lines=sorted(set(lines))))
+                          graph_source_lines=sorted(set(lines)),test_source_lines=source_lines,
+                          failure_markers=failure_markers,seconds=float(test.get('time','0'))))
 sysctl={}
 for key in ['apparmor_restrict_unprivileged_userns','unprivileged_userns_clone']:
     p=Path('/proc/sys/kernel')/key
