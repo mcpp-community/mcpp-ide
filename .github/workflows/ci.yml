@@ -62,28 +62,22 @@ jobs:
           version=$(sed -n 's/^mcpplsPluginVersion *= *//p' mide-plugins/clion/gradle.properties)
           gh release download "v$version" --repo Sunrisepeak/mcpp-language-server \
             --pattern "mcppls-clion-$version-linux-x64.zip" --dir stable-plugin
-      - name: Reproduce without changing browser or sandbox settings
+      - name: Same-host policy control with the exact package
         env:
           IDE_VERSION: ${{ matrix.version }}
+          PACKAGE_SHA: ${{ inputs.package_sha256 }}
         run: |
           set -euo pipefail
           plugin=$(find stable-plugin -maxdepth 1 -name 'mcpp-clion-*.zip' -print)
           language=$(find stable-plugin -maxdepth 1 -name 'mcppls-clion-*.zip' -print)
-          xvfb-run -a gradle --no-daemon --max-workers=4 \
-            -p mide-plugins/clion/integration-tests test \
-            -PpluginZip="$GITHUB_WORKSPACE/$plugin" \
-            -PmcpplsZip="$GITHUB_WORKSPACE/$language" \
-            -PideVersion="$IDE_VERSION" \
-            -Poutput="$RUNNER_TEMP/clion-stable-result"
-      - name: Classify the runtime failure without publishing logs
-        if: always()
-        run: python3 .github/scripts/clion-public-diagnostics.py
+          original=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)
+          trap 'sudo sysctl -w "kernel.apparmor_restrict_unprivileged_userns=$original" >/dev/null 2>&1 || true' EXIT
+          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/clion-userns-control.py \
+            --plugin "$GITHUB_WORKSPACE/$plugin" \
+            --language "$GITHUB_WORKSPACE/$language" \
+            --sha256 "$PACKAGE_SHA" --ide-version "$IDE_VERSION"
       - uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: clion-diagnosis-${{ matrix.version }}
-          path: |
-            ${{ runner.temp }}/clion-public-diagnostics.json
-            ${{ runner.temp }}/clion-stable-result/**/checks.json
-            ${{ runner.temp }}/clion-stable-result/**/result.json
-            ${{ runner.temp }}/clion-stable-result/settings/observations.json
+          name: clion-userns-control-${{ matrix.version }}
+          path: ${{ runner.temp }}/clion-userns-public.json

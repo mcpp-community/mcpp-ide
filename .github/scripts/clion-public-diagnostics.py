@@ -7,7 +7,10 @@ markers=['No usable sandbox','Failed to move to new namespace','Operation not pe
          'Failed to create browser','JCEF has been restarted','Failed to initialize JCEF',
          'CefApp initialization failed','JCEF is not supported','AWT-EventQueue']
 counts=collections.Counter();classes=collections.Counter();missing=set();files=0
-roots=[Path('out/ide-tests/tests'),Path('mide-plugins/clion/integration-tests/build/test-results/test')]
+contexts=os.environ.get('MCPP_DIAG_CONTEXTS')
+ide_roots=[Path(p) for p in json.loads(Path(contexts).read_text())] if contexts else [Path('out/ide-tests/tests')]
+test_root=Path('mide-plugins/clion/integration-tests/build/test-results/test')
+roots=[*ide_roots,test_root]
 for root in roots:
     if not root.is_dir():continue
     for p in root.rglob('*'):
@@ -18,15 +21,28 @@ for root in roots:
         for name in re.findall(r'\b((?:com\.intellij|com\.jetbrains|org\.cef|java|javax|kotlin|io\.github\.mcppcommunity)\.[\w.$]*(?:Exception|Error))\b',text):classes[name]+=1
         missing.update(re.findall(r'error while loading shared libraries: ([A-Za-z0-9_.+-]+)',text))
 tests=[]
-for p in roots[1].glob('TEST-*.xml'):
+allowed_tests={('PackagedPluginTest','packagedPluginStartsItsBundledBackend()'),
+               ('SettingsInteractionTest','settingsValidateBeforeSavingInTheRealDialog()'),
+               ('GraphInteractionTest','graphRendersNavigatesAndRecoversInJcef()'),
+               ('GraphInteractionTest','graphExplainsUnavailableJcef()')}
+other_tests=0
+for p in test_root.glob('TEST-*.xml'):
     for test in ET.parse(p).getroot().findall('testcase'):
-        tests.append(dict(classname=test.get('classname'),name=test.get('name'),failed=test.find('failure') is not None))
+        if (test.get('classname'),test.get('name')) not in allowed_tests:
+            other_tests+=1
+            continue
+        failure=test.find('failure')
+        text=failure.text or '' if failure is not None else ''
+        lines=[int(v) for v in re.findall(r'GraphInteractionTest\.kt:(\d+)',text)]
+        tests.append(dict(classname=test.get('classname'),name=test.get('name'),failed=failure is not None,
+                          graph_source_lines=sorted(set(lines))))
 sysctl={}
 for key in ['apparmor_restrict_unprivileged_userns','unprivileged_userns_clone']:
     p=Path('/proc/sys/kernel')/key
     sysctl[key]=p.read_text().strip() if p.is_file() else None
 probe=subprocess.run(['unshare','-Ur','true'],capture_output=True,text=True)
-report=dict(log_files_classified=files,markers=dict(counts),exception_classes=dict(classes),missing_libraries=sorted(missing),tests=tests,
+report=dict(log_files_classified=files,markers=dict(counts),exception_classes=dict(classes),missing_libraries=sorted(missing),tests=tests,other_testcase_count=other_tests,
             sysctl=sysctl,user_namespace_probe_exit=probe.returncode,user_namespace_probe_permission_denied='Operation not permitted' in probe.stderr,
             scope='Synthetic CI IDE contexts; only fixed diagnostic markers, public exception classes and test names. No raw logs, messages or paths.')
-out=Path(os.environ['RUNNER_TEMP'])/'clion-public-diagnostics.json';out.write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))
+out=Path(os.environ.get('MCPP_DIAG_REPORT',str(Path(os.environ['RUNNER_TEMP'])/'clion-public-diagnostics.json')))
+out.write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))
