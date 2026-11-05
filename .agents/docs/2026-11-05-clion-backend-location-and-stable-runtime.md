@@ -149,3 +149,52 @@ feedback, discoverability, absence of stalled progress, selection persistence an
 errors. Static API compatibility and registered actions alone do not satisfy these criteria.
 The two stable IDE versions run the same candidate; platform-specific GUI behavior remains
 separately bounded. Findings and fixes continue in the same review PR.
+
+## Settings loading and validation supplement, 2026-11-05
+
+The preceding variable-view and keyboard-completion changes subsequently passed canonical run
+42021317951 at 9f8b486, with all 25 jobs successful. The following settings changes have separate
+local controls and still require their own canonical package and final CI.
+
+The actual Settings dialog on CLion 2026.1.5.2 remained at `Reading the settings…` with the
+canonical ZIP from run 42009038494. Its SHA256 is
+`00820eb70fec31b6a105cd4f0ac069f6b90e72121271121bcf937d147cbbc3a3`.
+The registry response was scheduled as a nonmodal UI callback while Settings was modal.
+The callback now only fills Swing controls using any modality; a generation guard rejects
+responses for a disposed or replaced form. A corrected test observer still failed to obtain
+the original form within its bounded wait, whereas the loading-only diagnostic ZIP reached
+the actual fields with identical backend and runner bytes.
+
+The generated labels also had no associated input. The form now sets `labelFor`. Numeric
+validation was independently reproduced after those prerequisites: real keyboard input saved
+12, then Apply incorrectly replaced it with −1 although the registry's minimum is zero.
+The form now validates all numeric fields before returning any changes. Empty, nonnumeric,
+non-finite and out-of-range values produce a native configuration error and no partial save.
+Large finite values outside the Long range remain numeric rather than saturating to Long.MAX_VALUE.
+
+The same diagnostic ZIP passed the following actual interactions on 2026.1.5.2 and 2026.2.4.1:
+form loading, label association, a valid value, refusal of a second otherwise-valid edit while
+another field is invalid, visible errors for six invalid inputs, unchanged stored values,
+serialization into the real settings XML, reopening the form, and removal of a default override.
+The test does not claim an IDE restart or multi-project scope validation. The diagnostic package
+changes only the adapter JAR; the complete Gradle package remains the final CI input.
+
+Three test-driver failures are retained separately. The first observer requested Swing DOM
+discovery inside an EDT remote call while the modal dialog was open; the corrected observer
+still reproduced the original loading failure. Direct `setText` did not notify the native
+Settings editor that user input occurred, so the final test uses actual keyboard events.
+A global OK selector matched two windows on 2026.1; it is now scoped to the Settings window
+using the Driver SDK's window type and accessible name. These changes preserve the required
+visible effects and do not bypass Apply or persistence.
+
+One later launch failed before opening the project because the local test output's actual
+storage was full. The IDE reported ENOSPC and could not initialize VFS; numeric validation was
+not reached. Logs and configuration from ended contexts were archived and verified before
+their duplicate plugin installations and system caches were removed, freeing 2.376 GiB.
+The identical candidate then passed. SDKs and frozen performance artifacts were retained.
+
+The runtime workflow uploads only public versions, package hashes and assertions for these
+settings checks. User logs, screenshots, private paths and configuration contents are excluded.
+Remaining settings coverage includes locale interactions, application/project scope behavior,
+registry error recovery and dynamic backend replacement. The broader functional matrix above
+remains incomplete; this supplement closes only the observed loading and value-validation defects.

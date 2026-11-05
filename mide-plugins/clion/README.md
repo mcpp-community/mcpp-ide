@@ -21,6 +21,10 @@ Language features of C++ files come from the mcppls CLion plugin, which this plu
 Those of `mcpp.toml` and `build.mcpp` -- completion, documentation, the jumps and the diagnostics --
 come from the backend over the session's connection (mcpp-ide's `docs/rules.md`).
 
+In **Settings | Tools | mcpp**, Apply validates every numeric value against the registry's
+range and rejects non-finite values. An invalid value displays an error and leaves all stored
+settings unchanged. Entering a setting's default removes its stored override.
+
 ## Build
 
 ```bash
@@ -42,6 +46,9 @@ docs/architecture.md, Distribution. Without them the plugin finds the backend th
 `MCPP_IDE_MOCK_MCPP` name the programs `mcpp build` produced, and the views' models and the
 settings form headless. `npm run test:webui` in `../vscode` runs the graph page in Chromium over the
 backend.
+
+The stable IDE tests also use the actual settings dialog: keyboard input, visible validation
+errors, refusal of partial saves, the persisted XML, reopening the form and restoring defaults.
 
 The packaged ZIP is also run in the real stable CLion 2026.1.5.2 and 2026.2.4.1 IDEs by
 `clion-stable.yml`. Both versions load the same ZIP and the pinned mcppls plugin. The test opens

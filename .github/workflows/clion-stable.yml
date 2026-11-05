@@ -95,4 +95,6 @@ jobs:
           path: |
             ${{ runner.temp }}/clion-stable-result/result.json
             ${{ runner.temp }}/clion-stable-result/checks.json
+            ${{ runner.temp }}/clion-stable-result/settings/result.json
+            ${{ runner.temp }}/clion-stable-result/settings/observations.json
           if-no-files-found: warn

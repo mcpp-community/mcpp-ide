@@ -253,6 +253,8 @@
   "Installable: {0}": "可安装：{0}",
   "Installed": "已安装",
   "Invalid": "无效",
+  "Invalid value for {0}. Enter a finite number in the range {1}.": "{0} 的值无效。请输入 {1} 范围内的有限数值。",
+  "Invalid value for {0}.": "{0} 的值无效。",
   "Keep the shared build cache under": "将共享构建缓存保留在",
   "Keep the shared build cache under how many GiB?": "共享构建缓存保留在多少 GiB 以内？",
   "Label": "包",
