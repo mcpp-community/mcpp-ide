@@ -16,6 +16,7 @@ dependencies {
     testImplementation("com.jetbrains.intellij.tools:ide-starter-driver:262.10968.63")
     testImplementation("com.jetbrains.intellij.driver:driver-client:262.10968.63")
     testImplementation("com.jetbrains.intellij.driver:driver-sdk:262.10968.63")
+    testImplementation("com.jetbrains.intellij.driver:driver-model:262.10968.63")
     testImplementation("org.junit.jupiter:junit-jupiter:5.12.2")
     testImplementation("org.kodein.di:kodein-di-jvm:7.20.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.1")

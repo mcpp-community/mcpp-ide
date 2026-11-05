@@ -73,26 +73,42 @@ The runtime table can offer fewer entries according to the language service's ad
 capabilities. Every offered command and each forwarded action must resolve to a registered
 IDE action; hidden or deprecated commands are not counted as executed functionality.
 
-The local 2026.1.5.2 experiment also invokes the actual Build, Run and Test actions, waits for
-their IDE process handlers, requires exit code zero, and checks a file written by the program.
-These results establish real action execution; test-tree presentation and debugging need
-additional assertions. Compilation uses the installed GCC 16.1.0 toolchain. CI installs the
-same compiler before running this functional scenario.
+The local 2026.1.5.2 and 2026.2.4.1 experiments pass the same 20 checks. They invoke the actual
+Build, Run and Test actions, wait for fresh process handlers, require the expected exit code,
+and check a file written by the program. A compilation failure must appear in the console;
+restoring the source must restore a successful build. Test failure and recovery must reach the
+native test tree. The project path contains Unicode and spaces. Compilation uses GCC 16.1.0;
+CI installs the same compiler. These are diagnostic adapter packages with unchanged backend
+bytes; the canonical package must still pass CI.
+
+Two additional adapter defects were reproduced and corrected. The completion contributor did
+not implement `DumbAware`, so an index-independent backend feature was suppressed during IDE
+analysis. Marking that contributor allows a real completion popup and exact replacement of
+`[dep` by `[dependencies]` while indexing is active. Opening Cache through its command also
+left the tree empty until manual refresh. Content selection now focuses and refreshes the view,
+including command selection and tab selection, and the runtime check requires real inventory
+rows without an error. The same selection path handles existing graph tabs and refresh requests.
+
+Verifier 1.411 confirms both stable builds are compatible with zero internal API usages after
+using the public plugin-aware class loader descriptor. The original deprecated/experimental API
+warnings remain. Tests resolve the test-runner classes through the product plugin's class loader:
+the classes are in the platform on 2026.1 and a separate optional plugin on 2026.2. Local GUI
+tests serialize use of the Driver's ports; CI matrix entries use independent runners.
 
 | Area | Required scenario | Current local evidence |
 |---|---|---|
 | Backend/session | Bundle lookup, protocol mismatch, missing backend, restart and recovery | Original lookup failure and corrected startup reproduced; protocol data validation passes; recovery pending |
 | Command integration | Registry, context menu, shortcuts, forwarded mcppls commands | All offered actions resolve; individual forwarded operations and interactive discoverability pending |
-| Build | Success, compilation failure, incremental build, cancellation, console source links | Successful IDE action; negative, cancellation and links pending |
+| Build | Success, compilation failure, incremental build, cancellation, console source links | Success, compiler error text, failure and recovery pass; cancellation and links pending |
 | Run | Executable selection, arguments, working directory, PTY, stop | Successful IDE action and program-produced file; other interactions pending |
-| Test | Discovery, success, failure, filter, test tree and rerun | Successful IDE action; tree details and negative/filter/rerun pending |
+| Test | Discovery, success, failure, filter, test tree and rerun | Native tree success, failure and corrected rerun pass; filter pending |
 | Debug | Native breakpoint, variables, step, continue, stop; runner-backed program boundary | Pending actual debugger session |
 | Project | Data rows, targets, result/artifact links, refresh | Three views instantiate; populated rows and links pending |
 | Libraries | Search, detail, add dependency, index update, error feedback | Pending functional interaction |
-| Cache | Inventory, plan, confirmation/cancel, isolated apply, refused untrusted actions | Pending; no global user cache deletion is part of this test |
+| Cache | Inventory, plan, confirmation/cancel, isolated apply, refused untrusted actions | Opening the view loads real inventory without manual refresh; plan/apply/refusal pending; no global user cache deletion |
 | Settings | Registry form, persist/reload, invalid value, locale | Pending interactive validation |
 | Graphs | Package/module graph render, source navigation, empty/error view, no-JCEF fallback | Pending actual JCEF rendering |
-| Editor | Manifest/buildscript completion, hover, diagnostics, navigation, snippets; C++ module handoff | Pending actual editor interaction |
+| Editor | Manifest/buildscript completion, hover, diagnostics, navigation, snippets; C++ module handoff | Manifest popup and exact insertion during indexing pass; other interactions pending |
 | Project/toolchain setup | New project, target/profile choice, install/default toolchain | Compiler installation is test setup; plugin flows pending |
 | Diagnostics | Self-check, report export/redaction, logs, degraded operation | Startup logging implemented; export and recovery interactions pending |
 

@@ -46,7 +46,10 @@ backend.
 The packaged ZIP is also run in the real stable CLion 2026.1.5.2 and 2026.2.4.1 IDEs by
 `clion-stable.yml`. Both versions load the same ZIP and the pinned mcppls plugin. The test opens
 an mcpp project, completes protocol 2 initialization, loads runtime translations and commands,
-and activates the mcpp tool window. It supplements Plugin Verifier's static compatibility checks.
+and verifies the visible mcpp tool window and cache inventory. It executes build, run and test
+actions in a project whose path contains Unicode and spaces, checks the native test tree,
+compiler-error output, build/test failure and recovery, and exact manifest completion insertion
+during project analysis. It supplements Plugin Verifier's static compatibility checks.
 
 An individual packaged plugin can be checked without rebuilding the backend:
 

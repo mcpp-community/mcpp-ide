@@ -89,5 +89,7 @@ jobs:
         if: always()
         with:
           name: clion-stable-${{ matrix.version }}
-          path: ${{ runner.temp }}/clion-stable-result/result.json
+          path: |
+            ${{ runner.temp }}/clion-stable-result/result.json
+            ${{ runner.temp }}/clion-stable-result/checks.json
           if-no-files-found: warn

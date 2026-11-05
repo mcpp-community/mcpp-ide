@@ -31,6 +31,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -265,7 +266,7 @@ internal fun expandSnippet(snippet: String): Pair<String, Int?> {
 }
 
 /** The backend's completion in mcpp.toml and build.mcpp. */
-class McppCompletion : CompletionContributor() {
+class McppCompletion : CompletionContributor(), DumbAware {
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {
         val vf = parameters.originalFile.virtualFile ?: return
         if (!served(vf)) return

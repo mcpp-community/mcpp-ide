@@ -352,9 +352,8 @@ class McppSession(private val project: Project) : Disposable {
     companion object {
         /** The platform owns plugin paths; modern plugin class loaders can omit CodeSource URLs. */
         fun pluginDirectory(): File? = runCatching {
-            com.intellij.ide.plugins.PluginManagerCore.getPlugin(
-                com.intellij.openapi.extensions.PluginId.getId(PLUGIN_ID)
-            )?.pluginPath?.toFile()
+            (McppSession::class.java.classLoader as? com.intellij.ide.plugins.cl.PluginAwareClassLoader)
+                ?.pluginDescriptor?.pluginPath?.toFile()
         }.getOrNull()
 
         const val PLUGIN_ID = "io.github.mcpp-community.mcpp-clion"
