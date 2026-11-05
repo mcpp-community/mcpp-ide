@@ -1,6 +1,6 @@
 # CLion backend location and stable runtime validation
 
-Status: fixes and the initial stable runtime suite pass canonical CI; expanded debugger CI pending.
+Status: review branch; canonical and diagnostic evidence are distinguished below.
 
 ## Observed failure
 
@@ -74,13 +74,13 @@ The runtime table can offer fewer entries according to the language service's ad
 capabilities. Every offered command and each forwarded action must resolve to a registered
 IDE action; hidden or deprecated commands are not counted as executed functionality.
 
-The local 2026.1.5.2 and 2026.2.4.1 experiments pass the same 29 checks. They invoke the actual
+The local 2026.1.5.2 and 2026.2.4.1 experiments pass the same 31 checks. They invoke the actual
 Build, Run and Test actions, wait for fresh process handlers, require the expected exit code,
 and check a file written by the program. A compilation failure must appear in the console;
 restoring the source must restore a successful build. Test failure and recovery must reach the
 native test tree. The project path contains Unicode and spaces. Compilation uses GCC 16.1.0;
-CI installs the same compiler. These are diagnostic adapter packages with unchanged backend
-bytes; the canonical package must still pass CI.
+CI installs the same compiler. Earlier controls used diagnostic adapter packages with unchanged
+backend bytes. The variable-view checks reuse the successful canonical CI package identified below.
 
 Two additional adapter defects were reproduced and corrected. The completion contributor did
 not implement `DumbAware`, so an index-independent backend feature was suppressed during IDE
@@ -98,7 +98,16 @@ now execute the actual Debug action, finish with exit code zero through a native
 `CidrDebugProcess` process handler, and expose the Debug tool window. Both versions then stop
 at a real source breakpoint, step to the next source line, resume to normal completion and
 check program output. A separate debug run stops at the breakpoint and must terminate before
-the program writes its output. Variable inspection and runner-backed debugging remain pending.
+the program writes its output. The native variables tree shows `answer=40` before the step and
+`answer=42` afterward. These extra checks reuse the exact canonical ZIP from run 42009038494,
+SHA256 `00820eb70fec31b6a105cd4f0ac069f6b90e72121271121bcf937d147cbbc3a3`.
+Runner-backed debugging remains pending.
+
+The variable-view interaction changes keyboard focus. The manifest test explicitly focuses
+its editor before completion, then accepts the selected lookup item with a real Enter event.
+The popup, selected item and exact inserted text remain assertions. Generic SDK action
+invocation can reject lookup acceptance without the corresponding editor event context;
+this test adaptation does not change the product or bypass completion.
 
 The first canonical CI run passed the plugin build, static verification and other ecosystem
 checks. Both stable runtime jobs stopped during xlings installation when the installer tried
@@ -107,8 +116,9 @@ to read `/dev/tty`; neither reached IDE startup. The reusable workflow now sets
 Canonical run 42005596492 at commit `c5aed8e` subsequently passed all 25 jobs, including
 the actual packaged plugin on both stable IDE builds. The stable runtime reports contain
 23 successful checks on 2026.1 and 24 on 2026.2, including completion while indexing on the
-latter. The added breakpoint, step, resume and stop cases have passed locally on both IDEs;
-the expanded canonical suite still requires its own successful run.
+latter. The added breakpoint, step, resume and stop cases also passed canonical run
+42009038494 at commit `4bb1868`, with all 25 jobs successful and 30 checks in each stable IDE.
+The additional variable-view and keyboard-acceptance cases require their own canonical run.
 
 Verifier 1.411 confirms both stable builds are compatible with zero internal API usages after
 using the public plugin-aware class loader descriptor. The original deprecated/experimental API
@@ -123,7 +133,7 @@ tests serialize use of the Driver's ports; CI matrix entries use independent run
 | Build | Success, compilation failure, incremental build, cancellation, console source links | Success, compiler error text, failure and recovery pass; cancellation and links pending |
 | Run | Executable selection, arguments, working directory, PTY, stop | Successful IDE action and program-produced file; other interactions pending |
 | Test | Discovery, success, failure, filter, test tree and rerun | Native tree success, failure and corrected rerun pass; filter pending |
-| Debug | Native breakpoint, variables, step, continue, stop; runner-backed program boundary | Native debug launch, breakpoint, step over, resume, normal completion and stop pass on both stable versions; variables and runner-backed program pending |
+| Debug | Native breakpoint, variables, step, continue, stop; runner-backed program boundary | Native launch, breakpoint, step, resume, normal completion and stop pass canonical CI on both stable versions; variable values before/after stepping pass locally with that CI ZIP; runner-backed program pending |
 | Project | Data rows, targets, result/artifact links, refresh | Three views instantiate; populated rows and links pending |
 | Libraries | Search, detail, add dependency, index update, error feedback | Pending functional interaction |
 | Cache | Inventory, plan, confirmation/cancel, isolated apply, refused untrusted actions | Opening the view loads real inventory without manual refresh; plan/apply/refusal pending; no global user cache deletion |

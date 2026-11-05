@@ -166,6 +166,17 @@ interface DebugSessionRemote {
 }
 @Remote("com.intellij.xdebugger.XSourcePosition")
 interface DebugPositionRemote { fun getLine(): Int }
+@Remote("javax.swing.JTree")
+interface DebugTreeRemote { fun getModel(): DebugTreeModelRemote }
+@Remote("javax.swing.tree.TreeModel")
+interface DebugTreeModelRemote { fun getRoot(): DebugNodeRemote }
+@Remote("com.intellij.xdebugger.impl.ui.tree.nodes.XDebuggerTreeNode")
+interface DebugNodeRemote {
+    fun getLoadedChildren(): List<DebugNodeRemote>
+    fun getText(): ColoredTextRemote
+}
+@Remote("com.intellij.ui.SimpleColoredText")
+interface ColoredTextRemote { fun getTexts(): List<String> }
 
 @Remote("com.intellij.execution.ui.ExecutionConsole")
 interface ExecutionConsoleRemote
@@ -377,13 +388,44 @@ class PackagedPluginTest {
                     }
                     error("the native debugger did not suspend at fixture line $line")
                 }
+                fun visibleVariable(value: Int) {
+                    ui.x("//div[@visible_text='Threads & Variables']").click()
+                    val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
+                    var found = false
+                    do {
+                        found = withContext(OnDispatcher.EDT) {
+                            val components = ArrayDeque<ContainerRemote>()
+                            components.add(debugWindow!!.getContentManager().getSelectedContent()!!.getComponent())
+                            val trees = mutableListOf<DebugTreeRemote>()
+                            while (components.isNotEmpty()) {
+                                val component = components.removeFirst()
+                                if (component.getClass().getName().contains("DebuggerTree")) trees += cast(component, DebugTreeRemote::class)
+                                components.addAll(component.getComponents())
+                            }
+                            val nodes = ArrayDeque<DebugNodeRemote>()
+                            trees.forEach { nodes.add(it.getModel().getRoot()) }
+                            var visible = false
+                            while (nodes.isNotEmpty()) {
+                                val node = nodes.removeFirst()
+                                if (Regex("\\banswer\\b.*\\b$value\\b").containsMatchIn(node.getText().getTexts().joinToString(""))) visible = true
+                                nodes.addAll(node.getLoadedChildren())
+                            }
+                            visible
+                        }
+                        if (!found) Thread.sleep(100)
+                    } while (!found && System.nanoTime() < deadline)
+                    assertTrue(found, "the native variables view shows answer = $value")
+                    record("debug-variable-$value")
+                }
                 Files.delete(fixture.resolve("clion-run-ok.txt"))
                 execute("debug", "debug-breakpoint-step-resume", whileRunning = {
                     val paused = suspendedAt(3)
                     record("debug-breakpoint")
+                    visibleVariable(40)
                     withContext(OnDispatcher.EDT) { paused.stepOver(false) }
                     val stepped = suspendedAt(4)
                     record("debug-step-over")
+                    visibleVariable(42)
                     withContext(OnDispatcher.EDT) { stepped.resume() }
                 })
                 assertEquals("run-ok\n", Files.readString(fixture.resolve("clion-run-ok.txt")), "resume completes the debugged program")
@@ -415,6 +457,11 @@ class PackagedPluginTest {
                 withWriteAction { editor.getDocument().setText(manifestBefore + "\n[dep") }
                 withContext(OnDispatcher.EDT) { editor.getCaretModel().moveToOffset(editor.getDocument().getText().length) }
                 val indexingAtCompletion = utility<DumbServiceFactory>().getInstance(singleProject()).isDumb()
+                val manifestEditor = ui.x("//div[@class='EditorComponentImpl' and @accessiblename='Editor for mcpp.toml']")
+                manifestEditor.click()
+                val focusDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
+                while (!manifestEditor.isFocusOwner() && System.nanoTime() < focusDeadline) Thread.sleep(100)
+                assertTrue(manifestEditor.isFocusOwner(), "the manifest editor owns completion keyboard actions")
                 invokeAction("CodeCompletion")
                 val lookups = utility<LookupManagerFactory>().getInstance(singleProject())
                 val lookupDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15)
@@ -426,7 +473,7 @@ class PackagedPluginTest {
                 }
                 assertNotNull(dependencies, "mcpp.toml completion is visible in the actual editor")
                 withContext(OnDispatcher.EDT) { lookups.getActiveLookup()!!.setCurrentItem(dependencies!!) }
-                invokeAction("EditorChooseLookupItem")
+                manifestEditor.keyboard { hotKey(java.awt.event.KeyEvent.VK_ENTER) }
                 assertEquals(manifestBefore + "\n[dependencies]", editor.getDocument().getText(), "completion replaces exactly the requested range")
                 record("manifest-completion-and-insertion")
                 if (indexingAtCompletion) record("manifest-completion-during-indexing")
