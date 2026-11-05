@@ -94,6 +94,13 @@ bundle and the target set's tree (`mcpp-ide-<version>-openkal-bundle-all.tar.gz`
 one pack on Linux, takes okrun from that tree, opens both editor packages and the tree on every
 system and starts what they carry for it (`.github/scripts/check-package.sh`).
 
+The CLion adapter obtains its installation directory from the IDE's plugin descriptor. Its
+class loader's `CodeSource` URL is not required. The session accepts protocol 2 before sending
+`mcpp-ide/i18n/bundle` and `mcpp-ide/commands/list`. Backend selection and startup failures are
+recorded in `idea.log`; RPC startup failures include the method and error code. The stable
+CLion runtime checks install one packaged plugin ZIP in both stable IDE families and exercise
+the complete startup chain in each IDE process.
+
 ## Generated declarations
 
 `spec/` is the source of everything the editors declare statically. `mcpp-ide-dev gen vscode` writes

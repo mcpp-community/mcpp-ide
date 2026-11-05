@@ -42,3 +42,23 @@ docs/architecture.md, Distribution. Without them the plugin finds the backend th
 `MCPP_IDE_MOCK_MCPP` name the programs `mcpp build` produced, and the views' models and the
 settings form headless. `npm run test:webui` in `../vscode` runs the graph page in Chromium over the
 backend.
+
+The packaged ZIP is also run in the real stable CLion 2026.1.5.2 and 2026.2.4.1 IDEs by
+`clion-stable.yml`. Both versions load the same ZIP and the pinned mcppls plugin. The test opens
+an mcpp project, completes protocol 2 initialization, loads runtime translations and commands,
+and activates the mcpp tool window. It supplements Plugin Verifier's static compatibility checks.
+
+An individual packaged plugin can be checked without rebuilding the backend:
+
+```bash
+xvfb-run -a gradle --no-daemon -p integration-tests test \
+  -PpluginZip=/absolute/path/mcpp-clion-0.2.0.zip \
+  -PmcpplsZip=/absolute/path/mcppls-clion-0.0.19-linux-x64.zip \
+  -PideVersion=2026.1.5.2
+```
+
+The CLion session writes backend selection and startup failures to `idea.log`, under
+`io.github.mcppcommunity.mcppclion.McppSession`. A protocol mismatch stops initialization before
+custom requests. For an explicitly configured older backend, update it or clear
+`mcpp.ide.backendPath` to select the bundled backend. Error notifications can also appear in
+the IDE's notification area.

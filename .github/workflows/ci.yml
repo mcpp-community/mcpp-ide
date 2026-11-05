@@ -471,6 +471,14 @@ jobs:
           name: mcpp-clion-zip
           path: mide-plugins/clion/build/distributions/*.zip
 
+  # Both stable families load the exact same packaged ZIP. These are actual
+  # IDE startup/session checks, in addition to the static Plugin Verifier.
+  clion-stable:
+    needs: clion
+    uses: ./.github/workflows/clion-stable.yml
+    with:
+      plugin_artifact: mcpp-clion-zip
+
   # The Neovim plugin (mide-plugins/nvim) in a headless Neovim, against the backend built here: over
   # the mock mcpp on the oldest and the newest Neovim it supports, then over the real mcpp, which
   # builds the test's project. Neovim comes from xlings (`nvim` in xim-pkgindex), each version
