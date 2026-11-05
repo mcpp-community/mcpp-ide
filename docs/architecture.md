@@ -99,7 +99,9 @@ class loader's `CodeSource` URL is not required. The session accepts protocol 2 
 `mcpp-ide/i18n/bundle` and `mcpp-ide/commands/list`. Backend selection and startup failures are
 recorded in `idea.log`; RPC startup failures include the method and error code. The stable
 CLion runtime checks install one packaged plugin ZIP in both stable IDE families and exercise
-the complete startup chain in each IDE process.
+the complete startup chain in each IDE process. Functional checks cover build, run, test,
+native debug launch, error recovery, manifest completion and view selection. The debugger
+adapter starts the native Cidr process from the session starter before returning it.
 
 ## Generated declarations
 

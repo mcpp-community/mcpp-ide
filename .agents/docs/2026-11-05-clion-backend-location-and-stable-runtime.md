@@ -61,8 +61,9 @@ against each tested SDK. A manual release check can reuse the published ZIP with
 the backend. Only a report of public versions and assertions is uploaded.
 
 Plugin Verifier remains a separate static compatibility check. These runtime checks cover
-Linux startup and views on the two stable IDE families; native Windows/macOS GUI behavior,
-dynamic uninstall/reinstall, debugging and every project action require their own evidence.
+Linux startup and the functional scenarios below on the two stable IDE families; native
+Windows/macOS GUI behavior, dynamic uninstall/reinstall and remaining interactions require
+their own evidence.
 The null CodeSource reproduction uses a cold IDE start and does not depend on dynamic installation.
 
 ## Functional and user-experience coverage
@@ -73,7 +74,7 @@ The runtime table can offer fewer entries according to the language service's ad
 capabilities. Every offered command and each forwarded action must resolve to a registered
 IDE action; hidden or deprecated commands are not counted as executed functionality.
 
-The local 2026.1.5.2 and 2026.2.4.1 experiments pass the same 20 checks. They invoke the actual
+The local 2026.1.5.2 and 2026.2.4.1 experiments pass the same 23 checks. They invoke the actual
 Build, Run and Test actions, wait for fresh process handlers, require the expected exit code,
 and check a file written by the program. A compilation failure must appear in the console;
 restoring the source must restore a successful build. Test failure and recovery must reach the
@@ -88,6 +89,20 @@ analysis. Marking that contributor allows a real completion popup and exact repl
 left the tree empty until manual refresh. Content selection now focuses and refreshes the view,
 including command selection and tab selection, and the runtime check requires real inventory
 rows without an error. The same selection path handles existing graph tabs and refresh requests.
+Both versions also pass physical mouse selection of the Libraries and Cache tabs.
+
+The native debugger adapter constructed `CidrLocalDebugProcess` without starting it. The
+published adapter consequently opened a debug view without loading the target. Starting the
+process inside the session starter follows the native launch lifecycle. Both stable versions
+now execute the actual Debug action, finish with exit code zero through a native
+`CidrDebugProcess` process handler, and expose the Debug tool window. Breakpoints, variables,
+stepping and stop remain separate pending scenarios.
+
+The first canonical CI run passed the plugin build, static verification and other ecosystem
+checks. Both stable runtime jobs stopped during xlings installation when the installer tried
+to read `/dev/tty`; neither reached IDE startup. The reusable workflow now sets
+`XLINGS_NON_INTERACTIVE=1` itself, because the caller's workflow environment is not inherited.
+The corrected canonical runtime jobs still require a successful run.
 
 Verifier 1.411 confirms both stable builds are compatible with zero internal API usages after
 using the public plugin-aware class loader descriptor. The original deprecated/experimental API
@@ -102,7 +117,7 @@ tests serialize use of the Driver's ports; CI matrix entries use independent run
 | Build | Success, compilation failure, incremental build, cancellation, console source links | Success, compiler error text, failure and recovery pass; cancellation and links pending |
 | Run | Executable selection, arguments, working directory, PTY, stop | Successful IDE action and program-produced file; other interactions pending |
 | Test | Discovery, success, failure, filter, test tree and rerun | Native tree success, failure and corrected rerun pass; filter pending |
-| Debug | Native breakpoint, variables, step, continue, stop; runner-backed program boundary | Pending actual debugger session |
+| Debug | Native breakpoint, variables, step, continue, stop; runner-backed program boundary | Actual native debug launch, process completion and Debug view pass on both stable versions; breakpoint interactions and runner-backed program pending |
 | Project | Data rows, targets, result/artifact links, refresh | Three views instantiate; populated rows and links pending |
 | Libraries | Search, detail, add dependency, index update, error feedback | Pending functional interaction |
 | Cache | Inventory, plan, confirmation/cancel, isolated apply, refused untrusted actions | Opening the view loads real inventory without manual refresh; plan/apply/refusal pending; no global user cache deletion |

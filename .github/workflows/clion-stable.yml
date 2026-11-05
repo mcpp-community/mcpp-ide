@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+env:
+  XLINGS_NON_INTERACTIVE: '1'
+
 jobs:
   runtime:
     name: packaged plugin on CLion ${{ matrix.version }}

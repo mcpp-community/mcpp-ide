@@ -48,8 +48,11 @@ class McppDebugRunner : GenericProgramRunner<RunnerSettings>() {
             session.notify(session.t("This program runs through {0}. LLDB reads its symbols once `settings set plugin.jit-loader.gdb.enable on` is in ~/.lldbinit; GDB reads them as it is.", launch["via"].asString), NotificationType.INFORMATION)
         val parameters = TrivialRunParameters(driver, commandLine(launch, pty = false))
         return XDebuggerManager.getInstance(project).newSessionBuilder(object : XDebugProcessStarter() {
-            override fun start(xs: XDebugSession): XDebugProcess =
-                CidrLocalDebugProcess(parameters, xs, TextConsoleBuilderFactory.getInstance().createBuilder(project))
+            override fun start(xs: XDebugSession): XDebugProcess {
+                val process = CidrLocalDebugProcess(parameters, xs, TextConsoleBuilderFactory.getInstance().createBuilder(project))
+                process.start()
+                return process
+            }
         }).environment(env).startSession().runContentDescriptor
     }
 }

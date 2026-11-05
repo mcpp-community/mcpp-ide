@@ -14,4 +14,4 @@ webui/dist/
 compile_commands.json
 dist-upload/
 .xlings/
-out/ide-tests/
+out/ide-tests

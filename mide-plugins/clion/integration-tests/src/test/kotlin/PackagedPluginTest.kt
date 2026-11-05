@@ -7,6 +7,7 @@ import com.intellij.driver.sdk.Project
 import com.intellij.driver.sdk.FileEditorManager
 import com.intellij.driver.sdk.openEditor
 import com.intellij.driver.sdk.VirtualFile
+import com.intellij.driver.sdk.ui.ui
 import com.intellij.driver.model.OnDispatcher
 import com.intellij.driver.sdk.singleProject
 import com.intellij.driver.sdk.waitForProjectOpen
@@ -33,6 +34,7 @@ import org.kodein.di.direct
 import org.kodein.di.instance
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.time.Duration.Companion.minutes
 
 private const val PLUGIN_ID = "io.github.mcpp-community.mcpp-clion"
 
@@ -139,7 +141,15 @@ interface RunDescriptorRemote {
 interface ProcessHandlerRemote {
     fun isProcessTerminated(): Boolean
     fun getExitCode(): Int?
+    fun getClass(): ClassNameRemote
 }
+
+@Remote("com.jetbrains.cidr.cpp.toolchains.CPPToolchains", plugin = PLUGIN_ID)
+interface CppToolchainsFactory { fun getInstance(): CppToolchainsRemote }
+@Remote("com.jetbrains.cidr.cpp.toolchains.CPPToolchains", plugin = PLUGIN_ID)
+interface CppToolchainsRemote { fun getDefaultToolchain(): CppToolchainRemote? }
+@Remote("com.jetbrains.cidr.cpp.toolchains.CPPToolchains\$Toolchain", plugin = PLUGIN_ID)
+interface CppToolchainRemote
 
 @Remote("com.intellij.execution.ui.ExecutionConsole")
 interface ExecutionConsoleRemote
@@ -231,7 +241,7 @@ class PackagedPluginTest {
             addSystemProperty("idea.trust.all.projects", true)
             addSystemProperty("ide.show.tips.on.startup.default.value", false)
         }
-        context.runIdeWithDriver().useDriverAndCloseIde {
+        context.runIdeWithDriver(runTimeout = 3.minutes).useDriverAndCloseIde {
             waitForProjectOpen()
             withContext {
                 val application = utility<ApplicationInfoFactory>().getInstance()
@@ -275,7 +285,7 @@ class PackagedPluginTest {
                         .map { (it as RefWrapper).getRef().identityHashCode() }.toSet()
                     val startedAt = System.nanoTime()
                     invokeAction("mcpp.$command")
-                    val deadline = startedAt + java.util.concurrent.TimeUnit.SECONDS.toNanos(180)
+                    val deadline = startedAt + java.util.concurrent.TimeUnit.SECONDS.toNanos(if (command == "debug") 60 else 180)
                     var completed: RunDescriptorRemote? = null
                     while (System.nanoTime() < deadline) {
                         completed = runs.getAllDescriptors().firstOrNull {
@@ -319,12 +329,23 @@ class PackagedPluginTest {
                 execute("test", "test-failure", success = false)
                 Files.writeString(testSource, "int main() { return 0; }\n")
                 execute("test", "test-recovery")
+                assertNotNull(utility<CppToolchainsFactory>().getInstance().getDefaultToolchain(), "CLion has a debugger toolchain")
+                val debug = execute("debug", "debug-native-launch")
+                assertTrue(debug.getProcessHandler()!!.getClass().getName().contains("CidrDebugProcess"), "CLion's native debugger owns the process")
+                val debugWindow = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("Debug")
+                assertTrue(debugWindow?.isVisible() == true, "the native debugger view is visible")
+                record("native-debugger-process-and-view")
                 for ((command, title) in listOf("mcpp.library.search" to "Libraries", "mcpp.showCachePanel" to "Cache")) {
                     invokeAction(command)
                     val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
                     while (window.getContentManager().getSelectedContent()?.getDisplayName() != title && System.nanoTime() < deadline) Thread.sleep(100)
                     assertEquals(title, window.getContentManager().getSelectedContent()?.getDisplayName(), "$command selects its native view")
                     record("view-$title")
+                }
+                for (title in listOf("Libraries", "Cache")) {
+                    ui.x("//div[@visible_text='$title' and contains(@javaclass,'ContentTabLabel')]").click()
+                    assertEquals(title, window.getContentManager().getSelectedContent()?.getDisplayName(), "a mouse click selects $title")
+                    record("mouse-tab-$title")
                 }
                 val manifest = utility<LocalFileSystemFactory>().getInstance().refreshAndFindFileByPath(fixture.resolve("mcpp.toml").toString())
                 openEditor(requireNotNull(manifest))
@@ -349,23 +370,23 @@ class PackagedPluginTest {
                 record("manifest-completion-and-insertion")
                 if (indexingAtCompletion) record("manifest-completion-during-indexing")
                 withContext(OnDispatcher.EDT) {
-                    val pending = ArrayDeque<ContainerRemote>()
-                    pending.add(window.getContentManager().getSelectedContent()!!.getComponent())
-                    var cacheTree: TreeRemote? = null
-                    while (pending.isNotEmpty()) {
-                        val component = pending.removeFirst()
-                        if (component.getClass().getName() == "com.intellij.ui.treeStructure.Tree") {
-                            cacheTree = cast(component, TreeRemote::class)
-                            break
-                        }
-                        pending.addAll(component.getComponents())
+                val pending = ArrayDeque<ContainerRemote>()
+                pending.add(window.getContentManager().getSelectedContent()!!.getComponent())
+                var cacheTree: TreeRemote? = null
+                while (pending.isNotEmpty()) {
+                    val component = pending.removeFirst()
+                    if (component.getClass().getName() == "com.intellij.ui.treeStructure.Tree") {
+                        cacheTree = cast(component, TreeRemote::class)
+                        break
                     }
-                    assertNotNull(cacheTree, "the native cache tree exists")
-                    val cacheDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15)
-                    while (cacheTree!!.getRowCount() == 0 && System.nanoTime() < cacheDeadline) Thread.sleep(100)
-                    assertTrue(cacheTree!!.getRowCount() > 0, "opening the cache view loads its inventory without manual refresh")
-                    assertFalse(cacheTree.getModel().getRoot().getChildAt(0).getUserObject().getError(), "the inventory query succeeds")
-                    record("cache-inventory-visible")
+                    pending.addAll(component.getComponents())
+                }
+                assertNotNull(cacheTree, "the native cache tree exists")
+                val cacheDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15)
+                while (cacheTree!!.getRowCount() == 0 && System.nanoTime() < cacheDeadline) Thread.sleep(100)
+                assertTrue(cacheTree!!.getRowCount() > 0, "opening the cache view loads its inventory without manual refresh")
+                assertFalse(cacheTree.getModel().getRoot().getChildAt(0).getUserObject().getError(), "the inventory query succeeds")
+                record("cache-inventory-visible")
                 }
                 // Store only public versions and assertions. Raw IDE logs can
                 // contain usernames, private paths or workspace details.
