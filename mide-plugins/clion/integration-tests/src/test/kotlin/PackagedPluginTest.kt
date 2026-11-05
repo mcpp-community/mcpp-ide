@@ -6,6 +6,7 @@ import com.intellij.driver.sdk.invokeAction
 import com.intellij.driver.sdk.Project
 import com.intellij.driver.sdk.FileEditorManager
 import com.intellij.driver.sdk.openEditor
+import com.intellij.driver.sdk.XDebuggerUtil
 import com.intellij.driver.sdk.VirtualFile
 import com.intellij.driver.sdk.ui.ui
 import com.intellij.driver.model.OnDispatcher
@@ -151,6 +152,21 @@ interface CppToolchainsRemote { fun getDefaultToolchain(): CppToolchainRemote? }
 @Remote("com.jetbrains.cidr.cpp.toolchains.CPPToolchains\$Toolchain", plugin = PLUGIN_ID)
 interface CppToolchainRemote
 
+@Remote("com.intellij.xdebugger.XDebuggerManager")
+interface DebuggerManagerFactory { fun getInstance(project: Project): DebuggerManagerRemote }
+@Remote("com.intellij.xdebugger.XDebuggerManager")
+interface DebuggerManagerRemote { fun getCurrentSession(): DebugSessionRemote? }
+@Remote("com.intellij.xdebugger.XDebugSession")
+interface DebugSessionRemote {
+    fun isSuspended(): Boolean
+    fun getCurrentPosition(): DebugPositionRemote?
+    fun resume()
+    fun stepOver(ignoreBreakpoints: Boolean)
+    fun stop()
+}
+@Remote("com.intellij.xdebugger.XSourcePosition")
+interface DebugPositionRemote { fun getLine(): Int }
+
 @Remote("com.intellij.execution.ui.ExecutionConsole")
 interface ExecutionConsoleRemote
 @Remote("com.intellij.execution.impl.ConsoleViewImpl")
@@ -217,7 +233,18 @@ class PackagedPluginTest {
         val fixture = Files.createTempDirectory(output, "mcpp-用例 space-")
         Files.createDirectories(fixture.resolve("src"))
         Files.writeString(fixture.resolve("mcpp.toml"), "[package]\nname = \"clion-smoke\"\nversion = \"0.1.0\"\n")
-        Files.writeString(fixture.resolve("src/main.cpp"), "#include <cstdio>\nint main() { auto* f = std::fopen(\"clion-run-ok.txt\", \"w\"); if (!f) return 1; std::fputs(\"run-ok\\n\", f); std::fclose(f); return 0; }\n")
+        Files.writeString(fixture.resolve("src/main.cpp"), """
+            #include <cstdio>
+            int main() {
+                int answer = 40;
+                answer += 2;
+                auto* f = std::fopen("clion-run-ok.txt", "w");
+                if (!f) return 1;
+                std::fputs("run-ok\n", f);
+                std::fclose(f);
+                return answer == 42 ? 0 : 2;
+            }
+        """.trimIndent() + "\n")
         Files.createDirectories(fixture.resolve("tests"))
         Files.writeString(fixture.resolve("tests/check.cpp"), "int main() { return 0; }\n")
         val localHome = System.getProperty("mcpp.clion.ideHome")?.let(Path::of)
@@ -279,12 +306,13 @@ class PackagedPluginTest {
                 record("visible-three-view-tool-window")
                 val runs = utility<RunContentManagerFactory>().getInstance(singleProject())
                 val actionResults = mutableMapOf<String, Long>()
-                fun execute(command: String, label: String, success: Boolean = true): RunDescriptorRemote {
+                fun execute(command: String, label: String, success: Boolean? = true, whileRunning: (() -> Unit)? = null): RunDescriptorRemote {
                     val before = runs.getAllDescriptors().map { it.getExecutionId() }.toSet()
                     val previousHandlers = runs.getAllDescriptors().mapNotNull { it.getProcessHandler() }
                         .map { (it as RefWrapper).getRef().identityHashCode() }.toSet()
                     val startedAt = System.nanoTime()
                     invokeAction("mcpp.$command")
+                    whileRunning?.invoke()
                     val deadline = startedAt + java.util.concurrent.TimeUnit.SECONDS.toNanos(if (command == "debug") 60 else 180)
                     var completed: RunDescriptorRemote? = null
                     while (System.nanoTime() < deadline) {
@@ -298,17 +326,18 @@ class PackagedPluginTest {
                         Thread.sleep(100)
                     }
                     assertNotNull(completed, "the real $command action finishes in the IDE")
-                    assertEquals(success, completed!!.getProcessHandler()!!.getExitCode() == 0, "$label has the expected exit status")
+                    val finished = requireNotNull(completed)
+                    if (success != null) assertEquals(success, finished.getProcessHandler()!!.getExitCode() == 0, "$label has the expected exit status")
                     if (command == "test") {
-                        val testRoot = cast(completed.getExecutionConsole(), TestConsoleRemote::class).getResultsViewer().getTestsRootNode()
+                        val testRoot = cast(finished.getExecutionConsole(), TestConsoleRemote::class).getResultsViewer().getTestsRootNode()
                         assertFalse(testRoot.getChildren().isEmpty(), "the native test tree contains discovered tests")
-                        assertEquals(!success, testRoot.isDefect(), "the test tree records the actual outcome")
-                        if (success) assertTrue(testRoot.getChildren().all { it.isPassed() }, "test results reach the native tree")
+                        assertEquals(success == false, testRoot.isDefect(), "the test tree records the actual outcome")
+                        if (success == true) assertTrue(testRoot.getChildren().all { it.isPassed() }, "test results reach the native tree")
                         record("native-test-tree-$label")
                     }
                     actionResults[label] = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
                     record("action-$label")
-                    return completed
+                    return finished
                 }
                 for (command in listOf("build", "run", "test")) execute(command, command)
                 assertEquals("run-ok\n", Files.readString(fixture.resolve("clion-run-ok.txt")), "the program actually ran")
@@ -335,6 +364,38 @@ class PackagedPluginTest {
                 val debugWindow = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("Debug")
                 assertTrue(debugWindow?.isVisible() == true, "the native debugger view is visible")
                 record("native-debugger-process-and-view")
+                val debugger = utility<DebuggerManagerFactory>().getInstance(singleProject())
+                val debugFile = requireNotNull(utility<LocalFileSystemFactory>().getInstance().refreshAndFindFileByPath(source.toString()))
+                openEditor(debugFile)
+                withContext(OnDispatcher.EDT) { service<XDebuggerUtil>().toggleLineBreakpoint(singleProject(), debugFile, 3, false) }
+                fun suspendedAt(line: Int): DebugSessionRemote {
+                    val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+                    while (System.nanoTime() < deadline) {
+                        val current = debugger.getCurrentSession()
+                        if (current?.isSuspended() == true && current.getCurrentPosition()?.getLine() == line) return current
+                        Thread.sleep(100)
+                    }
+                    error("the native debugger did not suspend at fixture line $line")
+                }
+                Files.delete(fixture.resolve("clion-run-ok.txt"))
+                execute("debug", "debug-breakpoint-step-resume", whileRunning = {
+                    val paused = suspendedAt(3)
+                    record("debug-breakpoint")
+                    withContext(OnDispatcher.EDT) { paused.stepOver(false) }
+                    val stepped = suspendedAt(4)
+                    record("debug-step-over")
+                    withContext(OnDispatcher.EDT) { stepped.resume() }
+                })
+                assertEquals("run-ok\n", Files.readString(fixture.resolve("clion-run-ok.txt")), "resume completes the debugged program")
+                record("debug-resume-program-output")
+                Files.delete(fixture.resolve("clion-run-ok.txt"))
+                execute("debug", "debug-stop", success = null, whileRunning = {
+                    val paused = suspendedAt(3)
+                    withContext(OnDispatcher.EDT) { paused.stop() }
+                })
+                assertFalse(Files.exists(fixture.resolve("clion-run-ok.txt")), "stop at the breakpoint prevents subsequent program work")
+                record("debug-stop-prevents-program-work")
+                withContext(OnDispatcher.EDT) { service<XDebuggerUtil>().toggleLineBreakpoint(singleProject(), debugFile, 3, false) }
                 for ((command, title) in listOf("mcpp.library.search" to "Libraries", "mcpp.showCachePanel" to "Cache")) {
                     invokeAction(command)
                     val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
