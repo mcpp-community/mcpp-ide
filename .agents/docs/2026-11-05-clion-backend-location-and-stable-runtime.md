@@ -198,3 +198,38 @@ settings checks. User logs, screenshots, private paths and configuration content
 Remaining settings coverage includes locale interactions, application/project scope behavior,
 registry error recovery and dynamic backend replacement. The broader functional matrix above
 remains incomplete; this supplement closes only the observed loading and value-validation defects.
+
+## Graph error propagation and actual JCEF controls, 2026-11-06
+
+The settings changes at `95a6a1c` passed all 25 jobs in canonical run `42112497367`.
+Both stable runtime reports contain 31 checks, and their settings reports identify the same
+packaged ZIP, SHA256 `e9c6fb50e7c210d3b713de1ce61c0265b7561451a3cb8225eae6aee0df8b013c`.
+The new graph controls use that ZIP with the publicly supported backend-path setting pointing
+to the fresh native backend. They are local backend-only controls; the next canonical CI must
+exercise the packaged universal backend with that override absent.
+
+On CLion 2026.1.5.2 the original package rendered the package and module graphs, and clicking
+the rendered module opened its actual source. After introducing a malformed manifest, the
+graph displayed the ordinary empty-state instruction to build the project. The backend had
+cached the failed `emit build-database` response as a successful database. It now returns a
+request error containing the exit code and diagnostics before populating the cache. The protocol
+regression changes the mock failure flag without editing the manifest; both graph queries recover
+immediately, proving that recovery does not rely on a file watcher clearing a failed response.
+
+The fresh native backend passed the protocol regression and the actual JCEF scenario on both
+2026.1.5.2 and 2026.2.4.1: real build, visible package SVG, visible module SVG, rendered-node
+source navigation, visible manifest error with no SVG, and restored graph after correcting the
+manifest. The disabled-JCEF explanation passed on 2026.1 with the canonical backend and on
+2026.2 with the native backend control. A legitimate empty graph remains a separate unverified
+scenario; an error rendered as empty is not evidence for it.
+
+Observer failures are retained separately. Tool-window content creation required EDT access;
+a close-all-editors action was disabled because no editor was open. The navigation test now
+verifies that the target source is not selected before clicking the rendered node. On 2026.2,
+the Performance Testing plugin loader could not resolve the JCEF browser classes. The remote
+interfaces now use the actual product plugin's public class-loader identity. With that correction,
+both JCEF and disabled-JCEF scenarios passed. No product class-loading change was required.
+
+Only version, package identity, control mode and assertion names are uploaded. Local private
+logs and screenshots remain outside repository documents and CI artifacts. The broader matrix
+above, including runner debugging and native Windows/macOS GUI behavior, is still incomplete.

@@ -31,7 +31,7 @@ kotlin { jvmToolchain(25) }
 tasks.test {
     useJUnitPlatform()
     maxHeapSize = "2g"
-    for (key in listOf("pluginZip", "mcpplsZip", "ideVersion", "ideHome", "output")) {
+    for (key in listOf("pluginZip", "mcpplsZip", "ideVersion", "ideHome", "output", "backendPath")) {
         providers.gradleProperty(key).orNull?.let { systemProperty("mcpp.clion.$key", it) }
     }
     providers.gradleProperty("testHome").orNull?.let { systemProperty("user.home", it) }

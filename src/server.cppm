@@ -492,6 +492,14 @@ std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::p
     }
     auto r = query(root, {"emit", "build-database", "--format", "json"});
     if (!r) return std::unexpected(r.error());
+    if (r->exitCode != 0) {
+        const auto diagnostics = mcpp::diagnostics_of(r->envelope);
+        auto message = t("mcpp {0} failed with exit code {1}", {"emit build-database", std::to_string(r->exitCode)});
+        if (!r->narration.empty()) message += "\n" + r->narration;
+        else if (!diagnostics.empty()) message += "\n" + diagnostics.front().value("message", "");
+        return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, std::move(message),
+                                          Json{{"exitCode", r->exitCode}, {"diagnostics", diagnostics}}});
+    }
     if (r->envelope.is_null())
         return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcpp emit build-database printed no document")});
     std::lock_guard lock(mutex_);

@@ -39,6 +39,9 @@ CLion's **Settings | Tools | mcpp** validates finite numbers and their allowed r
 saving the form. Invalid input displays an error and leaves every stored value unchanged.
 Entering a setting's default removes its stored override.
 
+Graph queries report build-database errors instead of showing an empty graph. After correcting
+the reported problem, reopen the graph to retry.
+
 - **One answer everywhere** -- what a build runs, how a test is reported, what a cleanup costs: the backend's
 - **Only mcpp's contract** -- no manifest parsing, no dependency resolution of its own
 - **Jobs in order** -- one at a time per project, a newer build replaces a waiting one, cancelling ends cleanly

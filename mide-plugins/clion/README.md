@@ -25,6 +25,9 @@ In **Settings | Tools | mcpp**, Apply validates every numeric value against the 
 range and rejects non-finite values. An invalid value displays an error and leaves all stored
 settings unchanged. Entering a setting's default removes its stored override.
 
+The graph view reports a failed build-database query as an error. Correct the reported problem
+and reopen the graph to retry. An unavailable JCEF browser displays an explanation in the tool window.
+
 ## Build
 
 ```bash
@@ -49,6 +52,8 @@ backend.
 
 The stable IDE tests also use the actual settings dialog: keyboard input, visible validation
 errors, refusal of partial saves, the persisted XML, reopening the form and restoring defaults.
+Graph tests inspect the real JCEF document, click a rendered module to open its source,
+check visible query errors and recovery, and check the explanation when JCEF is disabled.
 
 The packaged ZIP is also run in the real stable CLion 2026.1.5.2 and 2026.2.4.1 IDEs by
 `clion-stable.yml`. Both versions load the same ZIP and the pinned mcppls plugin. The test opens

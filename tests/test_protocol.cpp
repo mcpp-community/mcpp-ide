@@ -186,6 +186,25 @@ int main() {
     CHECK(pack["linkages"].empty() != helpNamesLinkage);
     result_of("mcpp-ide/graph/packages", rooted);
     result_of("mcpp-ide/graph/modules", rooted);
+    // A failed database is an error, not an empty graph or a cached answer.
+    // The mock flag changes without a manifest edit, so immediate recovery
+    // proves the failed response itself was never cached.
+    const auto badDatabase = root / "database-error";
+    std::filesystem::create_directories(badDatabase);
+    std::ofstream(badDatabase / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.1.0\"\n";
+    std::ofstream(badDatabase / ".mock-mcpp-fail") << "manifest\n";
+    const Json badRoot{{"root", badDatabase.generic_string()}};
+    for (const auto* method : {"mcpp-ide/graph/packages", "mcpp-ide/graph/modules"}) {
+        const auto failed = wire.call(method, badRoot);
+        CHECK(failed.contains("error"));
+        CHECK(failed["error"]["code"] == rpc::REQUEST_FAILED);
+        CHECK(failed["error"]["data"]["exitCode"] == 1);
+        CHECK(!failed["error"]["data"]["diagnostics"].empty());
+        CHECK(failed["error"]["message"].get<std::string>().find("emit build-database") != std::string::npos);
+    }
+    std::filesystem::remove(badDatabase / ".mock-mcpp-fail");
+    CHECK(!result_of("mcpp-ide/graph/packages", badRoot)["nodes"].empty());
+    CHECK(!result_of("mcpp-ide/graph/modules", badRoot)["nodes"].empty());
     result_of("mcpp-ide/manifest/check", rooted);
     result_of("mcpp-ide/settings/registry", Json::object());
     result_of("mcpp-ide/selfCheck", Json::object());

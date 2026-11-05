@@ -97,4 +97,8 @@ jobs:
             ${{ runner.temp }}/clion-stable-result/checks.json
             ${{ runner.temp }}/clion-stable-result/settings/result.json
             ${{ runner.temp }}/clion-stable-result/settings/observations.json
+            ${{ runner.temp }}/clion-stable-result/graphs/result.json
+            ${{ runner.temp }}/clion-stable-result/graphs/checks.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/result.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/checks.json
           if-no-files-found: warn
