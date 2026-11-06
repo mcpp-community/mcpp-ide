@@ -6,7 +6,7 @@ markers=['No usable sandbox','Failed to move to new namespace','Operation not pe
          'AppArmor','error while loading shared libraries','GPU process exited unexpectedly',
          'Failed to create browser','JCEF has been restarted','Failed to initialize JCEF',
          'CefApp initialization failed','JCEF is not supported','AWT-EventQueue']
-counts=collections.Counter();classes=collections.Counter();missing=set();files=0
+counts=collections.Counter();classes=collections.Counter();missing=set();files=0;traces={}
 contexts=os.environ.get('MCPP_DIAG_CONTEXTS')
 ide_roots=[Path(p) for p in json.loads(Path(contexts).read_text())] if contexts else [Path('out/ide-tests/tests')]
 test_root=Path('mide-plugins/clion/integration-tests/build/test-results/test')
@@ -20,6 +20,17 @@ for root in roots:
         for marker in markers:counts[marker]+=text.count(marker)
         for name in re.findall(r'\b((?:com\.intellij|com\.jetbrains|org\.cef|java|javax|kotlin|io\.github\.mcppcommunity)\.[\w.$]*(?:Exception|Error))\b',text):classes[name]+=1
         missing.update(re.findall(r'error while loading shared libraries: ([A-Za-z0-9_.+-]+)',text))
+        lines=text.splitlines()
+        for index,line in enumerate(lines):
+            kinds=[name for name in ['ExecutionFinishedException','UnhandledException'] if name in line]
+            if not kinds:continue
+            frames=[]
+            for following in lines[index+1:index+65]:
+                frame=re.search(r'\bat ((?:com\.intellij|com\.jetbrains|io\.github\.mcppcommunity|kotlinx\.coroutines|java\.util)\.[A-Za-z0-9_.$<>]+)\(([A-Za-z0-9_.$-]+\.(?:kt|java)):(\d+)\)',following)
+                if frame:frames.append(dict(method=frame[1],source=frame[2],line=int(frame[3])))
+            if frames:
+                key=json.dumps([kinds,frames],sort_keys=True)
+                if len(traces)<16 or key in traces:traces[key]=dict(kinds=kinds,frames=frames)
 tests=[]
 allowed_tests={('PackagedPluginTest','packagedPluginStartsItsBundledBackend()'),
                ('SettingsInteractionTest','settingsValidateBeforeSavingInTheRealDialog()'),
@@ -48,6 +59,7 @@ for key in ['apparmor_restrict_unprivileged_userns','unprivileged_userns_clone']
     sysctl[key]=p.read_text().strip() if p.is_file() else None
 probe=subprocess.run(['unshare','-Ur','true'],capture_output=True,text=True)
 report=dict(log_files_classified=files,markers=dict(counts),exception_classes=dict(classes),missing_libraries=sorted(missing),tests=tests,other_testcase_count=other_tests,
+            public_exception_frames=list(traces.values()),
             sysctl=sysctl,user_namespace_probe_exit=probe.returncode,user_namespace_probe_permission_denied='Operation not permitted' in probe.stderr,
             scope='Synthetic CI IDE contexts; only fixed diagnostic markers, public exception classes and test names. No raw logs, messages or paths.')
 out=Path(os.environ.get('MCPP_DIAG_REPORT',str(Path(os.environ['RUNNER_TEMP'])/'clion-public-diagnostics.json')))
