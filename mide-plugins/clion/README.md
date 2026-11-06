@@ -85,12 +85,17 @@ checks its visible view, source breakpoint, variable values before and after ste
 and stop, checks the native test tree,
 compiler-error output, build/test failure and recovery, and exact manifest completion insertion
 during project analysis. It supplements Plugin Verifier's static compatibility checks.
+CLion 2026.2.4.1 can emit a GDB variable-read cancellation after stopping a
+debug session; the same exception occurs in a stock CMake project without the
+plugins. The stable test records the exception class and method symbols, and
+classifies this one SDK event only after its functional assertions complete.
+Other IDE errors fail the test.
 
 An individual packaged plugin can be checked without rebuilding the backend:
 
 ```bash
 xvfb-run -a gradle --no-daemon -p integration-tests test \
-  -PpluginZip=/absolute/path/mcpp-clion-0.2.0.zip \
+  -PpluginZip=/absolute/path/mcpp-clion-0.2.1.zip \
   -PmcpplsZip=/absolute/path/mcppls-clion-0.0.19-linux-x64.zip \
   -PideVersion=2026.1.5.2
 ```

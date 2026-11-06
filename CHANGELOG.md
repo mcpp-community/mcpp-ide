@@ -18,6 +18,11 @@ mcpp-vscode 1.1.1, mcpp-clion 0.2.1 and mcpp-nvim 0.2.1.
 - CI covers stable CLion 2026.1.5.2 and 2026.2.4.1 with the same packaged ZIP,
   static compatibility checks and actual editor interactions. The hosted JCEF
   check restores its temporary user-namespace policy after the test.
+- CLion 2026.2.4.1 can report an internal GDB variable-read cancellation after
+  debug stop, also reproduced without either plugin in a stock CMake project.
+  The stable test records its path-free fingerprint and classifies only that
+  exact SDK signature after all editor assertions finish. Other IDE errors
+  still fail the test.
 
 ## 0.2.0
 

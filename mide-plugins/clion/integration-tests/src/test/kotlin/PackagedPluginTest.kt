@@ -40,16 +40,35 @@ import kotlin.time.Duration.Companion.minutes
 
 private const val PLUGIN_ID = "io.github.mcpp-community.mcpp-clion"
 
-private fun ideFailureFingerprint(message: String, details: String): String {
+private fun stockClion262DebuggerStop(
+    version: String?, message: String, details: String, checks: String?, result: String?
+): Boolean {
+    if (version != "2026.2.4.1" || checks == null || result == null) return false
+    val completed = listOf("debug-variable-40", "debug-variable-42", "debug-step-over",
+        "debug-stop-prevents-program-work", "cache-inventory-visible")
+    if (completed.any { "\"$it\"" !in checks } ||
+        "\"ideVersion\":\"2026.2.4.1\"" !in result ||
+        "\"programExecuted\":true" !in result) return false
+    val reported = "$message\n$details"
+    return "com.intellij.openapi.diagnostic.UnhandledException" in reported &&
+        "com.intellij.execution.ExecutionFinishedException" in reported &&
+        "GDBDriver" in reported && "FrameVariables" in reported &&
+        "io.github.mcppcommunity." !in reported
+}
+
+private fun ideFailureFingerprint(message: String, details: String, classification: String): String {
     // IDE reports can contain machine paths. Retain only Java/Kotlin type and
     // method symbols; this is enough to distinguish an SDK error from ours.
     val text = "$message\n$details"
-    val types = Regex("""\b(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*[A-Za-z_$][A-Za-z0-9_$]*(?:Exception|Error)\b""")
-        .findAll(text).map { it.value }.distinct().take(6).toList()
-    val frames = Regex("""(?m)^\s*at\s+([A-Za-z0-9_.$]+)\(""")
-        .findAll(details).map { it.groupValues[1] }.distinct().take(8).toList()
+    val types = Regex("""\b(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*[A-Z][A-Za-z0-9_$]*(?:Exception|Error)\b""")
+        .findAll(text).map { it.value }.distinct().take(24).toList()
+    val allFrames = Regex("""(?m)^\s*at\s+([A-Za-z0-9_.$]+)\(""")
+        .findAll(details).map { it.groupValues[1] }.distinct().toList()
+    val frames = (allFrames.take(8) + allFrames.filter {
+        "GDBDriver" in it || "mcpp" in it.lowercase()
+    }.take(12)).distinct()
     fun array(values: List<String>) = values.joinToString(",", "[", "]") { "\"$it\"" }
-    return "{\"types\":${array(types)},\"frames\":${array(frames)}}"
+    return "{\"classification\":\"$classification\",\"types\":${array(types)},\"frames\":${array(frames)}}"
 }
 
 @Remote("io.github.mcppcommunity.mcppclion.McppSession", plugin = PLUGIN_ID)
@@ -227,8 +246,9 @@ interface LookupItemRemote { fun getLookupString(): String }
 
 class PackagedPluginTest {
     init {
-        // A successful process exit alone cannot prove the plugin loaded:
-        // exceptions reported by the IDE must fail the integration test.
+        // A successful process exit alone cannot prove the plugin loaded.
+        // Only the independently reproduced stock 262 post-stop debugger
+        // cancellation is classified after every functional assertion passes.
         di = DI {
             extend(di)
             bindSingleton<CIServer>(overrides = true) {
@@ -236,14 +256,37 @@ class PackagedPluginTest {
                     override fun reportTestFailure(testName: String, message: String, details: String, linkToLogs: String?, kind: SyntheticTestKind, generifyTestName: Boolean) {
                         val output = Path.of(System.getProperty("mcpp.clion.output") ?: "build/stable-smoke").toAbsolutePath()
                         Files.createDirectories(output)
+                        val known = stockClion262DebuggerStop(
+                            System.getProperty("mcpp.clion.ideVersion"), message, details,
+                            output.resolve("checks.json").takeIf { Files.exists(it) }?.let { Files.readString(it) },
+                            output.resolve("result.json").takeIf { Files.exists(it) }?.let { Files.readString(it) })
                         Files.writeString(output.resolve("ide-errors.ndjson"),
-                            ideFailureFingerprint(message, details) + "\n",
+                            ideFailureFingerprint(message, details,
+                                if (known) "stock-clion-262-debugger-stop" else "unclassified") + "\n",
                             StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+                        if (known) return
                         throw AssertionError("IDE failure; see sanitized ide-errors.ndjson")
                     }
                 }
             }
         }
+    }
+
+    @Test
+    fun stockDebuggerStopClassificationIsNarrow() {
+        val details = """com.intellij.openapi.diagnostic.UnhandledException
+            at com.intellij.openapi.application.impl.ExceptionsKt.processUnhandledException(Exceptions.kt:56)
+            Caused by: com.intellij.execution.ExecutionFinishedException
+            at com.jetbrains.cidr.execution.debugger.backend.gdb.GDBDriver.doGetFrameVariables(GDBDriver.java:1)
+        """.trimIndent()
+        val checks = """{"passed":["debug-variable-40","debug-variable-42","debug-step-over","debug-stop-prevents-program-work","cache-inventory-visible"]}"""
+        val result = """{"ideVersion":"2026.2.4.1","programExecuted":true}"""
+        assertTrue(stockClion262DebuggerStop("2026.2.4.1", "", details, checks, result))
+        assertFalse(stockClion262DebuggerStop("2026.1.5.2", "", details, checks, result))
+        assertFalse(stockClion262DebuggerStop("2026.2.4.1", "", details.replace("ExecutionFinishedException", "IllegalStateException"), checks, result))
+        assertFalse(stockClion262DebuggerStop("2026.2.4.1", "", details + " io.github.mcppcommunity.mcppclion.Backend", checks, result))
+        assertFalse(stockClion262DebuggerStop("2026.2.4.1", "", details, checks.replace("debug-variable-42", "missing"), result))
+        assertFalse(stockClion262DebuggerStop("2026.2.4.1", "", details, checks, null))
     }
 
     @Test
