@@ -23,6 +23,10 @@ mcpp-vscode 1.1.1, mcpp-clion 0.2.1 and mcpp-nvim 0.2.1.
   The stable test records its path-free fingerprint and classifies only that
   exact SDK signature after all editor assertions finish. Other IDE errors
   still fail the test.
+- Release CI submits the verified CLion ZIP to JetBrains Marketplace using the
+  configured token, alongside the verified VSIX sent to Open VSX. Each
+  destination has an independent publish job and the JetBrains response is
+  retained as a receipt.
 
 ## 0.2.0
 
