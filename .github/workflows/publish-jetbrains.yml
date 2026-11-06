@@ -1,8 +1,6 @@
 name: Publish JetBrains
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -21,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish-jetbrains-${{ inputs.tag || github.event.release.tag_name }}
+  group: publish-jetbrains-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -29,7 +27,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@v5
       - name: Resolve the published release version
@@ -66,6 +64,6 @@ jobs:
       - uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: jetbrains-${{ inputs.tag || github.event.release.tag_name }}-receipt
+          name: jetbrains-${{ inputs.tag }}-receipt
           path: published/jetbrains-receipt.json
           if-no-files-found: warn
