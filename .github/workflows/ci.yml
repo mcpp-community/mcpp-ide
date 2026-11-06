@@ -44,12 +44,16 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mcpp
       - name: Existing test tools and display
+        env:
+          DIAGNOSTIC_FOCUS: ${{ inputs.focus }}
         run: |
           xlings install gradle -y -g
           sudo apt-get update -qq
           sudo apt-get install -y xvfb
-          mcpp toolchain install gcc 16.1.0
-          mcpp toolchain default gcc@16.1.0
+          if [ "$DIAGNOSTIC_FOCUS" != native-262 ]; then
+            mcpp toolchain install gcc 16.1.0
+            mcpp toolchain default gcc@16.1.0
+          fi
       - uses: actions/cache@v5
         with:
           path: ~/.gradle/caches/modules-2
@@ -85,7 +89,7 @@ jobs:
           original=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)
           trap 'sudo sysctl -w "kernel.apparmor_restrict_unprivileged_userns=$original" >/dev/null 2>&1 || true' EXIT
           if [ "$DIAGNOSTIC_FOCUS" = native-262 ]; then
-            export NATIVE_CONTROL_CXX="${MCPP_HOME:-$HOME/.mcpp}/registry/data/xpkgs/xim-x-gcc/16.1.0/bin/g++"
+            export NATIVE_CONTROL_CXX=/usr/bin/c++
             test -x "$NATIVE_CONTROL_CXX"
           fi
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/clion-userns-control.py \

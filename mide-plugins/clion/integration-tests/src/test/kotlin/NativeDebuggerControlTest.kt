@@ -13,6 +13,8 @@ import com.intellij.ide.starter.ci.CIServer
 import com.intellij.ide.starter.ci.NoCIServer
 import com.intellij.ide.starter.di.di
 import com.intellij.ide.starter.driver.engine.runIdeWithDriver
+import com.intellij.ide.starter.ide.IdeDistributionFactory
+import com.intellij.ide.starter.ide.IdeInstaller
 import com.intellij.ide.starter.models.IdeInfo
 import com.intellij.ide.starter.models.TestCase
 import com.intellij.ide.starter.project.LocalProjectInfo
@@ -74,9 +76,11 @@ class NativeDebuggerControlTest {
         val compiler = Path.of(System.getenv("NATIVE_CONTROL_CXX") ?: error("native compiler is required"))
         assertTrue(Files.isExecutable(compiler))
         val compilerVersion = ProcessBuilder(compiler.toString(), "-dumpfullversion").start()
-        assertEquals("16.1.0", compilerVersion.inputStream.bufferedReader().readText().trim())
+        val versionText=compilerVersion.inputStream.bufferedReader().readText().trim()
+        assertTrue(Regex("[0-9]+(\\.[0-9]+){1,3}").matches(versionText))
         assertEquals(0, compilerVersion.waitFor())
-        record("gcc-16-control")
+        Files.writeString(output.resolve("toolchain.json"),"{\"compilerVersion\":\"$versionText\"}\n")
+        record("stock-compiler-control")
         Files.writeString(fixture.resolve("CMakeLists.txt"), """
             cmake_minimum_required(VERSION 3.15)
             set(CMAKE_CXX_COMPILER "${compiler.toString().replace('\\', '/')}")
@@ -98,7 +102,17 @@ class NativeDebuggerControlTest {
                 return answer == 42 ? 0 : 2;
             }
         """.trimIndent() + "\n")
-        val ide = IdeInfo(productCode="CL", platformPrefix="CLion", executableFileName="clion", fullName="CLion", version=version, buildType="release")
+        var ide = IdeInfo(productCode="CL", platformPrefix="CLion", executableFileName="clion", fullName="CLion", version=version, buildType="release")
+        val localHome=System.getProperty("mcpp.clion.ideHome")?.let(Path::of)
+        if (localHome!=null) {
+            ide=ide.copy(getInstaller={
+                object : IdeInstaller {
+                    override suspend fun install(ideInfo: IdeInfo)=
+                        Files.readString(localHome.resolve("build.txt")).trim().removePrefix("CL-") to
+                            di.direct.instance<IdeDistributionFactory>().installIDE(localHome,"clion")
+                }
+            })
+        }
         val context = Starter.newContext("native-debug-control-$version-${System.currentTimeMillis()}", TestCase(ide, LocalProjectInfo(fixture)))
         // No mcpp/mcppls installation; only the usual driver instrumentation.
         context.applyVMOptionsPatch {
@@ -116,6 +130,8 @@ class NativeDebuggerControlTest {
                 assertFalse(plugins.isPluginInstalled(ids.getId("io.github.mcpp-community.mcpp-clion")))
                 assertFalse(plugins.isPluginInstalled(ids.getId("io.github.sunrisepeak.mcppls")))
                 record("mcpp-and-mcppls-absent")
+                ui.x("//div[@visible_text='Skip Wizard and Use Defaults' or @text='Skip Wizard and Use Defaults']").click()
+                record("stock-toolchain-wizard-defaults")
                 val runs=utility<NativeRunManagerFactory>().getInstance(singleProject())
                 val ready=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(180)
                 var configuration: NativeRunSettings?=null

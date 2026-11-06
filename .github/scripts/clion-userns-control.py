@@ -110,10 +110,13 @@ def phase(name,patterns):
     entry['packaged_checks']=[v for v in json.loads(checks.read_text()).get('passed',[]) if v in allowed_checks] if checks.is_file() else []
     entry['packaged_result_published']=(directory/'result.json').is_file()
     native=directory/'native-debug/checks.json'
-    allowed_native={'gcc-16-control','mcpp-and-mcppls-absent','stock-cmake-configuration','native-breakpoint',
+    allowed_native={'stock-compiler-control','mcpp-and-mcppls-absent','stock-toolchain-wizard-defaults','stock-cmake-configuration','native-breakpoint',
                     'native-variable-40','native-step','native-variable-42','native-resume-output','native-stop-prevents-work'}
     entry['native_checks']=[v for v in json.loads(native.read_text()).get('passed',[]) if v in allowed_native] if native.is_file() else []
     entry['native_result_published']=(directory/'native-debug/result.json').is_file()
+    toolchain=directory/'native-debug/toolchain.json'
+    compiler_version=json.loads(toolchain.read_text()).get('compilerVersion') if toolchain.is_file() else None
+    entry['native_compiler_version']=compiler_version if isinstance(compiler_version,str) and re.fullmatch(r'[0-9]+(\.[0-9]+){1,3}',compiler_version) else None
     report['phases'].append(entry)
     save()
     return entry
