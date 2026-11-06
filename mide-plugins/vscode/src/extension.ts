@@ -190,7 +190,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   // background below, and nothing waits for it.
   const session = new Session(extensionContext, output);
   let missingMcppNoticeShown = false;
-  const ensureMcppForAction = async (): Promise<boolean> => {
+  const ensureMcppForAction = async (notify = true): Promise<boolean> => {
     if (!vscode.workspace.isTrusted) return true;
     let state: { available: boolean; missing: boolean };
     try {
@@ -199,7 +199,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
       return true; // Existing backend errors describe a backend that cannot answer.
     }
     if (!state.missing) return true;
-    if (!missingMcppNoticeShown) {
+    if (notify && !missingMcppNoticeShown) {
       missingMcppNoticeShown = true;
       const repository = "https://github.com/mcpp-community/mcpp";
       const open = t("Open the repository");
@@ -380,7 +380,8 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
       if (!read<boolean>("mcpp.build.onSave", document.uri) || cliController.isBusy()) return;
       if (!/\.(cppm|cpp|cc|cxx|ixx|mpp|h|hpp|toml|mcpp)$/.test(document.fileName)) return;
       const project = findCurrentProject();
-      if (project && document.fileName.startsWith(project.root)) await cliController.runProjectTask("build", { notify: false });
+      if (project && document.fileName.startsWith(project.root))
+        await cliController.runProjectTask("build", { notify: false, promptMissingMcpp: false });
     }),
   );
   function updateJobRunning(): Thenable<unknown> {

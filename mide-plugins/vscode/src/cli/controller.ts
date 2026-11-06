@@ -53,7 +53,7 @@ export interface McppCliControllerOptions {
   ) => Promise<void>;
   isTrusted: () => boolean;
   /** Called only for commands that need the local build tool. */
-  ensureMcpp: () => Promise<boolean>;
+  ensureMcpp: (notify?: boolean) => Promise<boolean>;
   /**
    * `mcpp.ui.statusBar.showLanguageServer`: one short line describing the C++
    * Modules state, or `undefined` when there is nothing to show. A callback
@@ -82,6 +82,8 @@ const QUICK_MENU_ICON_DIRECTORY = "media/quick-menu";
 export interface ProjectTaskRunOptions {
   /** Set to false when the caller performs its own post-task action. */
   notify?: boolean;
+  /** Autosave builds check availability without showing an unsolicited notice. */
+  promptMissingMcpp?: boolean;
   /** The arguments after the subcommand, for a pack the caller assembled. */
   args?: readonly string[];
 }
@@ -335,7 +337,7 @@ export class McppCliController {
     if (project === undefined || !this.requireTrusted()) {
       return undefined;
     }
-    if (!(await this.options.ensureMcpp())) return undefined;
+    if (!(await this.options.ensureMcpp(options.promptMissingMcpp !== false))) return undefined;
 
     // `mcpp.task.confirmClean`: one prompt for this entry point; the cleanup
     // plan's own level-2/3 confirmations are untouched by it.
