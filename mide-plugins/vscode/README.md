@@ -49,6 +49,9 @@ extension id, no version range ([docs/compatibility.md](docs/compatibility.md)).
    default); the C++ Modules status and actions live in **Project → Basics**.
 
 Opening a project never runs `mcpp` on its own and never downloads a toolchain.
+When a user starts an action that needs `mcpp` and the tool is absent, the extension shows one
+notification with the [mcpp repository](https://github.com/mcpp-community/mcpp) and an action to
+open it. Opening the project alone does not show that notification.
 
 ## Features
 

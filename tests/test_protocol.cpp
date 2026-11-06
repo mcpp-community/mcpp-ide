@@ -296,6 +296,8 @@ int main() {
     // What mcpp-vscode's own parsers read: one command's output as it printed it, and a project's
     // files with its source count.
     auto exec = result_of("mcpp-ide/mcpp/exec", Json{{"args", Json::array({"--version"})}, {"cwd", root.generic_string()}});
+    auto availability = result_of("mcpp-ide/mcpp/availability", Json::object());
+    CHECK(availability["available"] == true && availability["missing"] == false);
     CHECK(exec["exitCode"] == 0 && exec["stdout"].get<std::string>().find("mcpp") != std::string::npos);
     CHECK(exec["timedOut"] == false && exec["truncated"] == false);
     auto bounded = result_of("mcpp-ide/mcpp/exec", Json{{"args", Json::array({"--version"})}, {"maxOutputBytes", 3}});

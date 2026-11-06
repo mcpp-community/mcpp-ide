@@ -12,6 +12,8 @@ import com.intellij.DynamicBundle
 import com.intellij.ide.trustedProjects.TrustedProjects
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.notification.NotificationAction
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.PathManager
@@ -27,6 +29,7 @@ import io.github.mcppcommunity.mcppclion.settings.McppSettings
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** A path as the `file:` URI the backend names a document by (`file:///C:/x` for a drive path). */
 fun uriOf(path: String): String {
@@ -53,6 +56,7 @@ class McppSession(private val project: Project) : Disposable {
     /** When the backend ended, within the last three minutes. */
     private val exits = ArrayDeque<Long>()
     @Volatile var degraded = false; private set
+    private val missingMcppNoticeShown = AtomicBoolean(false)
 
     init {
         project.messageBus.connect(this).subscribe(McppSettings.CHANGED, McppSettings.Listener { key ->
@@ -263,6 +267,21 @@ class McppSession(private val project: Project) : Disposable {
         if (degraded && backend?.running != true)
             return CompletableFuture.failedFuture(IllegalStateException(t("the mcpp-ide backend is not running")))
         return start().thenCompose { backend?.request(method, params) ?: CompletableFuture.failedFuture(IllegalStateException(t("the mcpp-ide backend is not running"))) }
+    }
+
+    /** Only explicit commands call this. A later command retries discovery after installation. */
+    fun ensureMcppForAction(): CompletableFuture<Boolean> = request("mcpp/availability").handle { state, error ->
+        if (error != null || state?.asJsonObject?.get("missing")?.asBoolean != true) return@handle true
+        if (missingMcppNoticeShown.compareAndSet(false, true)) {
+            val repository = "https://github.com/mcpp-community/mcpp"
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed) NotificationGroupManager.getInstance().getNotificationGroup("mcpp")
+                    .createNotification("mcpp", t("mcpp is not installed. Install it from {0}.", repository), NotificationType.WARNING)
+                    .addAction(NotificationAction.createSimpleExpiring(t("Open the repository")) { BrowserUtil.browse(repository) })
+                    .notify(project)
+            }
+        }
+        false
     }
 
     // What each C++ file is to its project (source/entries) and each test program's cases

@@ -21,6 +21,10 @@ Language features of C++ files come from the mcppls CLion plugin, which this plu
 Those of `mcpp.toml` and `build.mcpp` -- completion, documentation, the jumps and the diagnostics --
 come from the backend over the session's connection (mcpp-ide's `docs/rules.md`).
 
+When a user starts an action that needs `mcpp` and the tool is absent, CLion shows one notification
+with the [mcpp repository](https://github.com/mcpp-community/mcpp) and an action to open it. Opening
+a project alone does not show that notification.
+
 In **Settings | Tools | mcpp**, Apply validates every numeric value against the registry's
 range and rejects non-finite values. An invalid value displays an error and leaves all stored
 settings unchanged. Entering a setting's default removes its stored override.

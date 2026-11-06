@@ -304,6 +304,11 @@
       "params": { "$ref": "#/$defs/rooted" },
       "result": { "type": "object", "required": ["root", "diagnostics"], "properties": { "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } } } }
     },
+    "mcpp-ide/mcpp/availability": {
+      "description": "On an explicit mcpp action, retry local discovery if needed and distinguish an absent tool from an installed tool whose handshake failed. No notification is emitted by the backend.",
+      "params": { "type": "object" },
+      "result": { "type": "object", "required": ["available", "missing"], "properties": { "available": { "type": "boolean" }, "missing": { "type": "boolean" } } }
+    },
     "mcpp-ide/mcpp/exec": {
       "description": "One command of mcpp, as an editor's own parsers read it (mcpp-vscode's views): what it printed and how it ended. The backend runs it as every command it runs -- the mcpp it located, the session's client, the effects an untrusted workspace denies -- ended past timeoutMs (without one, after a day: an install runs as long as it needs) and keeping at most maxOutputBytes (default 16 MiB) of each output.",
       "params": {

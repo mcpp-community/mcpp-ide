@@ -52,6 +52,8 @@ export interface McppCliControllerOptions {
     completion: TaskCompletion,
   ) => Promise<void>;
   isTrusted: () => boolean;
+  /** Called only for commands that need the local build tool. */
+  ensureMcpp: () => Promise<boolean>;
   /**
    * `mcpp.ui.statusBar.showLanguageServer`: one short line describing the C++
    * Modules state, or `undefined` when there is nothing to show. A callback
@@ -333,6 +335,7 @@ export class McppCliController {
     if (project === undefined || !this.requireTrusted()) {
       return undefined;
     }
+    if (!(await this.options.ensureMcpp())) return undefined;
 
     // `mcpp.task.confirmClean`: one prompt for this entry point; the cleanup
     // plan's own level-2/3 confirmations are untouched by it.
@@ -402,6 +405,7 @@ export class McppCliController {
     if (!this.requireTrusted()) {
       return;
     }
+    if (!(await this.options.ensureMcpp())) return;
     const project = this.options.currentProject();
     const inventory = await this.readToolchainInventory(project);
     if (inventory === undefined) {
@@ -427,6 +431,7 @@ export class McppCliController {
     if (!this.requireTrusted()) {
       return;
     }
+    if (!(await this.options.ensureMcpp())) return;
     const project = this.options.currentProject();
     const inventory = await this.readToolchainInventory(project);
     const spec = await this.pickInstallSpec(inventory);
@@ -520,6 +525,7 @@ export class McppCliController {
     if (!this.requireTrusted()) {
       return;
     }
+    if (!(await this.options.ensureMcpp())) return;
     const project = this.options.currentProject();
     const inventory = await this.readToolchainInventory(project);
     if (inventory !== undefined) {
@@ -782,6 +788,7 @@ export class McppCliController {
     if (!this.requireTrusted()) {
       return;
     }
+    if (!(await this.options.ensureMcpp())) return;
 
     const input = await vscode.window.showInputBox({
       title: t("New mcpp project (1/2)"),

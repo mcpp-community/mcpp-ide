@@ -40,7 +40,7 @@ inline constexpr int kProtocol = 2;
 // here and not in protocol/protocol.schema.json (or the other way) fails it. The session is an LSP
 // server (protocol 2, design 2026-10-30 part 2 §8): LSP's own methods, and mcpp-ide's under
 // `mcpp-ide/`.
-inline constexpr std::array<std::string_view, 52> kMethods = {
+inline constexpr std::array<std::string_view, 53> kMethods = {
     "initialize", "shutdown", "exit", "textDocument/completion", "textDocument/hover", "textDocument/definition",
     "textDocument/documentSymbol", "mcpp-ide/settings/update", "mcpp-ide/settings/registry",
     "mcpp-ide/settings/preset", "mcpp-ide/i18n/bundle", "mcpp-ide/selfCheck", "mcpp-ide/commands/list",
@@ -51,7 +51,7 @@ inline constexpr std::array<std::string_view, 52> kMethods = {
     "mcpp-ide/library/updateIndex", "mcpp-ide/toolchains/list", "mcpp-ide/toolchains/install",
     "mcpp-ide/toolchains/setDefault", "mcpp-ide/targets/list", "mcpp-ide/cache/inventory", "mcpp-ide/cache/plan",
     "mcpp-ide/cache/apply", "mcpp-ide/graph/packages", "mcpp-ide/graph/modules", "mcpp-ide/pack/formats",
-    "mcpp-ide/pack/start", "mcpp-ide/manifest/check", "mcpp-ide/mcpp/exec", "mcpp-ide/project/files",
+    "mcpp-ide/pack/start", "mcpp-ide/manifest/check", "mcpp-ide/mcpp/exec", "mcpp-ide/mcpp/availability", "mcpp-ide/project/files",
     "mcpp-ide/languageService/exec", "mcpp-ide/project/mcpp", "mcpp-ide/project/refresh",
     "mcpp-ide/capabilities/explain", "mcpp-ide/report/collect", "mcpp-ide/source/entries", "mcpp-ide/test/cases",
     "mcpp-ide/test/runCases"};
@@ -91,6 +91,7 @@ private:
     Result graph(const Json& p, bool modules);
     Result project_summary(const Json& p);
     Result mcpp_exec(const Json& p);
+    Result mcpp_availability();
     Result language_service_exec(const Json& p);
     Result project_new(const Json& p);
     Result manifest_check(const Json& p);
@@ -150,6 +151,7 @@ private:
     mcpp::Client client_;
     std::optional<mcpp::Located> located_;
     std::string mcppError_;
+    bool mcppMissing_ = false;
     Json settings_ = Json::object();
     bool trusted_ = true;
     mutable std::mutex localeMutex_;
@@ -331,12 +333,15 @@ void Session::locate_mcpp() {
     std::lock_guard lock(mutex_);
     if (!located) {
         mcppError_ = located.error();
+        // An invalid explicit path is a setting error when another local mcpp exists.
+        mcppMissing_ = configured.empty() || !mcpp::locate("").has_value();
         located_.reset();
         client_ = mcpp::Client{};
         jobs_->set_client(client_);
         return;
     }
     auto protocol = mcpp::handshake(located->program);
+    mcppMissing_ = false;
     if (!protocol) {
         mcppError_ = protocol.error();
         located_.reset();
@@ -505,6 +510,17 @@ std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::p
     std::lock_guard lock(mutex_);
     buildDatabases_[root] = r->envelope;
     return r->envelope;
+}
+
+std::expected<Json, rpc::Error> Session::mcpp_availability() {
+    bool retry;
+    {
+        std::lock_guard lock(mutex_);
+        retry = !client_.ready();
+    }
+    if (retry) locate_mcpp();
+    std::lock_guard lock(mutex_);
+    return Json{{"available", client_.ready()}, {"missing", mcppMissing_}};
 }
 
 Json Session::self_check() {
@@ -1696,6 +1712,7 @@ void Session::install() {
     });
     s.on("mcpp-ide/project/summary", [this](const Json& p, const rpc::Context&) { return project_summary(p); });
     s.on("mcpp-ide/mcpp/exec", [this](const Json& p, const rpc::Context&) { return mcpp_exec(p); });
+    s.on("mcpp-ide/mcpp/availability", [this](const Json&, const rpc::Context&) { return mcpp_availability(); });
     s.on("mcpp-ide/languageService/exec", [this](const Json& p, const rpc::Context&) { return language_service_exec(p); });
     s.on("mcpp-ide/project/files", [](const Json& p, const rpc::Context&) -> Result { return projects::files(root_of(p)); });
     s.on("mcpp-ide/project/new", [this](const Json& p, const rpc::Context&) { return project_new(p); });

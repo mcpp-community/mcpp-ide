@@ -387,6 +387,7 @@
   "mcpp has no global default toolchain yet": "mcpp 尚未设置全局默认工具链",
   "mcpp index update failed with exit code {0}": "mcpp index update 失败，退出码 {0}",
   "mcpp is installed but the environment is not ready; run `mcpp self doctor` to see what is missing.": "mcpp 已安装但环境尚未就绪；运行 `mcpp self doctor` 查看缺少什么。",
+  "mcpp is not installed. Install it from {0}.": "未安装 mcpp。请从 {0} 安装。",
   "mcpp library ecosystem": "mcpp 库生态",
   "mcpp list item effective for this directory; the actual build resolution may be affected by a parent mcpp workspace": "mcpp list 当前目录有效项；实际构建解析可能受父级 mcpp 工作区影响",
   "mcpp list toolchain for this directory": "mcpp list 当前目录工具链",

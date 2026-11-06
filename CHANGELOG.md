@@ -27,6 +27,9 @@ mcpp-vscode 1.1.1, mcpp-clion 0.2.1 and mcpp-nvim 0.2.1.
   configured token, alongside the verified VSIX sent to Open VSX. Each
   destination has an independent publish job and the JetBrains response is
   retained as a receipt.
+- VS Code and CLion check for a missing local `mcpp` only on user actions that
+  need the build tool. One notification links to its repository; opening a
+  project does not trigger the notice.
 
 ## 0.2.0
 

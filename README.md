@@ -72,6 +72,9 @@ Each editor package serves every system: it carries the backend as one ok-image 
 (`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.24.0) and okrun for
 Linux x64/arm64, macOS arm64 and Windows x64. The Neovim plugin carries none: it starts the
 `mcpp-ide` command xlings installs (okrun on the same bundle).
+VS Code and CLion check for the local build tool only when a user starts an action that needs it.
+If `mcpp` is absent, they show one notification linking to the
+[mcpp repository](https://github.com/mcpp-community/mcpp).
 
 ### From source
 

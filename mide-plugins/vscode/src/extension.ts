@@ -189,6 +189,25 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   // runner) answers the views' data, mcppls's account of the workspace among them; it starts in the
   // background below, and nothing waits for it.
   const session = new Session(extensionContext, output);
+  let missingMcppNoticeShown = false;
+  const ensureMcppForAction = async (): Promise<boolean> => {
+    if (!vscode.workspace.isTrusted) return true;
+    let state: { available: boolean; missing: boolean };
+    try {
+      state = await session.request("mcpp/availability");
+    } catch {
+      return true; // Existing backend errors describe a backend that cannot answer.
+    }
+    if (!state.missing) return true;
+    if (!missingMcppNoticeShown) {
+      missingMcppNoticeShown = true;
+      const repository = "https://github.com/mcpp-community/mcpp";
+      const open = t("Open the repository");
+      void vscode.window.showWarningMessage(t("mcpp is not installed. Install it from {0}.", repository), open)
+        .then((choice) => { if (choice === open) void vscode.env.openExternal(vscode.Uri.parse(repository)); });
+    }
+    return false;
+  };
   const bridge = createLanguageServerBridge({
     extensionInstalled: (id) => vscode.extensions.getExtension(id) !== undefined,
     serverActions: () => session.languageService?.serverActions,
@@ -261,6 +280,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     currentProject: findCurrentProject,
     afterProjectTask,
     isTrusted: () => vscode.workspace.isTrusted,
+    ensureMcpp: ensureMcppForAction,
     languageServerSummary: () => {
       const view = readLanguageServerState(session.languageService);
       return view.available ? view.state : undefined;
@@ -326,7 +346,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   extensionContext.subscriptions.push(
     session,
     jobs,
-    new Debugging(session, ideProjects),
+    new Debugging(session, ideProjects, ensureMcppForAction),
     testing,
     new McppCodeLens(session, testing, (root) => projectMcpp.get(root)),
     jobs.onDidChangeRunning.event((n) => void vscode.commands.executeCommand("setContext", "mcpp.jobRunning", n > 0)),
