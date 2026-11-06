@@ -2,6 +2,19 @@
 from pathlib import Path
 import collections,json,os,re,subprocess,xml.etree.ElementTree as ET
 
+def public_frames(text):
+    lines=text.splitlines()
+    result=[]
+    for index,line in enumerate(lines):
+        kinds=[name for name in ['ExecutionFinishedException','UnhandledException'] if name in line]
+        if not kinds:continue
+        frames=[]
+        for following in lines[index+1:index+65]:
+            frame=re.search(r'\bat ((?:com\.intellij|com\.jetbrains|io\.github\.mcppcommunity|kotlinx\.coroutines|java\.util)\.[A-Za-z0-9_.$<>]+)\(([A-Za-z0-9_.$-]+\.(?:kt|java)):(\d+)\)',following)
+            if frame:frames.append(dict(method=frame[1],source=frame[2],line=int(frame[3])))
+        if frames:result.append(dict(kinds=kinds,frames=frames))
+    return result
+
 markers=['No usable sandbox','Failed to move to new namespace','Operation not permitted',
          'AppArmor','error while loading shared libraries','GPU process exited unexpectedly',
          'Failed to create browser','JCEF has been restarted','Failed to initialize JCEF',
@@ -20,17 +33,9 @@ for root in roots:
         for marker in markers:counts[marker]+=text.count(marker)
         for name in re.findall(r'\b((?:com\.intellij|com\.jetbrains|org\.cef|java|javax|kotlin|io\.github\.mcppcommunity)\.[\w.$]*(?:Exception|Error))\b',text):classes[name]+=1
         missing.update(re.findall(r'error while loading shared libraries: ([A-Za-z0-9_.+-]+)',text))
-        lines=text.splitlines()
-        for index,line in enumerate(lines):
-            kinds=[name for name in ['ExecutionFinishedException','UnhandledException'] if name in line]
-            if not kinds:continue
-            frames=[]
-            for following in lines[index+1:index+65]:
-                frame=re.search(r'\bat ((?:com\.intellij|com\.jetbrains|io\.github\.mcppcommunity|kotlinx\.coroutines|java\.util)\.[A-Za-z0-9_.$<>]+)\(([A-Za-z0-9_.$-]+\.(?:kt|java)):(\d+)\)',following)
-                if frame:frames.append(dict(method=frame[1],source=frame[2],line=int(frame[3])))
-            if frames:
-                key=json.dumps([kinds,frames],sort_keys=True)
-                if len(traces)<16 or key in traces:traces[key]=dict(kinds=kinds,frames=frames)
+        for trace in public_frames(text):
+            key=json.dumps(trace,sort_keys=True)
+            if len(traces)<16 or key in traces:traces[key]=trace
 tests=[]
 allowed_tests={('PackagedPluginTest','packagedPluginStartsItsBundledBackend()'),
                ('SettingsInteractionTest','settingsValidateBeforeSavingInTheRealDialog()'),

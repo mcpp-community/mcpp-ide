@@ -16,6 +16,7 @@ parser.add_argument('--language',required=True,type=Path)
 parser.add_argument('--sha256',required=True)
 parser.add_argument('--ide-version',required=True)
 parser.add_argument('--focus',choices=['policy-control','packaged-262'],default='policy-control')
+parser.add_argument('--repetitions',choices=[1,3],default=1,type=int)
 args=parser.parse_args()
 root=Path.cwd()
 output=Path(os.environ['RUNNER_TEMP'])/'clion-userns-control'
@@ -122,9 +123,12 @@ try:
         set_policy('0')
         if probe()['exit']!=0:
             raise RuntimeError('user namespace permission did not change')
-        packaged=phase('packaged-only',['PackagedPluginTest'])
-        status=int(packaged['exit']!=0)
+        results=[phase('packaged-only' if args.repetitions==1 else 'packaged-'+str(n),['PackagedPluginTest'])
+                 for n in range(1,args.repetitions+1)]
+        status=int(any(p['exit']!=0 for p in results))
         report['focused_packaged_passed']=status==0
+        report['fixed_repetitions']=args.repetitions
+        report['repetition_passes']=sum(p['exit']==0 for p in results)
         raise SystemExit(status)
     baseline=phase('baseline',['GraphInteractionTest.graphRendersNavigatesAndRecoversInJcef'])
     set_policy('0')

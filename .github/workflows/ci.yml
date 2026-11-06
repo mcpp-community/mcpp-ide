@@ -16,6 +16,11 @@ on:
         type: choice
         options: ['policy-control', 'packaged-262']
         default: policy-control
+      repetitions:
+        description: Fixed repetitions, preserving every failure
+        type: choice
+        options: ['1', '3']
+        default: '1'
 
 permissions:
   contents: read
@@ -72,6 +77,7 @@ jobs:
           IDE_VERSION: ${{ matrix.version }}
           PACKAGE_SHA: ${{ inputs.package_sha256 }}
           DIAGNOSTIC_FOCUS: ${{ inputs.focus }}
+          DIAGNOSTIC_REPETITIONS: ${{ inputs.repetitions }}
         run: |
           set -euo pipefail
           plugin=$(find stable-plugin -maxdepth 1 -name 'mcpp-clion-*.zip' -print)
@@ -81,7 +87,8 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/clion-userns-control.py \
             --plugin "$GITHUB_WORKSPACE/$plugin" \
             --language "$GITHUB_WORKSPACE/$language" \
-            --sha256 "$PACKAGE_SHA" --ide-version "$IDE_VERSION" --focus "$DIAGNOSTIC_FOCUS"
+            --sha256 "$PACKAGE_SHA" --ide-version "$IDE_VERSION" --focus "$DIAGNOSTIC_FOCUS" \
+            --repetitions "$DIAGNOSTIC_REPETITIONS"
       - uses: actions/upload-artifact@v5
         if: always()
         with:
