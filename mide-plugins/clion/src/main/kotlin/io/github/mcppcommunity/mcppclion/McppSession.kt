@@ -12,6 +12,8 @@ import com.intellij.DynamicBundle
 import com.intellij.ide.trustedProjects.TrustedProjects
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.notification.NotificationAction
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.PathManager
@@ -20,10 +22,14 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import io.github.mcppcommunity.mcppclion.backend.Backend
 import io.github.mcppcommunity.mcppclion.backend.Locate
+import io.github.mcppcommunity.mcppclion.backend.BackendError
+import io.github.mcppcommunity.mcppclion.backend.requireProtocol
+import io.github.mcppcommunity.mcppclion.backend.wireName
 import io.github.mcppcommunity.mcppclion.settings.McppSettings
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** A path as the `file:` URI the backend names a document by (`file:///C:/x` for a drive path). */
 fun uriOf(path: String): String {
@@ -50,6 +56,7 @@ class McppSession(private val project: Project) : Disposable {
     /** When the backend ended, within the last three minutes. */
     private val exits = ArrayDeque<Long>()
     @Volatile var degraded = false; private set
+    private val missingMcppNoticeShown = AtomicBoolean(false)
 
     init {
         project.messageBus.connect(this).subscribe(McppSettings.CHANGED, McppSettings.Listener { key ->
@@ -146,12 +153,19 @@ class McppSession(private val project: Project) : Disposable {
         val configured = if (TrustedProjects.isProjectTrusted(project)) McppSettings.get().string("mcpp.ide.backendPath") else ""
         val located = Locate.backend(configured, pluginRoot())
         if (located == null) {
+            log.warn("mcpp-ide: startup failed (source=none, protocol=unknown): backend not found")
             notify(t("The mcpp-ide backend was not found. Install it with `xlings install mcpp-ide`, or set mcpp.ide.backendPath."), NotificationType.ERROR)
             future.completeExceptionally(IllegalStateException("mcpp-ide was not found"))
             return future
         }
         log.info("mcpp-ide: starting ${located.command.joinToString(" ")} (${located.source})")
-        val b = Backend(located.command + "serve") { line -> log.info("[backend] $line") }
+        val b = try {
+            Backend(located.command + "serve") { line -> log.info("[backend] $line") }
+        } catch (error: Exception) {
+            log.warn("mcpp-ide: startup failed (source=${located.source}, protocol=unknown)", error)
+            future.completeExceptionally(error)
+            return future
+        }
         backend = b
         b.on("*") { method, params -> listeners.filter { it.first == method || it.first == "*" }.forEach { (m, fn) ->
             runCatching { fn(if (m == "*") JsonObject().apply { addProperty("method", method); add("params", params) } else params) }
@@ -174,7 +188,11 @@ class McppSession(private val project: Project) : Disposable {
                 addProperty("mcpplsServes", mcpplsServes())
             })
         }
+        var protocol = "unknown"
         b.request("initialize", params).thenCompose { init ->
+            protocol = init.asJsonObject["protocol"]?.toString() ?: "missing"
+            requireProtocol(init.asJsonObject)
+            log.info("mcpp-ide: initialized (source=${located.source}, protocol=$protocol)")
             initialized = init.asJsonObject
             b.notify("initialized", JsonObject())
             b.request("i18n/bundle")
@@ -182,7 +200,13 @@ class McppSession(private val project: Project) : Disposable {
             bundle = strings.asJsonObject.entrySet().associate { it.key to it.value.asString }
             b.request("commands/list", JsonObject().apply { addProperty("editor", "jetbrains") })
         }.whenComplete { table, error ->
-            if (error != null) { future.completeExceptionally(error); return@whenComplete }
+            if (error != null) {
+                val cause = (error as? java.util.concurrent.CompletionException)?.cause ?: error
+                val rpc = (cause as? BackendError)?.let { ", method=${wireName(it.method)}, code=${it.code}" } ?: ""
+                log.warn("mcpp-ide: startup failed (source=${located.source}, protocol=$protocol$rpc)", cause)
+                future.completeExceptionally(error)
+                return@whenComplete
+            }
             commands = table.asJsonObject.getAsJsonArray("commands").map { it.asJsonObject }
             future.complete(initialized!!)
             startedListeners.forEach { runCatching { it() } }
@@ -243,6 +267,21 @@ class McppSession(private val project: Project) : Disposable {
         if (degraded && backend?.running != true)
             return CompletableFuture.failedFuture(IllegalStateException(t("the mcpp-ide backend is not running")))
         return start().thenCompose { backend?.request(method, params) ?: CompletableFuture.failedFuture(IllegalStateException(t("the mcpp-ide backend is not running"))) }
+    }
+
+    /** Only explicit commands call this. A later command retries discovery after installation. */
+    fun ensureMcppForAction(): CompletableFuture<Boolean> = request("mcpp/availability").handle { state, error ->
+        if (error != null || state?.asJsonObject?.get("missing")?.asBoolean != true) return@handle true
+        if (missingMcppNoticeShown.compareAndSet(false, true)) {
+            val repository = "https://github.com/mcpp-community/mcpp"
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed) NotificationGroupManager.getInstance().getNotificationGroup("mcpp")
+                    .createNotification("mcpp", t("mcpp is not installed. Install it from {0}.", repository), NotificationType.WARNING)
+                    .addAction(NotificationAction.createSimpleExpiring(t("Open the repository")) { BrowserUtil.browse(repository) })
+                    .notify(project)
+            }
+        }
+        false
     }
 
     // What each C++ file is to its project (source/entries) and each test program's cases
@@ -330,9 +369,10 @@ class McppSession(private val project: Project) : Disposable {
     }
 
     companion object {
-        /** <plugin>/lib/<jar> -> <plugin>, from where this class was loaded. */
+        /** The platform owns plugin paths; modern plugin class loaders can omit CodeSource URLs. */
         fun pluginDirectory(): File? = runCatching {
-            File(McppSession::class.java.protectionDomain.codeSource.location.toURI()).parentFile?.parentFile
+            (McppSession::class.java.classLoader as? com.intellij.ide.plugins.cl.PluginAwareClassLoader)
+                ?.pluginDescriptor?.pluginPath?.toFile()
         }.getOrNull()
 
         const val PLUGIN_ID = "io.github.mcpp-community.mcpp-clion"

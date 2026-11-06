@@ -94,6 +94,23 @@ bundle and the target set's tree (`mcpp-ide-<version>-openkal-bundle-all.tar.gz`
 one pack on Linux, takes okrun from that tree, opens both editor packages and the tree on every
 system and starts what they carry for it (`.github/scripts/check-package.sh`).
 
+The CLion adapter obtains its installation directory from the IDE's plugin descriptor. Its
+class loader's `CodeSource` URL is not required. The session accepts protocol 2 before sending
+`mcpp-ide/i18n/bundle` and `mcpp-ide/commands/list`. Backend selection and startup failures are
+recorded in `idea.log`; RPC startup failures include the method and error code. The stable
+CLion runtime checks install one packaged plugin ZIP in both stable IDE families and exercise
+the complete startup chain in each IDE process. Functional checks cover build, run, test,
+native debug launch, error recovery, manifest completion and view selection. The debugger
+adapter starts the native Cidr process from the session starter before returning it.
+
+The debug request first obtains the program's actual launch. With mcpp
+2026.11.6.1 or later, an available `debuggee` named runner is selected on that
+launch's target and profile; an explicit runner parameter takes precedence.
+The selected launch is checked again for the same target, profile and platform.
+CLion requests this backend debug configuration and enables LLDB's JIT reader
+within the session when starting a runner. Custom run-configuration profiles
+are forwarded as `--profile`.
+
 ## Generated declarations
 
 `spec/` is the source of everything the editors declare statically. `mcpp-ide-dev gen vscode` writes

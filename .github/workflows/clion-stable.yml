@@ -1,0 +1,135 @@
+name: CLion stable runtime
+
+on:
+  workflow_call:
+    inputs:
+      plugin_artifact:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published plugin release to install without rebuilding the backend
+        type: string
+        default: v0.2.0
+
+permissions:
+  contents: read
+
+env:
+  XLINGS_NON_INTERACTIVE: '1'
+
+jobs:
+  runtime:
+    name: packaged plugin on CLion ${{ matrix.version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['2026.1.5.2', '2026.2.4.1']
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+      - name: Gradle and a virtual display
+        run: |
+          xlings install gradle -y -g
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb
+      - name: The compiler for actual build, run and test actions
+        run: |
+          mcpp toolchain install gcc 16.1.0
+          mcpp toolchain default gcc@16.1.0
+      - uses: actions/cache@v5
+        with:
+          path: ~/.gradle/caches/modules-2
+          key: clion-stable-runtime-${{ hashFiles('mide-plugins/clion/integration-tests/*.gradle.kts') }}
+      - name: The candidate ZIP built once by CI
+        if: inputs.plugin_artifact != ''
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ inputs.plugin_artifact }}
+          path: stable-plugin
+      - name: The published ZIP for an isolated release check
+        if: inputs.plugin_artifact == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || 'v0.2.0' }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          mkdir -p stable-plugin
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'mcpp-clion-*.zip' --dir stable-plugin
+      - name: The pinned language-service plugin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^mcpplsPluginVersion *= *//p' mide-plugins/clion/gradle.properties)"
+          gh release download "v$version" --repo Sunrisepeak/mcpp-language-server \
+            --pattern "mcppls-clion-$version-linux-x64.zip" --dir stable-plugin
+      - name: Start the real IDE and complete the plugin startup chain
+        env:
+          IDE_VERSION: ${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          plugin="$(find stable-plugin -maxdepth 1 -name 'mcpp-clion-*.zip' -print)"
+          language="$(find stable-plugin -maxdepth 1 -name 'mcppls-clion-*.zip' -print)"
+          test -n "$plugin" && test -n "$language"
+          # Ubuntu's userns AppArmor restriction prevents JCEF's sandbox from
+          # creating its browser. Permit userns only for this hosted UI check;
+          # Chromium/JCEF sandbox flags and the tests remain unchanged.
+          original=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)
+          [[ "$original" =~ ^[01]$ ]]
+          printf '%s\n' "$original" > "$RUNNER_TEMP/clion-userns-policy"
+          restore_userns_policy() {
+            local status=$?
+            trap - EXIT
+            if ! sudo sysctl -w "kernel.apparmor_restrict_unprivileged_userns=$original" >/dev/null ||
+               [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" != "$original" ]; then
+              echo '::error::Could not restore the original user namespace policy'
+              exit 1
+            fi
+            exit "$status"
+          }
+          trap restore_userns_policy EXIT
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 >/dev/null
+          unshare -Ur true
+          xvfb-run -a gradle --no-daemon --max-workers=4 \
+            -p mide-plugins/clion/integration-tests test \
+            -PpluginZip="$GITHUB_WORKSPACE/$plugin" \
+            -PmcpplsZip="$GITHUB_WORKSPACE/$language" \
+            -PideVersion="$IDE_VERSION" \
+            -Poutput="$RUNNER_TEMP/clion-stable-result"
+      - name: Restore the hosted user namespace policy
+        if: always()
+        run: |
+          set -euo pipefail
+          state="$RUNNER_TEMP/clion-userns-policy"
+          if [ -f "$state" ]; then
+            original=$(cat "$state")
+            [[ "$original" =~ ^[01]$ ]]
+            sudo sysctl -w "kernel.apparmor_restrict_unprivileged_userns=$original" >/dev/null
+            test "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" = "$original"
+          fi
+      # The report contains public versions and assertions only. Private user
+      # logs and arbitrary IDE process output are not uploaded as artifacts.
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: clion-stable-${{ matrix.version }}
+          path: |
+            ${{ runner.temp }}/clion-stable-result/result.json
+            ${{ runner.temp }}/clion-stable-result/checks.json
+            ${{ runner.temp }}/clion-stable-result/ide-errors.ndjson
+            ${{ runner.temp }}/clion-stable-result/settings/result.json
+            ${{ runner.temp }}/clion-stable-result/settings/observations.json
+            ${{ runner.temp }}/clion-stable-result/graphs/result.json
+            ${{ runner.temp }}/clion-stable-result/graphs/checks.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/result.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/checks.json
+          if-no-files-found: warn

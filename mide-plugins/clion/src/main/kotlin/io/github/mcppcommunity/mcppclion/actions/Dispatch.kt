@@ -74,7 +74,12 @@ object Dispatch {
                 if (error != null) { session.notify(session.t("mcpp: {0}", (error.cause ?: error).message ?: ""), NotificationType.ERROR); return@invokeLater }
                 val entry = session.commands.firstOrNull { it["id"].asString == command }
                 if (entry == null) { session.notify(session.t("unknown command {0}", command), NotificationType.ERROR); return@invokeLater }
-                perform(project, entry["action"].asJsonObject, args)
+                val action = entry["action"].asJsonObject
+                val needsMcpp = action["kind"]?.asString in setOf("job", "run", "debug", "cache", "selectTarget",
+                    "installToolchain", "selectDefaultToolchain", "newProject", "rpc")
+                if (needsMcpp) session.ensureMcppForAction().thenAccept { ready ->
+                    if (ready) ApplicationManager.getApplication().invokeLater { if (!project.isDisposed) perform(project, action, args) }
+                } else perform(project, action, args)
             }
         }
     }

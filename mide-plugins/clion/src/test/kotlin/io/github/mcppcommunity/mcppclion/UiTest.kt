@@ -11,6 +11,7 @@ import com.google.gson.JsonPrimitive
 import com.intellij.testFramework.ApplicationRule
 import com.intellij.testFramework.EdtRule
 import com.intellij.testFramework.RunsInEdt
+import com.intellij.openapi.options.ConfigurationException
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBTextField
 import io.github.mcppcommunity.mcppclion.settings.SettingsForm
@@ -21,6 +22,7 @@ import io.github.mcppcommunity.mcppclion.ui.RowNode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
@@ -115,5 +117,32 @@ class UiTest {
         assertEquals(listOf(false, true, false, false), form.fields.map { it.component.isVisible })
         form.filter("")
         assertTrue(form.fields.all { it.component.isVisible })
+    }
+
+    @Test
+    fun invalidNumbersRefuseTheWholeApplyAndKeepLargeFiniteValues() {
+        val registry = json("""{"groups":[{"id":"runtime","title":"Runtime"}],"settings":[
+            {"key":"enabled","type":"boolean","default":false,"group":"runtime"},
+            {"key":"timeout","type":"number","minimum":0,"maximum":3600,"default":30,"group":"runtime","title":"Timeout"},
+            {"key":"budget","type":"number","minimum":0,"default":0,"group":"runtime","title":"Budget"}]}""")
+        val form = SettingsForm(registry, { it }) { null }
+        val timeout = form.fields.first { it.key == "timeout" }.component as JBTextField
+        val enabled = form.fields.first { it.key == "enabled" }.component as JBCheckBox
+        enabled.isSelected = true
+        for (invalid in listOf("", "not-a-number", "NaN", "Infinity", "-1", "3601", "1e309")) {
+            timeout.text = invalid
+            val error = assertThrows(ConfigurationException::class.java) { form.changes() }
+            assertTrue(error.message!!.contains("Timeout"))
+            assertTrue(error.message!!.contains("3600"))
+        }
+        timeout.text = "0.5"
+        assertEquals(JsonPrimitive(0.5), form.changes()["timeout"])
+        assertEquals(JsonPrimitive(true), form.changes()["enabled"])
+        timeout.text = "3600"
+        assertEquals(JsonPrimitive(3600L), form.changes()["timeout"])
+        val budget = form.fields.first { it.key == "budget" }.component as JBTextField
+        budget.text = "1e20"
+        assertEquals(1e20, form.changes()["budget"]!!.asDouble, 0.0)
+        assertTrue(form.fields.filter { it.label != null }.all { it.label!!.labelFor === it.component })
     }
 }

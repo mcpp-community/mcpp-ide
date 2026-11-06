@@ -33,14 +33,14 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "0.2.0";
+inline constexpr std::string_view kVersion = "0.2.1";
 inline constexpr int kProtocol = 2;
 
 // The methods `install` registers, for the protocol schema's test: a method
 // here and not in protocol/protocol.schema.json (or the other way) fails it. The session is an LSP
 // server (protocol 2, design 2026-10-30 part 2 §8): LSP's own methods, and mcpp-ide's under
 // `mcpp-ide/`.
-inline constexpr std::array<std::string_view, 52> kMethods = {
+inline constexpr std::array<std::string_view, 53> kMethods = {
     "initialize", "shutdown", "exit", "textDocument/completion", "textDocument/hover", "textDocument/definition",
     "textDocument/documentSymbol", "mcpp-ide/settings/update", "mcpp-ide/settings/registry",
     "mcpp-ide/settings/preset", "mcpp-ide/i18n/bundle", "mcpp-ide/selfCheck", "mcpp-ide/commands/list",
@@ -51,7 +51,7 @@ inline constexpr std::array<std::string_view, 52> kMethods = {
     "mcpp-ide/library/updateIndex", "mcpp-ide/toolchains/list", "mcpp-ide/toolchains/install",
     "mcpp-ide/toolchains/setDefault", "mcpp-ide/targets/list", "mcpp-ide/cache/inventory", "mcpp-ide/cache/plan",
     "mcpp-ide/cache/apply", "mcpp-ide/graph/packages", "mcpp-ide/graph/modules", "mcpp-ide/pack/formats",
-    "mcpp-ide/pack/start", "mcpp-ide/manifest/check", "mcpp-ide/mcpp/exec", "mcpp-ide/project/files",
+    "mcpp-ide/pack/start", "mcpp-ide/manifest/check", "mcpp-ide/mcpp/exec", "mcpp-ide/mcpp/availability", "mcpp-ide/project/files",
     "mcpp-ide/languageService/exec", "mcpp-ide/project/mcpp", "mcpp-ide/project/refresh",
     "mcpp-ide/capabilities/explain", "mcpp-ide/report/collect", "mcpp-ide/source/entries", "mcpp-ide/test/cases",
     "mcpp-ide/test/runCases"};
@@ -91,6 +91,7 @@ private:
     Result graph(const Json& p, bool modules);
     Result project_summary(const Json& p);
     Result mcpp_exec(const Json& p);
+    Result mcpp_availability();
     Result language_service_exec(const Json& p);
     Result project_new(const Json& p);
     Result manifest_check(const Json& p);
@@ -150,6 +151,7 @@ private:
     mcpp::Client client_;
     std::optional<mcpp::Located> located_;
     std::string mcppError_;
+    bool mcppMissing_ = false;
     Json settings_ = Json::object();
     bool trusted_ = true;
     mutable std::mutex localeMutex_;
@@ -331,12 +333,15 @@ void Session::locate_mcpp() {
     std::lock_guard lock(mutex_);
     if (!located) {
         mcppError_ = located.error();
+        // An invalid explicit path is a setting error when another local mcpp exists.
+        mcppMissing_ = configured.empty() || !mcpp::locate("").has_value();
         located_.reset();
         client_ = mcpp::Client{};
         jobs_->set_client(client_);
         return;
     }
     auto protocol = mcpp::handshake(located->program);
+    mcppMissing_ = false;
     if (!protocol) {
         mcppError_ = protocol.error();
         located_.reset();
@@ -492,11 +497,30 @@ std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::p
     }
     auto r = query(root, {"emit", "build-database", "--format", "json"});
     if (!r) return std::unexpected(r.error());
+    if (r->exitCode != 0) {
+        const auto diagnostics = mcpp::diagnostics_of(r->envelope);
+        auto message = t("mcpp {0} failed with exit code {1}", {"emit build-database", std::to_string(r->exitCode)});
+        if (!r->narration.empty()) message += "\n" + r->narration;
+        else if (!diagnostics.empty()) message += "\n" + diagnostics.front().value("message", "");
+        return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, std::move(message),
+                                          Json{{"exitCode", r->exitCode}, {"diagnostics", diagnostics}}});
+    }
     if (r->envelope.is_null())
         return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcpp emit build-database printed no document")});
     std::lock_guard lock(mutex_);
     buildDatabases_[root] = r->envelope;
     return r->envelope;
+}
+
+std::expected<Json, rpc::Error> Session::mcpp_availability() {
+    bool retry;
+    {
+        std::lock_guard lock(mutex_);
+        retry = !client_.ready();
+    }
+    if (retry) locate_mcpp();
+    std::lock_guard lock(mutex_);
+    return Json{{"available", client_.ready()}, {"missing", mcppMissing_}};
 }
 
 Json Session::self_check() {
@@ -711,7 +735,15 @@ std::expected<Json, rpc::Error> Session::run_launch(const Json& p, const rpc::Co
     std::vector<std::string> args{test.empty() ? "run" : "test", "--print-launch"};
     const auto profile = p.value("profile", setting("mcpp.build.profile").is_string() ? setting("mcpp.build.profile").get<std::string>() : "dev");
     if (profile == "release") args.push_back("--release");
+    else if (!profile.empty() && profile != "dev") {
+        args.push_back("--profile");
+        args.push_back(profile);
+    }
     for (const auto& a : target_args(p)) args.push_back(a);
+    if (auto runner = p.value("runner", ""); !runner.empty()) {
+        args.push_back("--runner");
+        args.push_back(runner);
+    }
     if (!test.empty()) {
         args.push_back(test);
         if (const auto* f = testing::framework(p.value("framework", "")))
@@ -735,15 +767,35 @@ std::expected<Json, rpc::Error> Session::run_launch(const Json& p, const rpc::Co
     return launch;
 }
 
-// A debug session for what `run/launch` describes, in the adapter's debugger's own configuration.
-//
-// A PROGRAM THAT RUNS THROUGH ANOTHER (`via`: an ok image under `okrun`, a target's runner) is
-// debugged as that runner, with the image's symbols arriving through the GDB JIT interface: okrun
-// registers each image it loads (`__jit_debug_register_code`), which gdb reads by default and lldb
-// reads once its JIT loader is on. Breakpoints in the image's sources then bind when it is loaded.
+// A debug session starts the launch selected by mcpp. A named `debuggee`
+// declares the host-debugger form; other runner names retain their own meaning.
+// Configurations come from that actual build, including target-set selection
+// and custom-profile build-program declarations.
 std::expected<Json, rpc::Error> Session::debug_configuration(const Json& p, const rpc::Context& ctx) {
     auto launch = run_launch(p, ctx);
     if (!launch) return launch;
+    if (!p.contains("runner")) {
+        const auto configuration = launch->value("configuration", Json::object());
+        const auto runners = configuration.is_object()
+            ? strings_of(configuration.value("runners", Json::array())) : std::vector<std::string>{};
+        if (std::ranges::find(runners, "debuggee") != runners.end()) {
+            const auto triple = configuration.value("triple", "");
+            const auto profile = configuration.value("profile", "");
+            if (triple.empty() || profile.empty())
+                return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcpp's launch configuration omits its target or profile")});
+            Json parameters = p;
+            parameters["target"] = triple;
+            parameters["profile"] = profile;
+            parameters["runner"] = "debuggee";
+            launch = run_launch(parameters, ctx);
+            if (!launch) return launch;
+            const auto selected = launch->value("configuration", Json::object());
+            if (!selected.is_object() || selected.value("triple", "") != triple
+                || selected.value("profile", "") != profile
+                || selected.value("platform", Json(nullptr)) != configuration.value("platform", Json(nullptr)))
+                return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcpp's debug launch changed the selected target, profile or platform")});
+        }
+    }
     const auto& l = *launch;
     std::string engine = p.value("engine", setting("mcpp.debug.engine").is_string() ? setting("mcpp.debug.engine").get<std::string>() : "auto");
     const auto available = strings_of(p.value("available", Json::array()));
@@ -787,7 +839,7 @@ std::expected<Json, rpc::Error> Session::debug_configuration(const Json& p, cons
         return std::unexpected(invalid(std::format("unknown debug engine {}", engine)));
     }
     if (through)
-        cfg["mcppNote"] = t("this program runs through {0}; the debugger starts {0} and reads the program's symbols when it is loaded",
+        cfg["mcppNote"] = t("the debugger starts {0}; source symbols depend on the runner's debugger support",
                             {l["via"].is_string() ? l["via"].get<std::string>() : program});
     return Json{{"engine", engine}, {"configuration", cfg}, {"launch", l}};
 }
@@ -1660,6 +1712,7 @@ void Session::install() {
     });
     s.on("mcpp-ide/project/summary", [this](const Json& p, const rpc::Context&) { return project_summary(p); });
     s.on("mcpp-ide/mcpp/exec", [this](const Json& p, const rpc::Context&) { return mcpp_exec(p); });
+    s.on("mcpp-ide/mcpp/availability", [this](const Json&, const rpc::Context&) { return mcpp_availability(); });
     s.on("mcpp-ide/languageService/exec", [this](const Json& p, const rpc::Context&) { return language_service_exec(p); });
     s.on("mcpp-ide/project/files", [](const Json& p, const rpc::Context&) -> Result { return projects::files(root_of(p)); });
     s.on("mcpp-ide/project/new", [this](const Json& p, const rpc::Context&) { return project_new(p); });

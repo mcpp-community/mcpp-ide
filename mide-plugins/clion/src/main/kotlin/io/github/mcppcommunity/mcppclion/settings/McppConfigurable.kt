@@ -11,7 +11,9 @@ import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonPrimitive
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.options.SearchableConfigurable
+import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.SearchTextField
@@ -46,7 +48,7 @@ class SettingField(val entry: JsonObject) {
         type == "array" -> JBTextArea(2, 40).apply { lineWrap = false }
         else -> JBTextField(30)
     }
-    val label: JBLabel? = if (type == "boolean") null else JBLabel("$title:")
+    val label: JBLabel? = if (type == "boolean") null else JBLabel("$title:").apply { labelFor = component }
     val comment: JBLabel = JBLabel("<html>${escape(description)}<br><code>$key</code></html>").apply {
         foreground = UIUtil.getContextHelpForeground()
         font = JBUI.Fonts.smallFont()
@@ -70,8 +72,9 @@ class SettingField(val entry: JsonObject) {
         is JBCheckBox -> JsonPrimitive(c.isSelected)
         is ComboBox<*> -> enumValues.firstOrNull { label(it) == c.selectedItem } ?: default
         is JBTextArea -> JsonArray().apply { c.text.lines().map { it.trim() }.filter { it.isNotEmpty() }.forEach { add(it) } }
-        is JBTextField -> if (type == "number") c.text.trim().toDoubleOrNull()?.let { d ->
-            if (d == Math.floor(d) && !d.isInfinite()) JsonPrimitive(d.toLong()) else JsonPrimitive(d)
+        is JBTextField -> if (type == "number") c.text.trim().toDoubleOrNull()?.takeIf { it.isFinite() }?.let { d ->
+            if (d == Math.floor(d) && d >= Long.MIN_VALUE.toDouble() && d < Long.MAX_VALUE.toDouble())
+                JsonPrimitive(d.toLong()) else JsonPrimitive(d)
         } else JsonPrimitive(c.text)
         else -> null
     }
@@ -89,7 +92,7 @@ class SettingField(val entry: JsonObject) {
 }
 
 /** The form from a registry. Pure but for Swing: the tests build it from the backend's answer. */
-class SettingsForm(registry: JsonObject, t: (String) -> String, private val stored: (String) -> JsonElement?) {
+class SettingsForm(registry: JsonObject, private val t: (String) -> String, private val stored: (String) -> JsonElement?) {
     val fields: List<SettingField>
     val component: JComponent
     private val search = SearchTextField(false)
@@ -148,10 +151,28 @@ class SettingsForm(registry: JsonObject, t: (String) -> String, private val stor
     fun isModified(): Boolean = fields.any { f -> f.value()?.let { it != current(f) } ?: true }
 
     /** What changed, each value to store (null: back to the default). */
-    fun changes(): Map<String, JsonElement?> = fields.mapNotNull { f ->
-        val v = f.value() ?: return@mapNotNull null
-        if (v == current(f)) null else f.key to (if (v == f.default) null else v)
-    }.toMap()
+    fun changes(): Map<String, JsonElement?> {
+        // Validate the complete form before apply() writes any of its values.
+        val values = fields.map { f ->
+            val value = f.value()
+            if (f.type == "number") {
+                val number = value?.asDouble
+                val minimum = f.entry["minimum"]?.asDouble
+                val maximum = f.entry["maximum"]?.asDouble
+                if (number == null || !number.isFinite() || (minimum != null && number < minimum) ||
+                    (maximum != null && number > maximum)) {
+                    val range = "${f.entry["minimum"]?.asString ?: "−∞"} … ${f.entry["maximum"]?.asString ?: "∞"}"
+                    throw ConfigurationException(t("Invalid value for {0}. Enter a finite number in the range {1}.")
+                        .replace("{0}", f.title).replace("{1}", range))
+                }
+            }
+            if (value == null) throw ConfigurationException(t("Invalid value for {0}.").replace("{0}", f.title))
+            f to value
+        }
+        return values.mapNotNull { (f, value) ->
+            if (value == current(f)) null else f.key to (if (value == f.default) null else value)
+        }.toMap()
+    }
 
     fun reset() = fields.forEach { it.show(stored(it.key)) }
 }
@@ -159,16 +180,21 @@ class SettingsForm(registry: JsonObject, t: (String) -> String, private val stor
 class McppConfigurable(private val project: Project) : SearchableConfigurable {
     private var form: SettingsForm? = null
     private val holder = JPanel(BorderLayout())
+    private var generation = 0L
 
     override fun getId(): String = "io.github.mcppcommunity.mcppclion.settings"
     override fun getDisplayName(): String = "mcpp"
 
     override fun createComponent(): JComponent {
+        val requestGeneration = ++generation
         val session = McppSession.get(project)
         holder.removeAll()
         holder.add(JBLabel(session.t("Reading the settings…")), BorderLayout.NORTH)
         session.start().thenCompose { session.request("settings/registry") }.whenComplete { registry, error ->
-            ApplicationManager.getApplication().invokeLater {
+            // This callback only fills Swing controls. A nonmodal callback
+            // waits until the Settings dialog closes, leaving its form loading.
+            ApplicationManager.getApplication().invokeLater({
+                if (generation != requestGeneration || project.isDisposed) return@invokeLater
                 holder.removeAll()
                 if (error != null || registry == null || !registry.isJsonObject) {
                     holder.add(JBLabel(session.t("The settings come from the mcpp-ide backend, which is not running: {0}", (error?.cause ?: error)?.message ?: "")), BorderLayout.NORTH)
@@ -179,7 +205,7 @@ class McppConfigurable(private val project: Project) : SearchableConfigurable {
                 }
                 holder.revalidate()
                 holder.repaint()
-            }
+            }, ModalityState.any())
         }
         return holder
     }
@@ -197,6 +223,7 @@ class McppConfigurable(private val project: Project) : SearchableConfigurable {
     }
 
     override fun disposeUIResources() {
+        ++generation
         form = null
         holder.removeAll()
     }

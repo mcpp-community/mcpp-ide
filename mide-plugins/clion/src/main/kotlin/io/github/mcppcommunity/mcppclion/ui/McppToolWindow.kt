@@ -15,6 +15,8 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
+import com.intellij.ui.content.ContentManagerListener
+import com.intellij.ui.content.ContentManagerEvent
 import io.github.mcppcommunity.mcppclion.McppSession
 import io.github.mcppcommunity.mcppclion.actions.Dispatch
 import io.github.mcppcommunity.mcppclion.settings.McppConfigurable
@@ -25,12 +27,19 @@ interface McppView {
     val id: String
     fun refresh()
     /** Shows what `params` names (a package of the libraries); the view itself when nothing. */
-    fun focus(params: JsonObject) {}
+    fun focus(params: JsonObject) { refresh() }
 }
 
 object McppPanels {
     const val TOOL_WINDOW = "mcpp"
     private val VIEW = Key.create<McppView>("mcpp.view")
+    private val FOCUS_PARAMS = Key.create<JsonObject>("mcpp.focus.params")
+
+    private fun focus(content: Content) {
+        val params = content.getUserData(FOCUS_PARAMS) ?: JsonObject()
+        content.putUserData(FOCUS_PARAMS, null)
+        content.getUserData(VIEW)?.focus(params)
+    }
 
     /** The command table's `panel` actions: a view brought on screen, a graph opened, settings shown. */
     fun show(project: Project, panel: String, params: JsonObject = JsonObject()) {
@@ -52,16 +61,20 @@ object McppPanels {
 
     private fun select(window: ToolWindow, id: String, params: JsonObject) {
         val content = window.contentManager.contents.firstOrNull { it.getUserData(VIEW)?.id == id } ?: return
-        window.contentManager.setSelectedContent(content, true)
-        content.getUserData(VIEW)?.focus(params)
+        select(window, content, params)
+    }
+
+    private fun select(window: ToolWindow, content: Content, params: JsonObject) {
+        content.putUserData(FOCUS_PARAMS, params)
+        if (window.contentManager.selectedContent === content) focus(content)
+        else window.contentManager.setSelectedContent(content, true)
     }
 
     /** A graph is a tab of its own, closeable; one per kind, refreshed when it is asked again. */
     private fun openGraph(project: Project, window: ToolWindow, kind: String) {
         val id = "graph:$kind"
         window.contentManager.contents.firstOrNull { it.getUserData(VIEW)?.id == id }?.let {
-            window.contentManager.setSelectedContent(it, true)
-            it.getUserData(VIEW)?.refresh()
+            select(window, it, JsonObject())
             return
         }
         val session = McppSession.get(project)
@@ -72,8 +85,7 @@ object McppPanels {
         content.putUserData(VIEW, page)
         Disposer.register(content, page)
         window.contentManager.addContent(content)
-        window.contentManager.setSelectedContent(content, true)
-        page.refresh()
+        select(window, content, JsonObject())
     }
 
     class Factory : ToolWindowFactory, DumbAware {
@@ -94,13 +106,18 @@ object McppPanels {
             add(projectView, projectView.component, session.t("Project"))
             add(libraryView, libraryView.component, session.t("Libraries"))
             add(cacheView, cacheView.component, session.t("Cache"))
+            toolWindow.contentManager.addContentManagerListener(object : ContentManagerListener {
+                override fun selectionChanged(event: ContentManagerEvent) {
+                    if (event.operation == ContentManagerEvent.ContentOperation.add) focus(event.content)
+                }
+            })
             // The strings and the data arrive with the backend.
             session.whenStarted {
                 com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
                     if (project.isDisposed) return@invokeLater
                     val titles = mapOf("project" to "Project", "libraries" to "Libraries", "cache" to "Cache")
                     for (c in toolWindow.contentManager.contents) c.getUserData(VIEW)?.id?.let { id -> titles[id]?.let { c.displayName = session.t(it) } }
-                    projectView.refresh()
+                    toolWindow.contentManager.selectedContent?.let(::focus)
                 }
             }
             projectView.refresh()

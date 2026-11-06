@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.1
+
+mcpp-vscode 1.1.1, mcpp-clion 0.2.1 and mcpp-nvim 0.2.1.
+
+- CLion locates the bundled backend from the plugin descriptor and checks
+  protocol compatibility before sending namespaced requests. Backend selection
+  and startup failures are recorded in `idea.log`.
+- Native settings reject non-finite and out-of-range values without partially
+  saving the form. Failed graph queries remain errors and can be retried.
+- Debug launches use the actual selected target and custom profile. With mcpp
+  2026.11.6.1 or later, a declared `debuggee` runner is selected without guessing
+  from device actions; explicit runner choices take precedence. A changed
+  target, profile or platform between launch descriptions is refused.
+- CLion requests the backend's debug launch and configures LLDB's JIT reader
+  for that session. The run-configuration profile field accepts custom names.
+- CI covers stable CLion 2026.1.5.2 and 2026.2.4.1 with the same packaged ZIP,
+  static compatibility checks and actual editor interactions. The hosted JCEF
+  check restores its temporary user-namespace policy after the test.
+- CLion 2026.2.4.1 can report an internal GDB variable-read cancellation after
+  debug stop, also reproduced without either plugin in a stock CMake project.
+  The stable test records its path-free fingerprint and classifies only that
+  exact SDK signature after all editor assertions finish. Other IDE errors
+  still fail the test.
+- Release CI submits the verified CLion ZIP to JetBrains Marketplace using the
+  configured token, alongside the verified VSIX sent to Open VSX. Each
+  destination has an independent publish job and the JetBrains response is
+  retained as a receipt.
+- VS Code and CLion check for a missing local `mcpp` only on user actions that
+  need the build tool. One notification links to its repository; opening a
+  project does not trigger the notice.
+
 ## 0.2.0
 
 mcpp-vscode 1.1.0, mcpp-clion 0.2.0 and mcpp-nvim 0.2.0 (mcpp design 2026-10-29 §10).

@@ -36,7 +36,7 @@ jobs:
           - { os: ubuntu-24.04-arm, platform: linux-arm64, llvm: 'false' }
           - { os: macos-15, platform: darwin-arm64, llvm: 'true' }
           - { os: windows-2022, platform: win32-x64, llvm: 'true' }
-          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', host-platform: 'openkal-platform@0.23.3' }
+          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', host-platform: 'openkal-platform@0.24.0' }
     defaults:
       run:
         shell: bash
@@ -454,6 +454,17 @@ jobs:
           unzip -l plugin.jar | tee jar.txt | grep -q "webui/files.txt"
           for f in $(unzip -p plugin.jar webui/files.txt); do grep -q " webui/$f$" jar.txt; done
           ls -l build/distributions/*.zip
+      - name: The Marketplace submission would name this verified plugin
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
+          archive="mide-plugins/clion/build/distributions/mcpp-clion-$version.zip"
+          test -f "$archive"
+          digest="$(sha256sum "$archive" | cut -d ' ' -f1)"
+          python3 .github/scripts/publish-jetbrains.py --verify-only \
+            --archive "$archive" --xml-id io.github.mcpp-community.mcpp-clion \
+            --version "$version" --sha256 "$digest" \
+            --output "$RUNNER_TEMP/jetbrains-archive-verification.json"
       # The plugin's icon and its tool window's are the mcpp logo, an embedded image (design 2026-10-29
       # §10.4), not text; the VS Code extension's logo is mcpp-vscode 0.9.0's, byte for byte.
       - name: The icons are the mcpp logo
@@ -470,6 +481,14 @@ jobs:
         with:
           name: mcpp-clion-zip
           path: mide-plugins/clion/build/distributions/*.zip
+
+  # Both stable families load the exact same packaged ZIP. These are actual
+  # IDE startup/session checks, in addition to the static Plugin Verifier.
+  clion-stable:
+    needs: clion
+    uses: ./.github/workflows/clion-stable.yml
+    with:
+      plugin_artifact: mcpp-clion-zip
 
   # The Neovim plugin (mide-plugins/nvim) in a headless Neovim, against the backend built here: over
   # the mock mcpp on the oldest and the newest Neovim it supports, then over the real mcpp, which

@@ -186,6 +186,25 @@ int main() {
     CHECK(pack["linkages"].empty() != helpNamesLinkage);
     result_of("mcpp-ide/graph/packages", rooted);
     result_of("mcpp-ide/graph/modules", rooted);
+    // A failed database is an error, not an empty graph or a cached answer.
+    // The mock flag changes without a manifest edit, so immediate recovery
+    // proves the failed response itself was never cached.
+    const auto badDatabase = root / "database-error";
+    std::filesystem::create_directories(badDatabase);
+    std::ofstream(badDatabase / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.1.0\"\n";
+    std::ofstream(badDatabase / ".mock-mcpp-fail") << "manifest\n";
+    const Json badRoot{{"root", badDatabase.generic_string()}};
+    for (const auto* method : {"mcpp-ide/graph/packages", "mcpp-ide/graph/modules"}) {
+        const auto failed = wire.call(method, badRoot);
+        CHECK(failed.contains("error"));
+        CHECK(failed["error"]["code"] == rpc::REQUEST_FAILED);
+        CHECK(failed["error"]["data"]["exitCode"] == 1);
+        CHECK(!failed["error"]["data"]["diagnostics"].empty());
+        CHECK(failed["error"]["message"].get<std::string>().find("emit build-database") != std::string::npos);
+    }
+    std::filesystem::remove(badDatabase / ".mock-mcpp-fail");
+    CHECK(!result_of("mcpp-ide/graph/packages", badRoot)["nodes"].empty());
+    CHECK(!result_of("mcpp-ide/graph/modules", badRoot)["nodes"].empty());
     result_of("mcpp-ide/manifest/check", rooted);
     result_of("mcpp-ide/settings/registry", Json::object());
     result_of("mcpp-ide/selfCheck", Json::object());
@@ -193,9 +212,92 @@ int main() {
     auto launch = result_of("mcpp-ide/run/launch", rooted);
     CHECK(!launch["argv"].empty());
     result_of("mcpp-ide/debug/configuration", Json{{"root", root.generic_string()}, {"available", Json::array({"lldb"})}});
+    // Debug selection follows the configuration of the actual launch, not a
+    // separately queried default profile or the first leg of a target set.
+    const auto launchFile = root / ".mock-mcpp-launch";
+    const auto selectedFile = root / ".mock-mcpp-runner-launch";
+    const auto commandLog = root / ".mock-mcpp-log";
+    Json ordinary{{"kind", "mcpp.launch"}, {"data", {
+        {"program", "app.oke"}, {"argv", Json::array({"okrun", "app.oke"})},
+        {"cwd", root.generic_string()}, {"env", Json::object()}, {"via", "runner"}}}};
+    auto commands = [&] {
+        std::vector<std::string> found;
+        std::istringstream input(testsupport::read(commandLog));
+        for (std::string line; std::getline(input, line);)
+            if (line.starts_with("run --print-launch ") || line.starts_with("test --print-launch ")) found.push_back(line);
+        return found;
+    };
+    auto reset_launch = [&](const Json& first, const Json& second) {
+        std::ofstream(launchFile) << first.dump();
+        std::ofstream(selectedFile) << second.dump();
+        std::ofstream(commandLog).close();
+    };
+    auto debugParams = rooted;
+    debugParams["engine"] = "lldb";
+    debugParams["args"] = Json::array({"with spaces", ""});
+    // Older cores omit configuration; board actions called `debug` are not
+    // host-debugger launch declarations and are never guessed as one.
+    for (bool withBoardRunner : {false, true}) {
+        auto first = ordinary;
+        if (withBoardRunner) first["data"]["configuration"] = {
+            {"triple", "x86_64-openkal"}, {"profile", "inspect"}, {"runners", Json::array({"debug"})}};
+        reset_launch(first, first);
+        auto debug = result_of("mcpp-ide/debug/configuration", debugParams);
+        CHECK(commands().size() == 1);
+        CHECK(debug["launch"]["argv"] == Json::array({"okrun", "app.oke", "with spaces", ""}));
+    }
+    ordinary["data"]["configuration"] = {{"triple", "x86_64-openkal"}, {"profile", "inspect"},
+        {"platform", nullptr}, {"runners", Json::array({"debug", "debuggee"})}};
+    auto selected = ordinary;
+    selected["data"]["argv"] = Json::array({"okrun", "--debugger", "app.oke"});
+    for (bool test : {false, true}) {
+        reset_launch(ordinary, selected);
+        auto params = debugParams;
+        params["target"] = "all";
+        if (test) params["test"] = "unit/math";
+        auto debug = result_of("mcpp-ide/debug/configuration", params);
+        auto calls = commands();
+        CHECK(calls.size() == 2);
+        CHECK(calls[0].find("--target all ") != std::string::npos);
+        CHECK(calls[1].find("--target x86_64-openkal ") != std::string::npos);
+        CHECK(calls[1].find("--profile inspect ") != std::string::npos);
+        CHECK(calls[1].find("--runner debuggee ") != std::string::npos);
+        CHECK(calls[1].starts_with(test ? "test " : "run "));
+        if (test) CHECK(calls[1].find("unit/math ") != std::string::npos);
+        CHECK(debug["launch"]["argv"] == Json::array({"okrun", "--debugger", "app.oke", "with spaces", ""}));
+        CHECK(debug["configuration"]["initCommands"] == Json::array({"settings set plugin.jit-loader.gdb.enable on"}));
+    }
+    // Explicit runner choices, including an explicit default, are preserved.
+    for (const auto* runner : {"", "monitor"}) {
+        reset_launch(ordinary, selected);
+        auto params = debugParams;
+        params["runner"] = runner;
+        result_of("mcpp-ide/debug/configuration", params);
+        CHECK(commands().size() == 1);
+    }
+    auto missing = ordinary;
+    missing["data"]["configuration"].erase("profile");
+    reset_launch(missing, selected);
+    CHECK(wire.call("mcpp-ide/debug/configuration", debugParams).contains("error"));
+    CHECK(commands().size() == 1);
+    for (const auto* field : {"triple", "profile", "platform"}) {
+        auto changed = selected;
+        changed["data"]["configuration"][field] = "different";
+        reset_launch(ordinary, changed);
+        CHECK(wire.call("mcpp-ide/debug/configuration", debugParams).contains("error"));
+        CHECK(commands().size() == 2);
+    }
+    reset_launch(ordinary, selected);
+    auto custom = rooted;
+    custom["profile"] = "inspect";
+    result_of("mcpp-ide/run/launch", custom);
+    CHECK(commands().size() == 1 && commands()[0].find("--profile inspect ") != std::string::npos);
+    for (const auto& path : {launchFile, selectedFile, commandLog}) std::filesystem::remove(path);
     // What mcpp-vscode's own parsers read: one command's output as it printed it, and a project's
     // files with its source count.
     auto exec = result_of("mcpp-ide/mcpp/exec", Json{{"args", Json::array({"--version"})}, {"cwd", root.generic_string()}});
+    auto availability = result_of("mcpp-ide/mcpp/availability", Json::object());
+    CHECK(availability["available"] == true && availability["missing"] == false);
     CHECK(exec["exitCode"] == 0 && exec["stdout"].get<std::string>().find("mcpp") != std::string::npos);
     CHECK(exec["timedOut"] == false && exec["truncated"] == false);
     auto bounded = result_of("mcpp-ide/mcpp/exec", Json{{"args", Json::array({"--version"})}, {"maxOutputBytes", 3}});

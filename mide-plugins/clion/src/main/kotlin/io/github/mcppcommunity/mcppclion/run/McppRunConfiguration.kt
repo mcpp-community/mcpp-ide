@@ -83,7 +83,7 @@ class McppRunConfiguration(project: Project, factory: ConfigurationFactory, name
     class Editor : SettingsEditor<McppRunConfiguration>() {
         private val command = ComboBox(arrayOf("run", "test", "build"))
         private val target = JBTextField()
-        private val profile = ComboBox(arrayOf("", "dev", "release"))
+        private val profile = ComboBox(arrayOf("", "dev", "release")).apply { isEditable = true }
         private val args = JBTextField()
         private val filter = JBTextField()
         private val bin = JBTextField()
@@ -104,7 +104,7 @@ class McppRunConfiguration(project: Project, factory: ConfigurationFactory, name
         override fun applyEditorTo(c: McppRunConfiguration) {
             c.options.command = command.selectedItem as String
             c.options.target = target.text.trim()
-            c.options.profile = profile.selectedItem as String
+            c.options.profile = profile.editor.item.toString().trim()
             c.options.args = args.text
             c.options.filter = filter.text.trim()
             c.options.bin = bin.text.trim()

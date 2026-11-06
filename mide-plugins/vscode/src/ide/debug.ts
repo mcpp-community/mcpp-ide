@@ -14,7 +14,8 @@ import type { Session } from "./session";
 export class Debugging implements vscode.DebugConfigurationProvider, vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
 
-  constructor(private readonly session: Session, private readonly projects: IdeProjects) {
+  constructor(private readonly session: Session, private readonly projects: IdeProjects,
+    private readonly ensureMcpp: () => Promise<boolean>) {
     this.disposables.push(
       vscode.debug.registerDebugConfigurationProvider("mcpp", this),
       vscode.debug.registerDebugConfigurationProvider("mcpp", { provideDebugConfigurations: () => [{ type: "mcpp", request: "launch", name: "mcpp: debug" }] },
@@ -29,6 +30,7 @@ export class Debugging implements vscode.DebugConfigurationProvider, vscode.Disp
       void vscode.window.showWarningMessage(t("No mcpp.toml was found in this workspace. Run this command inside an mcpp project."));
       return undefined;
     }
+    if (!(await this.ensureMcpp())) return undefined;
     const available = availableDebuggers((id) => vscode.extensions.getExtension(id) !== undefined);
     if (available.length === 0) {
       const install = t("Install CodeLLDB");

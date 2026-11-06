@@ -51,7 +51,10 @@ open class JobProcessHandler(protected val session: McppSession, private val par
         super.startNotify()
         for (m in listOf("job/output", "job/finished", "test/result", "test/summary", "test/caseResult"))
             subscriptions += session.on(m) { p -> route(m, p) }
-        session.request(method, params).whenComplete { r, e ->
+        session.ensureMcppForAction().thenCompose { ready ->
+            if (ready) session.request(method, params)
+            else CompletableFuture.failedFuture<JsonElement>(IllegalStateException("mcpp is not installed"))
+        }.whenComplete { r, e ->
             if (e != null) {
                 print("${(e.cause ?: e).message}\n", ProcessOutputTypes.STDERR)
                 finish(1)
@@ -201,7 +204,7 @@ class McppTestState(private val c: McppRunConfiguration, env: ExecutionEnvironme
 }
 
 /** The backend's answer to "how does the program start" for a configuration (mcpp run --print-launch). */
-internal fun launch(c: McppRunConfiguration): CompletableFuture<JsonObject> {
+internal fun launch(c: McppRunConfiguration, debugEngine: String? = null): CompletableFuture<JsonObject> {
     val session = McppSession.get(c.project)
     val params = JsonObject().apply {
         addProperty("root", c.root)
@@ -209,8 +212,14 @@ internal fun launch(c: McppRunConfiguration): CompletableFuture<JsonObject> {
         if (c.options.profile.isNotBlank()) addProperty("profile", c.options.profile)
         if (c.options.bin.isNotBlank()) addProperty("bin", c.options.bin)
         add("args", JsonArray().apply { c.programArgs.forEach { add(it) } })
+        if (debugEngine != null) addProperty("engine", debugEngine)
     }
-    return session.request("run/launch", params).thenApply { it.asJsonObject }
+    return session.ensureMcppForAction().thenCompose { ready ->
+        if (ready) session.request(if (debugEngine == null) "run/launch" else "debug/configuration", params)
+        else CompletableFuture.failedFuture<JsonElement>(IllegalStateException("mcpp is not installed"))
+    }.thenApply {
+        if (debugEngine == null) it.asJsonObject else it.asJsonObject.getAsJsonObject("launch")
+    }
 }
 
 internal fun commandLine(l: JsonObject, pty: Boolean): GeneralCommandLine {

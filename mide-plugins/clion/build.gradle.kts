@@ -126,8 +126,8 @@ tasks.prepareSandbox {
 }
 
 intellijPlatform {
-    // The settings page is the shared web panel: there is nothing for the settings search to index,
-    // and the index is built by starting an IDE, which a machine without a display cannot.
+    // The native settings form receives its fields from the backend registry
+    // at runtime; there is no static field catalogue for the options index.
     buildSearchableOptions = false
     pluginConfiguration {
         id = "io.github.mcpp-community.mcpp-clion"

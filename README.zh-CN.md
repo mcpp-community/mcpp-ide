@@ -31,6 +31,11 @@ quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。C++ 文
 | 目标（含目标集合）、打包 | 快速选择 | 弹出列表 | `vim.ui.select` |
 | 语言功能 | mcppls（随扩展一并安装） | mcppls CLion 插件（依赖） | mcppls-nvim（`xlings install mcppls-nvim`） |
 
+CLion 的 **Settings | Tools | mcpp** 在保存表单前检查数值是否有限、是否处于允许范围内。
+无效输入会显示错误，并保持所有已存储的值不变。输入某项设置的默认值会移除其存储覆盖。
+
+图查询失败时显示构建数据库错误。修正所报告的问题后，重新打开图即可重试。
+
 - **处处同一答案**——构建运行什么、测试如何报告、清理的代价：都由后端决定
 - **只读 mcpp 的契约**——不自行解析清单，不自行解析依赖
 - **任务有序**——每个工程同一时间一个任务，新构建替换等待中的构建，取消会正常结束
@@ -56,9 +61,11 @@ quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。C++ 文
 | Neovim 0.10+ | release 源码树中的 `mide-plugins/nvim` | `xlings install mcpp-ide-nvim` 与 `xlings install mcpp-ide`，再 `require('mcpp').setup()`；或把该目录加入 runtimepath（[其 README](mide-plugins/nvim/README.md)） |
 | Agent、其他客户端 | `mcpp-ide-<version>-openkal-bundle-all.tar.gz`（两个架构的映像；Linux x64/arm64、macOS arm64、Windows x64 的 okrun），携带 okrun 的 `mcpp-ide-<version>.okb`，或 `xlings install mcpp-ide` | 运行 `bin/mcpp-ide serve`（Windows 上为 `bin\mcpp-ide.exe`），或 `okrun mcpp-ide-<version>.okb serve` |
 
-每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.23.3 上的
+每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.24.0 上的
 x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 的 okrun 携带。Neovim 插件不携带后端：
 它启动 xlings 安装的 `mcpp-ide` 命令（由 okrun 运行同一个映像包）。
+VS Code 和 CLion 仅在用户主动执行依赖本地构建工具的操作时检查 `mcpp`；未安装时只提示一次，并提供
+[mcpp 开源仓库](https://github.com/mcpp-community/mcpp)链接。
 
 ### 从源码构建
 
