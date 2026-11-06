@@ -35,9 +35,22 @@ import org.kodein.di.direct
 import org.kodein.di.instance
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import kotlin.time.Duration.Companion.minutes
 
 private const val PLUGIN_ID = "io.github.mcpp-community.mcpp-clion"
+
+private fun ideFailureFingerprint(message: String, details: String): String {
+    // IDE reports can contain machine paths. Retain only Java/Kotlin type and
+    // method symbols; this is enough to distinguish an SDK error from ours.
+    val text = "$message\n$details"
+    val types = Regex("""\b(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*[A-Za-z_$][A-Za-z0-9_$]*(?:Exception|Error)\b""")
+        .findAll(text).map { it.value }.distinct().take(6).toList()
+    val frames = Regex("""(?m)^\s*at\s+([A-Za-z0-9_.$]+)\(""")
+        .findAll(details).map { it.groupValues[1] }.distinct().take(8).toList()
+    fun array(values: List<String>) = values.joinToString(",", "[", "]") { "\"$it\"" }
+    return "{\"types\":${array(types)},\"frames\":${array(frames)}}"
+}
 
 @Remote("io.github.mcppcommunity.mcppclion.McppSession", plugin = PLUGIN_ID)
 interface McppSessionRemote {
@@ -221,7 +234,12 @@ class PackagedPluginTest {
             bindSingleton<CIServer>(overrides = true) {
                 object : CIServer by NoCIServer {
                     override fun reportTestFailure(testName: String, message: String, details: String, linkToLogs: String?, kind: SyntheticTestKind, generifyTestName: Boolean) {
-                        throw AssertionError("IDE failure: $testName: $message")
+                        val output = Path.of(System.getProperty("mcpp.clion.output") ?: "build/stable-smoke").toAbsolutePath()
+                        Files.createDirectories(output)
+                        Files.writeString(output.resolve("ide-errors.ndjson"),
+                            ideFailureFingerprint(message, details) + "\n",
+                            StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+                        throw AssertionError("IDE failure; see sanitized ide-errors.ndjson")
                     }
                 }
             }
@@ -235,6 +253,7 @@ class PackagedPluginTest {
         Files.createDirectories(output)
         Files.deleteIfExists(output.resolve("result.json"))
         Files.deleteIfExists(output.resolve("checks.json"))
+        Files.deleteIfExists(output.resolve("ide-errors.ndjson"))
         val checked = linkedSetOf<String>()
         fun record(name: String) {
             checked += name
