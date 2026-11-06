@@ -201,7 +201,7 @@ class McppTestState(private val c: McppRunConfiguration, env: ExecutionEnvironme
 }
 
 /** The backend's answer to "how does the program start" for a configuration (mcpp run --print-launch). */
-internal fun launch(c: McppRunConfiguration): CompletableFuture<JsonObject> {
+internal fun launch(c: McppRunConfiguration, debugEngine: String? = null): CompletableFuture<JsonObject> {
     val session = McppSession.get(c.project)
     val params = JsonObject().apply {
         addProperty("root", c.root)
@@ -209,8 +209,11 @@ internal fun launch(c: McppRunConfiguration): CompletableFuture<JsonObject> {
         if (c.options.profile.isNotBlank()) addProperty("profile", c.options.profile)
         if (c.options.bin.isNotBlank()) addProperty("bin", c.options.bin)
         add("args", JsonArray().apply { c.programArgs.forEach { add(it) } })
+        if (debugEngine != null) addProperty("engine", debugEngine)
     }
-    return session.request("run/launch", params).thenApply { it.asJsonObject }
+    return session.request(if (debugEngine == null) "run/launch" else "debug/configuration", params).thenApply {
+        if (debugEngine == null) it.asJsonObject else it.asJsonObject.getAsJsonObject("launch")
+    }
 }
 
 internal fun commandLine(l: JsonObject, pty: Boolean): GeneralCommandLine {

@@ -203,7 +203,7 @@
       "result": { "type": "object", "required": ["argv", "cwd", "env"], "properties": { "argv": { "type": "array", "items": { "type": "string" } }, "cwd": { "type": "string" }, "env": { "type": "object" }, "program": { "type": "string" }, "via": { "type": ["string", "null"] } } }
     },
     "mcpp-ide/debug/configuration": {
-      "description": "Builds and returns a debug configuration for the adapter's debugger. A program that runs through another (an ok image under okrun) is debugged as that runner, its symbols read through the GDB JIT interface.",
+      "description": "Builds and returns a debug configuration for the adapter's debugger. Selects a declared debuggee runner from the actual launch configuration, preserving its target and profile; an explicit runner choice takes precedence. Source symbols depend on the runner's debugger support.",
       "params": {
         "allOf": [
           { "$ref": "#/$defs/launchParams" },
@@ -512,7 +512,7 @@
         "action": { "type": "object", "required": ["kind"], "properties": { "kind": { "enum": ["job", "run", "debug", "cache", "panel", "cancel", "selectTarget", "installToolchain", "selectDefaultToolchain", "newProject", "quickMenu", "selfCheck", "rpc", "languageService", "forward", "editor", "problems", "report"] } } }
       }
     },
-    "launchParams": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "target": { "type": "string" }, "profile": { "type": "string" }, "bin": { "type": "string" }, "args": { "type": "array", "items": { "type": "string" } } } },
+    "launchParams": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "target": { "type": "string" }, "profile": { "type": "string" }, "runner": { "type": "string", "description": "Explicit named runner; empty selects the default and disables automatic debuggee selection." }, "bin": { "type": "string" }, "test": { "type": "string" }, "framework": { "type": "string" }, "cases": { "type": "array", "items": { "type": "string" } }, "args": { "type": "array", "items": { "type": "string" } } } },
     "graph": { "type": "object", "required": ["nodes", "edges"], "properties": { "nodes": { "type": "array" }, "edges": { "type": "array" } } },
     "diagnostic": {
       "type": "object",

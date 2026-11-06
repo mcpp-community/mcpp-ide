@@ -151,7 +151,9 @@ int build(bool message) {
 
 int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
-    if (const auto log = env("MOCK_MCPP_LOG"); !log.empty()) {
+    auto log = env("MOCK_MCPP_LOG");
+    if (log.empty() && std::filesystem::exists(".mock-mcpp-log")) log = ".mock-mcpp-log";
+    if (!log.empty()) {
         std::ofstream out(log, std::ios::app);
         for (const auto& a : args) out << a << ' ';
         const char* pinned = std::getenv("XLINGS_PROJECT_DIR");
@@ -169,8 +171,15 @@ int main(int argc, char** argv) {
     if (first(0) == "--version") { out(fixture("version.txt")); return 0; }
     if (first(0) == "--protocol-version") { out(fixture("protocol-version.json")); return 0; }
     if (first(0) == "build") return build(has("--message-format"));
+    if ((first(0) == "run" || first(0) == "test") && has("--print-launch")) {
+        auto text = here_file(".mock-mcpp-launch");
+        // A second launch can deliberately return a different configuration.
+        if (has("--runner"))
+            if (auto selected = here_file(".mock-mcpp-runner-launch"); !selected.empty()) text = selected;
+        out(text.empty() ? fixture("launch.json") : text);
+        return 0;
+    }
     if (first(0) == "test") { out(fixture(has("--list") ? "test-list.ndjson" : "test.ndjson")); return 0; }
-    if (first(0) == "run" && has("--print-launch")) { out(fixture("launch.json")); return 0; }
     if (first(0) == "search") { out(fixture("search.json")); return 0; }
     if (first(0) == "index" && first(1) == "list") { out(fixture("index-list.json")); return 0; }
     if (first(0) == "pack" && has("--help")) { out(fixture("pack-help.txt")); return 0; }

@@ -1,5 +1,12 @@
 ## Unreleased
 
+## 1.1.1
+
+- The bundled backend preserves the target and custom profile of a debug
+  launch. With mcpp 2026.11.6.1 or later, a declared `debuggee` runner is selected
+  automatically unless the request explicitly chooses a runner.
+- Failed build-database queries report graph errors and allow a retry.
+
 ## 1.1.0
 
 - The extension is mcpp-vscode 0.9.0 in everything a user sees and does: the same views (Project,

@@ -82,7 +82,15 @@
         "cwd": { "type": "string" },
         "env": { "type": "object", "additionalProperties": { "type": "string" } },
         "program": { "type": "string" },
-        "via": { "type": ["string", "null"] }
+        "via": { "type": ["string", "null"] },
+        "configuration": {
+          "type": "object", "required": ["triple", "profile", "platform", "runners"],
+          "properties": {
+            "triple": { "type": "string" }, "profile": { "type": "string" },
+            "platform": { "type": ["object", "null"] },
+            "runners": { "type": "array", "items": { "type": "string" } }
+          }
+        }
       }
     },
     "artifact": {

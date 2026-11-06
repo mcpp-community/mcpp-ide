@@ -103,6 +103,14 @@ the complete startup chain in each IDE process. Functional checks cover build, r
 native debug launch, error recovery, manifest completion and view selection. The debugger
 adapter starts the native Cidr process from the session starter before returning it.
 
+The debug request first obtains the program's actual launch. With mcpp
+2026.11.6.1 or later, an available `debuggee` named runner is selected on that
+launch's target and profile; an explicit runner parameter takes precedence.
+The selected launch is checked again for the same target, profile and platform.
+CLion requests this backend debug configuration and enables LLDB's JIT reader
+within the session when starting a runner. Custom run-configuration profiles
+are forwarded as `--profile`.
+
 ## Generated declarations
 
 `spec/` is the source of everything the editors declare statically. `mcpp-ide-dev gen vscode` writes

@@ -5,8 +5,8 @@ mcpp's project features in CLion 2026.1 and later, over the mcpp-ide backend:
 - the **mcpp** run configuration type: run (the program in a PTY console), test (the IDE's test
   tree) or build, for a target and a profile; a ▶ beside `main` runs the project, or the test whose
   `main` it is;
-- **debugging** under CLion's own GDB or LLDB (the default toolchain's); an ok image runs under
-  `okrun`, whose images reach GDB through the JIT interface;
+- **debugging** under CLion's own GDB or LLDB (the default toolchain's), using the
+  program and arguments returned by the backend's debug launch;
 - **console links** to `file:line:column`;
 - the **mcpp tool window** in CLion's own components: the Project tab (each project's mcpp,
   targets, tests, libraries, last build, artifacts, platform, and what C++ Modules says), the
@@ -27,6 +27,27 @@ settings unchanged. Entering a setting's default removes its stored override.
 
 The graph view reports a failed build-database query as an error. Correct the reported problem
 and reopen the graph to retry. An unavailable JCEF browser displays an explanation in the tool window.
+
+## Debug launches
+
+The run configuration's Profile field accepts `dev`, `release` and custom
+profile names. An empty field uses the project setting.
+
+With mcpp 2026.11.6.1 or later, the backend uses the configuration returned by
+the actual program launch. If that configuration declares a named `debuggee`
+runner, the backend selects it with the same target and profile. Other runner
+names, including device actions named `debug`, are not selected automatically.
+Older mcpp versions retain their ordinary launch behavior.
+
+OpenKal platform 0.24.0 declares `debuggee` as `okrun --debugger`. Image source
+debugging requires retained debug relocation information and the runner's JIT
+registration symbols. The adapter enables LLDB's GDB JIT reader for the debug
+session; no change to a global LLDB initialization file is needed. External
+debug sidecars are not supported by this path.
+
+The backend protocol also describes individual test debug launches through
+`mcpp test --runner`. The CLion adapter currently offers native debugging for
+program run configurations; this does not claim a CLion test-debug UI.
 
 ## Build
 

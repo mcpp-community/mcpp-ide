@@ -13,7 +13,7 @@ local uv = vim.uv or vim.loop
 local is_windows = vim.fn.has('win32') == 1
 
 -- mcpp-nvim's version: mcpp-ide's, whose release carries it.
-M.version = '0.2.0'
+M.version = '0.2.1'
 
 -- Neovim's version, as its release names it.
 function M.nvim_version()

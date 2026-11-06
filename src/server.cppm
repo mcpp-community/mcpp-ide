@@ -33,7 +33,7 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "0.2.0";
+inline constexpr std::string_view kVersion = "0.2.1";
 inline constexpr int kProtocol = 2;
 
 // The methods `install` registers, for the protocol schema's test: a method
@@ -719,7 +719,15 @@ std::expected<Json, rpc::Error> Session::run_launch(const Json& p, const rpc::Co
     std::vector<std::string> args{test.empty() ? "run" : "test", "--print-launch"};
     const auto profile = p.value("profile", setting("mcpp.build.profile").is_string() ? setting("mcpp.build.profile").get<std::string>() : "dev");
     if (profile == "release") args.push_back("--release");
+    else if (!profile.empty() && profile != "dev") {
+        args.push_back("--profile");
+        args.push_back(profile);
+    }
     for (const auto& a : target_args(p)) args.push_back(a);
+    if (auto runner = p.value("runner", ""); !runner.empty()) {
+        args.push_back("--runner");
+        args.push_back(runner);
+    }
     if (!test.empty()) {
         args.push_back(test);
         if (const auto* f = testing::framework(p.value("framework", "")))
@@ -743,15 +751,35 @@ std::expected<Json, rpc::Error> Session::run_launch(const Json& p, const rpc::Co
     return launch;
 }
 
-// A debug session for what `run/launch` describes, in the adapter's debugger's own configuration.
-//
-// A PROGRAM THAT RUNS THROUGH ANOTHER (`via`: an ok image under `okrun`, a target's runner) is
-// debugged as that runner, with the image's symbols arriving through the GDB JIT interface: okrun
-// registers each image it loads (`__jit_debug_register_code`), which gdb reads by default and lldb
-// reads once its JIT loader is on. Breakpoints in the image's sources then bind when it is loaded.
+// A debug session starts the launch selected by mcpp. A named `debuggee`
+// declares the host-debugger form; other runner names retain their own meaning.
+// Configurations come from that actual build, including target-set selection
+// and custom-profile build-program declarations.
 std::expected<Json, rpc::Error> Session::debug_configuration(const Json& p, const rpc::Context& ctx) {
     auto launch = run_launch(p, ctx);
     if (!launch) return launch;
+    if (!p.contains("runner")) {
+        const auto configuration = launch->value("configuration", Json::object());
+        const auto runners = configuration.is_object()
+            ? strings_of(configuration.value("runners", Json::array())) : std::vector<std::string>{};
+        if (std::ranges::find(runners, "debuggee") != runners.end()) {
+            const auto triple = configuration.value("triple", "");
+            const auto profile = configuration.value("profile", "");
+            if (triple.empty() || profile.empty())
+                return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcpp's launch configuration omits its target or profile")});
+            Json parameters = p;
+            parameters["target"] = triple;
+            parameters["profile"] = profile;
+            parameters["runner"] = "debuggee";
+            launch = run_launch(parameters, ctx);
+            if (!launch) return launch;
+            const auto selected = launch->value("configuration", Json::object());
+            if (!selected.is_object() || selected.value("triple", "") != triple
+                || selected.value("profile", "") != profile
+                || selected.value("platform", Json(nullptr)) != configuration.value("platform", Json(nullptr)))
+                return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcpp's debug launch changed the selected target, profile or platform")});
+        }
+    }
     const auto& l = *launch;
     std::string engine = p.value("engine", setting("mcpp.debug.engine").is_string() ? setting("mcpp.debug.engine").get<std::string>() : "auto");
     const auto available = strings_of(p.value("available", Json::array()));
@@ -795,7 +823,7 @@ std::expected<Json, rpc::Error> Session::debug_configuration(const Json& p, cons
         return std::unexpected(invalid(std::format("unknown debug engine {}", engine)));
     }
     if (through)
-        cfg["mcppNote"] = t("this program runs through {0}; the debugger starts {0} and reads the program's symbols when it is loaded",
+        cfg["mcppNote"] = t("the debugger starts {0}; source symbols depend on the runner's debugger support",
                             {l["via"].is_string() ? l["via"].get<std::string>() : program});
     return Json{{"engine", engine}, {"configuration", cfg}, {"launch", l}};
 }
