@@ -11,6 +11,8 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        python=python3; [ "$RUNNER_OS" = Windows ] && python=python
+        "$python" .github/scripts/check-bootstrap-pin.py
         while IFS='=' read -r name value; do
           case "$name" in ''|\#*) continue ;; esac
           if [ -z "${!name:-}" ]; then echo "$name=$value" >> "$GITHUB_ENV"; fi
