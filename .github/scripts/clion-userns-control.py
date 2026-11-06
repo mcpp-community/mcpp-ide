@@ -15,7 +15,7 @@ parser.add_argument('--plugin',required=True,type=Path)
 parser.add_argument('--language',required=True,type=Path)
 parser.add_argument('--sha256',required=True)
 parser.add_argument('--ide-version',required=True)
-parser.add_argument('--focus',choices=['policy-control','packaged-262'],default='policy-control')
+parser.add_argument('--focus',choices=['policy-control','packaged-262','native-262'],default='policy-control')
 parser.add_argument('--repetitions',choices=[1,3],default=1,type=int)
 args=parser.parse_args()
 root=Path.cwd()
@@ -26,10 +26,12 @@ policy=Path('/proc/sys/kernel/apparmor_restrict_unprivileged_userns')
 graph_source=root/'mide-plugins/clion/integration-tests/src/test/kotlin/GraphInteractionTest.kt'
 report={'ide_version':args.ide_version,'plugin_sha256':args.sha256,'phases':[],
         'scope':'Same canonical ZIP, stable IDE and test source. JCEF flags and all test assertions unchanged. No raw logs, messages or paths.'}
+if args.focus=='native-262':
+    report['scope']='Stock CMake/GDB control on stable CLion262 with the usual IDE driver instrumentation. Runtime assertions verify mcpp and mcppls are absent. Canonical ZIP identity is retained but that ZIP is not installed. Only allowlisted markers and public exception frames leave the runner.'
 started=time.monotonic()
 
 def context_directories(test_root):
-    prefixes=('mcpp-graphs-','mcpp-settings-','mcpp-clion-stable-')
+    prefixes=('mcpp-graphs-','mcpp-settings-','mcpp-clion-stable-','native-debug-control-')
     return {p.resolve() for p in test_root.rglob('*') if p.is_dir() and p.name.startswith(prefixes)} if test_root.is_dir() else set()
 
 def save():
@@ -64,6 +66,8 @@ def phase(name,patterns):
            'plugin_sha256':digest(args.plugin),'graph_test_source_sha256':source_hash,
            'language_zip_sha256':digest(args.language),
            'test_patterns':patterns}
+    if args.focus=='native-262':
+        entry['native_test_source_sha256']=digest(root/'mide-plugins/clion/integration-tests/src/test/kotlin/NativeDebuggerControlTest.kt')
     command=['xvfb-run','-a','gradle','--no-daemon','--max-workers=4',
              '-p','mide-plugins/clion/integration-tests','test','--rerun-tasks',
              '-PpluginZip='+str(args.plugin.resolve()),'-PmcpplsZip='+str(args.language.resolve()),
@@ -105,6 +109,11 @@ def phase(name,patterns):
     allowed_checks.update('native-test-tree-'+s for s in ['test','test-failure','test-recovery'])
     entry['packaged_checks']=[v for v in json.loads(checks.read_text()).get('passed',[]) if v in allowed_checks] if checks.is_file() else []
     entry['packaged_result_published']=(directory/'result.json').is_file()
+    native=directory/'native-debug/checks.json'
+    allowed_native={'gcc-16-control','mcpp-and-mcppls-absent','stock-cmake-configuration','native-breakpoint',
+                    'native-variable-40','native-step','native-variable-42','native-resume-output','native-stop-prevents-work'}
+    entry['native_checks']=[v for v in json.loads(native.read_text()).get('passed',[]) if v in allowed_native] if native.is_file() else []
+    entry['native_result_published']=(directory/'native-debug/result.json').is_file()
     report['phases'].append(entry)
     save()
     return entry
@@ -117,16 +126,19 @@ try:
     report['language_zip_sha256']=digest(args.language)
     original=policy.read_text().strip()
     report['original_policy']=original
-    if args.focus=='packaged-262':
+    if args.focus in ['packaged-262','native-262']:
         if args.ide_version!='2026.2.4.1':
             raise ValueError('focused diagnosis requires stable 262')
         set_policy('0')
         if probe()['exit']!=0:
             raise RuntimeError('user namespace permission did not change')
-        results=[phase('packaged-only' if args.repetitions==1 else 'packaged-'+str(n),['PackagedPluginTest'])
+        native=args.focus=='native-262'
+        label='native' if native else 'packaged'
+        test='NativeDebuggerControlTest' if native else 'PackagedPluginTest'
+        results=[phase(label+'-only' if args.repetitions==1 else label+'-'+str(n),[test])
                  for n in range(1,args.repetitions+1)]
         status=int(any(p['exit']!=0 for p in results))
-        report['focused_packaged_passed']=status==0
+        report['focused_native_passed' if native else 'focused_packaged_passed']=status==0
         report['fixed_repetitions']=args.repetitions
         report['repetition_passes']=sum(p['exit']==0 for p in results)
         raise SystemExit(status)

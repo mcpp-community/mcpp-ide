@@ -14,7 +14,7 @@ on:
       focus:
         description: Controlled scenario to diagnose
         type: choice
-        options: ['policy-control', 'packaged-262']
+        options: ['policy-control', 'packaged-262', 'native-262']
         default: policy-control
       repetitions:
         description: Fixed repetitions, preserving every failure
@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ${{ fromJSON(inputs.focus == 'packaged-262' && '["2026.2.4.1"]' || '["2026.1.5.2","2026.2.4.1"]') }}
+        version: ${{ fromJSON(inputs.focus != 'policy-control' && '["2026.2.4.1"]' || '["2026.1.5.2","2026.2.4.1"]') }}
     defaults:
       run:
         shell: bash
@@ -84,6 +84,10 @@ jobs:
           language=$(find stable-plugin -maxdepth 1 -name 'mcppls-clion-*.zip' -print)
           original=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)
           trap 'sudo sysctl -w "kernel.apparmor_restrict_unprivileged_userns=$original" >/dev/null 2>&1 || true' EXIT
+          if [ "$DIAGNOSTIC_FOCUS" = native-262 ]; then
+            export NATIVE_CONTROL_CXX="${MCPP_HOME:-$HOME/.mcpp}/registry/data/xpkgs/xim-x-gcc/16.1.0/bin/g++"
+            test -x "$NATIVE_CONTROL_CXX"
+          fi
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/clion-userns-control.py \
             --plugin "$GITHUB_WORKSPACE/$plugin" \
             --language "$GITHUB_WORKSPACE/$language" \

@@ -38,6 +38,7 @@ for root in roots:
             if len(traces)<16 or key in traces:traces[key]=trace
 tests=[]
 allowed_tests={('PackagedPluginTest','packagedPluginStartsItsBundledBackend()'),
+               ('NativeDebuggerControlTest','nativeCmakeDebuggerReadsVariablesAndStops()'),
                ('SettingsInteractionTest','settingsValidateBeforeSavingInTheRealDialog()'),
                ('GraphInteractionTest','graphRendersNavigatesAndRecoversInJcef()'),
                ('GraphInteractionTest','graphExplainsUnavailableJcef()')}
@@ -51,7 +52,7 @@ for p in test_root.glob('TEST-*.xml'):
         text=failure.text or '' if failure is not None else ''
         lines=[int(v) for v in re.findall(r'GraphInteractionTest\.kt:(\d+)',text)]
         source_lines={name:sorted({int(v) for v in re.findall(name+r'\.kt:(\d+)',text)})
-                      for name in ['PackagedPluginTest','SettingsInteractionTest','GraphInteractionTest']}
+                      for name in ['PackagedPluginTest','SettingsInteractionTest','GraphInteractionTest','NativeDebuggerControlTest']}
         failure_markers={name:text.count(name) for name in ['IDE failure:','ExecutionFinishedException',
                          'reportTestFailure','ErrorReporterToCI','the real debug action finishes in the IDE',
                          'the native debugger did not suspend at fixture line','the native variables view shows answer']}
