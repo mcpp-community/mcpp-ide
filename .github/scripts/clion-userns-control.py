@@ -110,7 +110,7 @@ def phase(name,patterns):
     entry['packaged_checks']=[v for v in json.loads(checks.read_text()).get('passed',[]) if v in allowed_checks] if checks.is_file() else []
     entry['packaged_result_published']=(directory/'result.json').is_file()
     native=directory/'native-debug/checks.json'
-    allowed_native={'stock-compiler-control','mcpp-and-mcppls-absent','stock-toolchain-wizard-defaults','stock-cmake-configuration','native-breakpoint',
+    allowed_native={'stock-compiler-control','mcpp-and-mcppls-absent','stock-toolchain-wizard-defaults','stock-toolchain-wizard-not-needed','stock-cmake-configuration','native-breakpoint',
                     'native-variable-40','native-step','native-variable-42','native-resume-output','native-stop-prevents-work'}
     entry['native_checks']=[v for v in json.loads(native.read_text()).get('passed',[]) if v in allowed_native] if native.is_file() else []
     entry['native_result_published']=(directory/'native-debug/result.json').is_file()

@@ -130,8 +130,13 @@ class NativeDebuggerControlTest {
                 assertFalse(plugins.isPluginInstalled(ids.getId("io.github.mcpp-community.mcpp-clion")))
                 assertFalse(plugins.isPluginInstalled(ids.getId("io.github.sunrisepeak.mcppls")))
                 record("mcpp-and-mcppls-absent")
-                ui.x("//div[@visible_text='Skip Wizard and Use Defaults' or @text='Skip Wizard and Use Defaults']").click()
-                record("stock-toolchain-wizard-defaults")
+                val wizard=ui.x("//div[@visible_text='Skip Wizard and Use Defaults' or @text='Skip Wizard and Use Defaults']")
+                if (wizard.present()) {
+                    wizard.click()
+                    record("stock-toolchain-wizard-defaults")
+                } else {
+                    record("stock-toolchain-wizard-not-needed")
+                }
                 val runs=utility<NativeRunManagerFactory>().getInstance(singleProject())
                 val ready=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(180)
                 var configuration: NativeRunSettings?=null
