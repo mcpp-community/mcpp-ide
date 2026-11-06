@@ -658,14 +658,23 @@ test("the package job guards the published artefact against local leakage", () =
   }
 });
 
-test("a release publishes Open VSX and leaves the Marketplace upload manual", () => {
+test("a release verifies separate Open VSX and JetBrains uploads", () => {
   const workflow = readFileSync(path.join(workflows, "release.yml"), "utf8");
   assert.match(workflow, /npx ovsx publish "\$GITHUB_WORKSPACE\/\$vsix" --pat "\$OPENVSX_TOKEN"/);
   assert.doesNotMatch(workflow, /npx vsce publish/);
   // Open VSX is a required destination: a missing token fails the release.
   assert.match(workflow, /OPENVSX_TOKEN: \$\{\{ secrets\.OPENVSX_TOKEN \}\}/);
   assert.match(workflow, /if \[ -z "\$\{OPENVSX_TOKEN:-\}" \]; then[\s\S]*?exit 1/);
-  assert.match(workflow, /Upload the GitHub Release VSIX manually/);
+  assert.match(workflow, /openvsx:\s*\n\s+needs: release/);
+  assert.match(workflow, /gh release download "v\$VERSION" -p 'mcpp-vscode-\*\.vsix' -p SHA256SUMS/);
+  assert.match(workflow, /jetbrains:\s*\n\s+needs: release/);
+  assert.match(workflow, /uses: \.\/\.github\/workflows\/publish-jetbrains\.yml/);
+  assert.match(workflow, /JETBRAINS_TOKEN: \$\{\{ secrets\.JETBRAINS_TOKEN \}\}/);
+  const jetbrains = readFileSync(path.join(workflows, "publish-jetbrains.yml"), "utf8");
+  assert.match(jetbrains, /gh release download "\$TAG" -p "mcpp-clion-\$VERSION\.zip" -p SHA256SUMS/);
+  assert.match(jetbrains, /sha256sum -c --ignore-missing SHA256SUMS/);
+  assert.match(jetbrains, /--xml-id io\.github\.mcpp-community\.mcpp-clion/);
+  assert.match(jetbrains, /--output published\/jetbrains-receipt\.json/);
   const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as PackageManifest;
   assert.ok(manifest.devDependencies?.ovsx, "ovsx must be a devDependency the release resolves offline");
 });
