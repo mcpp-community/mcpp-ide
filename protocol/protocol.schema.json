@@ -441,15 +441,21 @@
       }
     },
     "mcpp-ide/test/result": {
+      "description": "One test program's result, mcpp's status value for value: pass is passed; run_fail failed, or timedOut when mcpp says timed_out; compile_fail failed with compileFailed; not_run skipped with mcpp's reason; built skipped with builtOnly. Every result carries the program's whole output (compile, then run), passed or not, the head and the tail past 1 MiB with outputTruncated; a failure's location is the first file:line its output names, or null.",
       "params": {
         "type": "object",
-        "required": ["jobId", "test", "status"],
+        "required": ["jobId", "test", "status", "output", "outputTruncated"],
         "properties": {
           "test": { "type": "string" },
           "member": { "type": "string" },
           "status": { "enum": ["passed", "failed", "timedOut", "skipped", "errored"] },
+          "timedOut": { "type": "boolean" },
+          "compileFailed": { "type": "boolean" },
+          "builtOnly": { "type": "boolean" },
           "durationMs": { "type": "integer" },
           "output": { "type": "string" },
+          "outputTruncated": { "type": "boolean" },
+          "location": { "$ref": "#/$defs/failureLocation" },
           "reason": { "type": "string" }
         }
       }
@@ -459,10 +465,11 @@
     "mcpp-ide/manifest/changed": { "params": { "type": "object", "required": ["root"] } },
     "mcpp-ide/manifest/diagnostics": { "params": { "type": "object", "required": ["root", "diagnostics"] } },
     "mcpp-ide/project/mcppChanged": { "description": "A job's envelope named another mcpp than the project's was asked as: it is asked again on its next use.", "params": { "type": "object", "required": ["root", "version"] } },
-    "mcpp-ide/test/caseResult": { "description": "One case's outcome, read from the framework's report when a test/runCases job ended.", "params": { "type": "object", "required": ["jobId", "root", "test", "case", "status"], "properties": { "status": { "enum": ["passed", "failed", "skipped"] }, "durationMs": { "type": "integer" }, "message": { "type": "string" } } } },
+    "mcpp-ide/test/caseResult": { "description": "One case's outcome, read from the framework's report when a test/runCases job ended, with the case's own output (GoogleTest's console between [ RUN ] and its result line; empty for a framework whose console names no case) and a failure's location.", "params": { "type": "object", "required": ["jobId", "root", "test", "case", "status", "output", "outputTruncated"], "properties": { "status": { "enum": ["passed", "failed", "skipped"] }, "durationMs": { "type": "integer" }, "message": { "type": "string" }, "output": { "type": "string" }, "outputTruncated": { "type": "boolean" }, "location": { "$ref": "#/$defs/failureLocation" } } } },
     "mcpp-ide/languageService/changed": { "description": "mcppls answered differently from the last time it was asked: another program or version, other actions, or another state of the workspace. An editor that lists the commands asks for them again.", "params": { "type": "object", "required": ["root", "state", "workspaceState"] } }
   },
   "$defs": {
+    "failureLocation": { "description": "Where a failure is: the first file:line (or file(line):) its output names, line 0-based; null when it names none.", "oneOf": [{ "type": "null" }, { "type": "object", "required": ["path", "line"], "properties": { "path": { "type": "string" }, "line": { "type": "integer", "minimum": 0 } } }] },
     "settingValues": { "type": "object", "additionalProperties": true },
     "resolvedSettings": { "type": "object", "required": ["values", "rejected", "renames", "deprecated"] },
     "rooted": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" } } },

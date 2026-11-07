@@ -185,6 +185,9 @@ private:
     std::map<std::filesystem::path, Json> buildDatabases_;
     // The project and kind of each job, for the notifications its records become.
     std::map<std::string, std::pair<std::filesystem::path, std::string>, std::less<>> jobOf_;
+    // The whole output of the last test record of each running test job, for a case run to divide
+    // among its cases when the job ends (test/runCases).
+    std::map<std::string, std::string, std::less<>> programOutput_;
     // The configuration (and platforms) the last plan of each project named.
     std::map<std::filesystem::path, Json> plans_;
     // What `mcpp pack` accepts, read from its help once per mcpp (SPEC-014: `--pkg-format` names the
@@ -247,6 +250,7 @@ Session::Session(rpc::Server& server) : rpc_(server) {
                     root = it->second.first;
                     jobOf_.erase(it);
                 }
+                if (auto it = programOutput_.find(id); it != programOutput_.end()) programOutput_.erase(it);
             }
             rpc_.notify("mcpp-ide/job/finished", s);
             // Every envelope names the mcpp that wrote it: another version than the one probed (a
@@ -404,6 +408,10 @@ void Session::on_record(std::string_view jobId, const Json& record) {
     } else if (type == "artifact") {
         rpc_.notify("mcpp-ide/job/artifact", n);
     } else if (type == "test") {
+        {
+            std::lock_guard lock(mutex_);
+            programOutput_[std::string(jobId)] = record.value("compile_output", "") + record.value("run_output", "");
+        }
         rpc_.notify("mcpp-ide/test/result", n);
     } else if (type == "summary") {
         rpc_.notify("mcpp-ide/test/summary", n);
@@ -1539,11 +1547,25 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
         std::ifstream in(report, std::ios::binary);
         const std::string text(std::istreambuf_iterator<char>(in), {});
         in.close();
-        if (fw)
-            for (const auto& o : testing::read_report(*fw, text))
+        std::string programOutput;
+        {
+            std::lock_guard lock(mutex_);
+            if (auto it = programOutput_.find(jobId); it != programOutput_.end()) programOutput = it->second;
+        }
+        if (fw) {
+            const auto outputs = testing::case_outputs(*fw, programOutput);
+            for (const auto& o : testing::read_report(*fw, text)) {
+                // Each case with its own output (passed or not) and a failure's place (D16).
+                const auto own = outputs.find(o.name);
+                bool truncated = false;
+                auto output = views::bounded_output(own != outputs.end() ? own->second : std::string_view{}, truncated);
+                const Json location = o.status == "failed" ? views::failure_location(o.message.empty() ? output : o.message) : Json(nullptr);
                 rpc_.notify("mcpp-ide/test/caseResult", Json{{"jobId", jobId}, {"root", root.generic_string()}, {"test", test},
                                                     {"case", o.name}, {"status", o.status}, {"durationMs", o.durationMs},
-                                                    {"message", o.message}});
+                                                    {"message", o.message}, {"output", std::move(output)},
+                                                    {"outputTruncated", truncated}, {"location", location}});
+            }
+        }
         std::error_code ignored;
         std::filesystem::remove_all(dir, ignored);
     });

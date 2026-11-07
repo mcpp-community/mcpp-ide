@@ -133,6 +133,18 @@ TEST(Math,
         CHECK(d.size() == 3 && d[0].status == "passed" && d[0].durationMs == 1);
         CHECK(d[1].name == "a & b" && d[1].status == "failed" && d[1].message.find("NOT correct") != std::string::npos);
         CHECK(d[2].status == "skipped");
+
+        // Each case's own output, by GoogleTest's boundaries (D16); none for a framework without them.
+        const auto outputs = testing::case_outputs(fw("gtest"), "Running main() from gtest_main.cc\n"
+            "[==========] Running 3 tests from 1 test suite.\n"
+            "[ RUN      ] Math.Adds\nadding\n[       OK ] Math.Adds (2 ms)\n"
+            "[ RUN      ] Math.Spans\na.cpp:3: Failure\nExpected 2\n[  FAILED  ] Math.Spans (0 ms)\n"
+            "[ RUN      ] Math.Crashes\nhalf way\n");
+        CHECK(outputs.size() == 3);
+        CHECK(outputs.at("Math.Adds") == "[ RUN      ] Math.Adds\nadding\n[       OK ] Math.Adds (2 ms)\n");
+        CHECK(outputs.at("Math.Spans").contains("a.cpp:3: Failure") && outputs.at("Math.Spans").ends_with("[  FAILED  ] Math.Spans (0 ms)\n"));
+        CHECK(outputs.at("Math.Crashes") == "[ RUN      ] Math.Crashes\nhalf way\n");
+        CHECK(testing::case_outputs(fw("catch2"), "[ RUN      ] x\n").empty());
     }
 
     // source/entries and test/cases over a project on disk (no mcpp: the plan's packages are not

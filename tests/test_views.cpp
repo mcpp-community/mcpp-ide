@@ -124,7 +124,36 @@ int main() {
     std::getline(test, first);
     auto r = views::stream_record(Json::parse(first));
     CHECK(r["type"] == "test" && r["status"] == "passed" && r["test"] == "test_smoke");
-    auto failed = views::stream_record(Json{{"test", "t"}, {"status", "fail"}, {"timed_out", true}});
-    CHECK(failed["status"] == "timedOut");
+    // mcpp's statuses, value for value (D16): pass, run_fail (timed_out), compile_fail, not_run, built.
+    auto timedOut = views::stream_record(Json{{"test", "t"}, {"status", "run_fail"}, {"timed_out", true}});
+    CHECK(timedOut["status"] == "timedOut" && timedOut["timedOut"] == true);
+    auto failed = views::stream_record(Json{{"test", "t"}, {"status", "run_fail"},
+                                            {"run_output", "running\ntests/t.cpp:12: assertion failed\n"}});
+    CHECK(failed["status"] == "failed" && failed["location"]["path"] == "tests/t.cpp" && failed["location"]["line"] == 11);
+    auto compileFailed = views::stream_record(Json{{"test", "t"}, {"status", "compile_fail"}, {"compile_output", "tests/t.cpp:3:5: error: x\n"}});
+    CHECK(compileFailed["status"] == "failed" && compileFailed["compileFailed"] == true && compileFailed["location"]["line"] == 2);
+    auto notRun = views::stream_record(Json{{"test", "t"}, {"status", "not_run"}, {"reason", "no runner for riscv64"}});
+    CHECK(notRun["status"] == "skipped" && notRun["reason"] == "no runner for riscv64" && notRun["location"].is_null());
+    auto built = views::stream_record(Json{{"test", "t"}, {"status", "built"}});
+    CHECK(built["status"] == "skipped" && built["builtOnly"] == true && !built["reason"].get<std::string>().empty());
+    CHECK(views::stream_record(Json{{"test", "t"}, {"status", "fail"}})["status"] == "errored");
+    // A passed test keeps its output.
+    auto passed = views::stream_record(Json{{"test", "t"}, {"status", "pass"}, {"run_output", "hello\n"}});
+    CHECK(passed["status"] == "passed" && passed["output"] == "hello\n" && passed["outputTruncated"] == false);
+    // Past the limit, the head and the tail are kept, and the record says so.
+    std::string big = "first line\n";
+    while (big.size() < 3 * views::kOutputLimit) big += "a line of output\n";
+    big += "last line\n";
+    auto long_ = views::stream_record(Json{{"test", "t"}, {"status", "pass"}, {"run_output", big}});
+    const auto kept = long_["output"].get<std::string>();
+    CHECK(long_["outputTruncated"] == true && kept.size() <= views::kOutputLimit + 100);
+    CHECK(kept.starts_with("first line\n") && kept.ends_with("last line\n") && kept.contains("bytes of output left out"));
+    // Where a failure is: GCC/Clang, MSVC and a drive; nothing that only looks like it.
+    CHECK(views::failure_location("src/a.cpp:3:5: error: x")["line"] == 2);
+    CHECK(views::failure_location("C:\\p\\a.cpp(12): error C2065")["path"] == "C:\\p\\a.cpp");
+    CHECK(views::failure_location("C:\\p\\a.cpp(12): error C2065")["line"] == 11);
+    CHECK(views::failure_location("C:/p/b.cpp:7: Failure")["path"] == "C:/p/b.cpp");
+    CHECK(views::failure_location("started at 12:30: ok").is_null());
+    CHECK(views::failure_location("no location here").is_null());
     std::println("test_views: ok");
 }
