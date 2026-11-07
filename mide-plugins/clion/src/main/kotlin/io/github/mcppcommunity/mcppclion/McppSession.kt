@@ -131,6 +131,13 @@ class McppSession(private val project: Project) : Disposable {
         com.intellij.ide.plugins.PluginManagerCore.isLoaded(id)
     }.getOrDefault(false)
 
+    /** This plugin's version, as its descriptor states it: the series the backend must share (D15). */
+    private fun pluginVersion(): String = runCatching {
+        (McppSession::class.java.classLoader as? com.intellij.ide.plugins.cl.PluginAwareClassLoader)?.pluginDescriptor?.version
+    }.getOrNull() ?: runCatching {
+        com.intellij.ide.plugins.PluginManagerCore.getPlugin(com.intellij.openapi.extensions.PluginId.getId(PLUGIN_ID))?.version
+    }.getOrNull() ?: "unknown"
+
     /** The plugin's directory: the parent of the lib/ holding this class's jar. */
     private fun pluginRoot(): File? = pluginDirectory()
 
@@ -191,7 +198,7 @@ class McppSession(private val project: Project) : Disposable {
         var protocol = "unknown"
         b.request("initialize", params).thenCompose { init ->
             protocol = init.asJsonObject["protocol"]?.toString() ?: "missing"
-            requireProtocol(init.asJsonObject)
+            requireProtocol(init.asJsonObject, pluginVersion())
             log.info("mcpp-ide: initialized (source=${located.source}, protocol=$protocol)")
             initialized = init.asJsonObject
             b.notify("initialized", JsonObject())

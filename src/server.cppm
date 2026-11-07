@@ -33,7 +33,12 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "0.2.1";
+inline constexpr std::string_view kVersion = "1.2.0";
+// THE SERIES (mcpp design 2026-11-07, D15): `X.Y` of `X.Y.Z`, shared by the backend and every editor
+// plugin; components of one series work together, and `Z` is each component's own patch. A plugin
+// refuses a backend of another series, naming both versions.
+inline constexpr std::string_view kSeries = "1.2";
+static_assert(kVersion.starts_with(kSeries) && kVersion.size() > kSeries.size() && kVersion[kSeries.size()] == '.');
 inline constexpr int kProtocol = 2;
 
 // The methods `install` registers, for the protocol schema's test: a method
@@ -615,6 +620,7 @@ std::expected<Json, rpc::Error> Session::initialize(const Json& p) {
     return Json{{"capabilities", documents::server_capabilities()},
                 {"serverInfo", Json{{"name", "mcpp-ide"}, {"version", kVersion}}},
                 {"protocol", kProtocol},
+                {"series", kSeries},
                 {"mcpp", check["mcpp"]},
                 {"languageService", check["languageService"]},
                 {"checks", check["checks"]},

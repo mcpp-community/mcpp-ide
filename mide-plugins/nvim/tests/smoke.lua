@@ -103,6 +103,17 @@ local function first(items) return items[1] end
 vim.opt.runtimepath:prepend(plugin)
 local mcppide = require('mcpp')
 local session = require('mcpp.session')
+
+-- ── the series (mcpp design 2026-11-07, D15) ───────────────────────────────────────────────────
+check('one series works together, whatever the patches',
+  session.incompatibility({ protocol = 2, series = '1.2', serverInfo = { version = '1.2.4' } }, '1.2.0') == nil
+    and session.incompatibility({ protocol = 2, serverInfo = { version = '1.2.1' } }, '1.2.3') == nil)
+local older = session.incompatibility({ protocol = 2, serverInfo = { version = '0.2.1' } }, '1.2.0')
+check('another series is refused, naming both versions and what installs this one',
+  older ~= nil and older:find('0.2.1', 1, true) ~= nil and older:find('series 0.2', 1, true) ~= nil
+    and older:find('mcpp-ide@1.2.0', 1, true) ~= nil, older)
+check('another protocol is refused', session.incompatibility({ protocol = 1, series = '1.2' }, '1.2.0') ~= nil)
+check('the plugin is of the backend series this repository builds', session.series_of(session.version) == '1.2')
 local diagnostics = require('mcpp.diagnostics')
 local views = require('mcpp.views')
 
