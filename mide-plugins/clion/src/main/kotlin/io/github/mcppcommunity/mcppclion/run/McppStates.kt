@@ -120,10 +120,36 @@ class McppJobState(private val c: McppRunConfiguration, env: ExecutionEnvironmen
 /**
  * A test job whose results fill the IDE's test tree: each `test/result` becomes the TeamCity
  * service messages the test runner reads, located at the file that holds the test's `main`.
+ *
+ * EVERY TEST AND CASE HAS ITS OWN OUTPUT (design 2026-11-07, D16): `testStdOut` carries a program's
+ * whole output and a case's own (GoogleTest's console between `[ RUN ]` and its result), passed or
+ * not; a failure's `details` start with the place its output names (`file:line`, which the console
+ * filter links), then the output.
  */
 class TestJobProcessHandler(session: McppSession, params: JsonObject, private val mains: Map<String, String>, method: String = "job/start") :
     JobProcessHandler(session, params, method) {
     private fun escape(s: String) = s.replace("|", "||").replace("'", "|'").replace("\n", "|n").replace("\r", "|r").replace("[", "|[").replace("]", "|]")
+
+    /** `path:line` of a result's `location` (its line 0-based), or "". */
+    private fun place(p: JsonObject): String = runCatching {
+        val l = p.getAsJsonObject("location")
+        "${l["path"].asString}:${l["line"].asInt + 1}"
+    }.getOrDefault("")
+
+    /** The output a result carries, as its test's standard output, with a note when it was cut short. */
+    private fun stdout(out: StringBuilder, name: String, p: JsonObject) {
+        val output = p["output"]?.takeIf { it.isJsonPrimitive }?.asString ?: ""
+        if (output.isEmpty()) return
+        val note = if (p["outputTruncated"]?.asBoolean == true) "\n(the output was longer; its head and tail are shown)\n" else ""
+        out.append("##teamcity[testStdOut name='$name' out='${escape(output + note)}']\n")
+    }
+
+    /** `testFailed` with the failure's place first in its details, then what the result says. */
+    private fun failed(out: StringBuilder, name: String, message: String, p: JsonObject, details: String) {
+        val at = place(p)
+        val text = listOf(at, details).filter { it.isNotBlank() }.joinToString("\n")
+        out.append("##teamcity[testFailed name='$name' message='${escape(message)}' details='${escape(text)}']\n")
+    }
     /** The program whose cases are reported, once its first case is (test/runCases). */
     private var suite: String? = null
 
@@ -143,10 +169,14 @@ class TestJobProcessHandler(session: McppSession, params: JsonObject, private va
                 val hint = caseUrl(session, p["root"]?.asString ?: "", program, p["case"].asString, mains[program])
                     ?.let { " locationHint='${escape(it)}'" } ?: ""
                 out.append("##teamcity[testStarted name='$name'$hint]\n")
+                stdout(out, name, p)
                 when (p["status"]?.asString) {
                     "passed" -> {}
                     "skipped" -> out.append("##teamcity[testIgnored name='$name']\n")
-                    else -> out.append("##teamcity[testFailed name='$name' message='${escape(p["message"]?.asString ?: "")}']\n")
+                    else -> {
+                        val message = p["message"]?.asString ?: ""
+                        failed(out, name, message.lineSequence().firstOrNull() ?: "", p, message)
+                    }
                 }
                 out.append("##teamcity[testFinished name='$name' duration='${p["durationMs"]?.asLong ?: 0}']\n")
                 notifyTextAvailable(out.toString(), ProcessOutputTypes.STDOUT)
@@ -159,12 +189,19 @@ class TestJobProcessHandler(session: McppSession, params: JsonObject, private va
                 val name = escape(p["test"].asString)
                 val hint = mains[p["test"].asString]?.let { " locationHint='file://${escape(it)}'" } ?: ""
                 val out = StringBuilder("##teamcity[testStarted name='$name'$hint]\n")
-                val output = p["output"]?.asString ?: ""
-                if (output.isNotEmpty()) out.append("##teamcity[testStdOut name='$name' out='${escape(output)}']\n")
+                stdout(out, name, p)
+                val reason = p["reason"]?.asString?.ifBlank { null }
                 when (p["status"]?.asString) {
                     "passed" -> {}
-                    "skipped" -> out.append("##teamcity[testIgnored name='$name']\n")
-                    else -> out.append("##teamcity[testFailed name='$name' message='${escape(p["reason"]?.asString?.ifBlank { null } ?: p["status"].asString)}']\n")
+                    "skipped" -> out.append("##teamcity[testIgnored name='$name'${reason?.let { " message='${escape(it)}'" } ?: ""}]\n")
+                    else -> {
+                        val message = when {
+                            p["timedOut"]?.asBoolean == true -> "The test timed out"
+                            p["compileFailed"]?.asBoolean == true -> "The test did not compile"
+                            else -> reason ?: "The test failed (${p["status"].asString})"
+                        }
+                        failed(out, name, message, p, "")
+                    }
                 }
                 out.append("##teamcity[testFinished name='$name' duration='${p["durationMs"]?.asLong ?: 0}']\n")
                 notifyTextAvailable(out.toString(), ProcessOutputTypes.STDOUT)

@@ -195,6 +195,29 @@ check('its narration is streamed into mcpp://output', output():find('$ ', 1, tru
 check('its end is said there', output():find('mcpp build: ok', 1, true) ~= nil)
 check('the statusline shows the last build', mcppide.status():find('build ok', 1, true) ~= nil, mcppide.status())
 
+-- ── a test run (D16) ─────────────────────────────────────────────────────────────────────────
+before = session.state.last
+vim.cmd('Mcpp test')
+done = finished('test', before)
+check('a test run finishes ok', done and done.status == 'ok', done and done.status)
+local tests_buf = vim.fn.bufnr('mcpp://tests')
+local said = tests_buf ~= -1 and table.concat(vim.api.nvim_buf_get_lines(tests_buf, 0, -1, false), '\n') or ''
+check('mcpp://tests has a section for the test, with its status and its output, though it passed',
+  said:find('test_smoke', 1, true) ~= nil and said:find('passed', 1, true) ~= nil and said:find('test_smoke: ok', 1, true) ~= nil,
+  said:sub(1, 300))
+check('a run without failures leaves the quickfix list empty', #vim.fn.getqflist() == 0, #vim.fn.getqflist())
+local tests_mod = require('mcpp.tests')
+check('the sign of a test that passed is ✓', tests_mod.sign_of(root, 'test_smoke') == '✓', tests_mod.sign_of(root, 'test_smoke'))
+-- A failure lands in the quickfix list at the place its output names.
+tests_mod.begin(root)
+tests_mod.add('test/result', { root = root, test = 't', status = 'failed', durationMs = 1, output = 'tests/t.cpp:3: failed\n',
+                               location = { path = 'tests/t.cpp', line = 2 } })
+tests_mod.finish()
+local qf_items = vim.fn.getqflist()
+check('a failure is put in the quickfix list at its place', #qf_items == 1 and qf_items[1].lnum == 3
+  and vim.api.nvim_buf_get_name(qf_items[1].bufnr):find('tests/t.cpp', 1, true) ~= nil, vim.inspect(qf_items[1]))
+check('and its sign is ✗', tests_mod.sign_of(root, 't') == '✗')
+
 -- ── diagnostics ───────────────────────────────────────────────────────────────────────────────
 write('src/main.cpp', 'int main() { return undeclared_name; }\n')
 write('.mock-mcpp-fail', 'build\n')

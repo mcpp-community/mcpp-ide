@@ -6,6 +6,7 @@ local session = require('mcpp.session')
 local flow = require('mcpp.flow')
 local views = require('mcpp.views')
 local diagnostics = require('mcpp.diagnostics')
+local tests = require('mcpp.tests')
 
 local M = {}
 local t = session.t
@@ -57,10 +58,19 @@ local actions = {}
 
 function actions.job(row, args, root)
   local params = { kind = row.action.job, root = root }
-  if row.action.job == 'test' and args[1] then
+  local testing = row.action.job == 'test'
+  if testing and args[1] then
     params.filter = args[1]
   end
-  local done = views.job('job/start', params, row.action.job)
+  -- A test job: each result in mcpp://tests, its failures in the quickfix list, its signs (D16).
+  if testing then
+    tests.begin(root)
+  end
+  local done = views.job('job/start', params, row.action.job, testing and { test = tests.add } or nil)
+  if testing then
+    tests.finish()
+    tests.reveal()
+  end
   if done and row.action['then'] == 'languageService' then
     actions.languageService()
   end

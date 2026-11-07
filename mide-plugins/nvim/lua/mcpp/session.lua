@@ -208,6 +208,8 @@ local function deliver(owner, method, params)
     on.output(params.text or '')
   elseif method == 'job/started' and on.started then
     on.started(params)
+  elseif (method == 'test/result' or method == 'test/caseResult') and on.test then
+    on.test(method, params)
   elseif method == 'job/finished' then
     state.claimed[params.jobId] = nil
     owner.handle.done = params
@@ -251,11 +253,12 @@ end
 local JOB_EVENTS = {
   ['job/started'] = true, ['job/output'] = true, ['job/plan'] = true, ['job/progress'] = true,
   ['job/diagnostic'] = true, ['job/artifact'] = true, ['job/record'] = true, ['job/finished'] = true,
-  ['test/result'] = true, ['test/summary'] = true,
+  ['test/result'] = true, ['test/summary'] = true, ['test/caseResult'] = true,
 }
 
 -- Inside a flow: asks for a job (`job/start`, or another method that answers a job id) and follows
--- it. `events`: output(text), started(params); the handle's wait() answers its end. Returns the
+-- it. `events`: output(text), started(params), test(method, result) for each `test/result` and
+-- `test/caseResult`; the handle's wait() answers its end. Returns the
 -- handle, or nil and the error.
 function M.job(method, params, events)
   local result, err = M.call(method, params)

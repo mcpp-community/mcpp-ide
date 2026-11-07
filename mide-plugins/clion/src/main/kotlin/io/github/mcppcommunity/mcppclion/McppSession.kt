@@ -304,8 +304,17 @@ class McppSession(private val project: Project) : Disposable {
     }
 
     fun refreshEntries(path: String) {
-        request("source/entries", JsonObject().apply { addProperty("file", path) }).thenAccept { r ->
-            sources[path] = r.asJsonObject
+        request("source/entries", JsonObject().apply { addProperty("file", path) }).whenComplete { r, error ->
+            // Why the gutter has no ▶ for a file (D16): the backend could not say what the file is.
+            if (error != null) {
+                val cause = (error as? java.util.concurrent.CompletionException)?.cause ?: error
+                log.info("mcpp-ide: no run entries for $path: ${cause.message}")
+                return@whenComplete
+            }
+            val entries = r.asJsonObject
+            if (entries["kind"]?.asString !in setOf("program", "test"))
+                log.debug("mcpp-ide: $path is no target's entry (${entries["kind"]?.asString ?: "unknown"})")
+            sources[path] = entries
             restartMarkers()
         }
     }
