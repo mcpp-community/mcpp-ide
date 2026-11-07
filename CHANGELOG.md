@@ -1,5 +1,41 @@
 # Changelog
 
+The changelog is kept by series (`X.Y`); each section lists its components' releases.
+
+## 1.2
+
+### 1.2.0
+
+The first series of one version for every component: the backend, mcpp-vscode, mcpp-clion and
+mcpp-nvim are 1.2.0 (from 0.2.1, 1.1.1, 0.2.1 and 0.2.1).
+
+- **One series.** A version is `X.Y.Z`; `X.Y` is shared by the backend and every plugin, `Z` is each
+  component's own patch. The backend states its series in the initialize answer, and each plugin
+  checks protocol 2 and its series and refuses another, naming both versions and the install that
+  matches. A series release is tagged `vX.Y.0`; `backend-`, `vscode-`, `clion-` and `nvim-vX.Y.Z`
+  publish one component's patch, and CI checks that every component states one series.
+- **mcppls payloads by their specification.** The backend reads `payload.json` as mcppls's S6 states
+  it: version 5 (mcppls 0.0.20 and later) takes this system's entry under `platforms` and starts
+  `<runner> <server.path>`; version 4 serves the one `platform` it names. A payload that does not
+  serve this system is refused, naming the platforms it does serve. 0.2.1 ran a version 5 payload's
+  `bin/mcppls.okb` itself and failed. CLion makes every runner a payload names executable again.
+- **Test results as mcpp states them.** Statuses follow mcpp's test records value for value:
+  `run_fail` is failed, or timed out when mcpp says so; `compile_fail` is failed and says it did not
+  compile; `not_run` is skipped with mcpp's reason; `built` is skipped as built only. 0.2.1 mapped
+  values mcpp never writes, so every failure was "errored" and a timeout was never seen.
+- **Every test's own output.** Each test and each case carries its whole output, passed or not
+  (head and tail past 1 MiB), and a failure carries the place its output names. A case run divides
+  the program's output among its cases by GoogleTest's boundaries. VS Code says the output to the
+  test's own item and shows a failure at its place, else at the test's `main` or the case's macro;
+  CLion sends it to the test tree, with the place first in a failure's details; Neovim writes
+  `mcpp://tests`, one section per test and case, and puts the failures in the quickfix list.
+- **Run entries with icons.** VS Code's lenses above `main` are `$(play) Run` and `$(debug-alt)
+  Debug`, and while the active editor is a target's entry the editor title's Run menu runs and
+  debugs it. Neovim's sign column shows ▶ on a program's and a test's `main` and on each case, and a
+  result turns it into ✓ or ✗. CLion logs why a file has no run entry.
+- **The platform as a series.** The payloads' platform is `openkal-platform@^0.24`, kept in
+  `mcpp.lock` (0.24.2), and os is `^0.3.1`; mcpp 2026.11.7.1 or later builds them.
+
 ## 0.2.1
 
 mcpp-vscode 1.1.1, mcpp-clion 0.2.1 and mcpp-nvim 0.2.1.

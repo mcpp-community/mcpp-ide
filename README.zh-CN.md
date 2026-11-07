@@ -61,11 +61,15 @@ CLion 的 **Settings | Tools | mcpp** 在保存表单前检查数值是否有限
 | Neovim 0.10+ | release 源码树中的 `mide-plugins/nvim` | `xlings install mcpp-ide-nvim` 与 `xlings install mcpp-ide`，再 `require('mcpp').setup()`；或把该目录加入 runtimepath（[其 README](mide-plugins/nvim/README.md)） |
 | Agent、其他客户端 | `mcpp-ide-<version>-openkal-bundle-all.tar.gz`（两个架构的映像；Linux x64/arm64、macOS arm64、Windows x64 的 okrun），携带 okrun 的 `mcpp-ide-<version>.okb`，或 `xlings install mcpp-ide` | 运行 `bin/mcpp-ide serve`（Windows 上为 `bin\mcpp-ide.exe`），或 `okrun mcpp-ide-<version>.okb serve` |
 
-每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.24.0 上的
+每个编辑器包都服务全部系统：后端以一个 ok 映像包（`backend/mcpp-ide.okb`，openkal-platform 0.24 上的
 x86_64 与 aarch64 映像）加上 Linux x64/arm64、macOS arm64、Windows x64 的 okrun 携带。Neovim 插件不携带后端：
 它启动 xlings 安装的 `mcpp-ide` 命令（由 okrun 运行同一个映像包）。
 VS Code 和 CLion 仅在用户主动执行依赖本地构建工具的操作时检查 `mcpp`；未安装时只提示一次，并提供
 [mcpp 开源仓库](https://github.com/mcpp-community/mcpp)链接。
+
+**版本。** 版本为 `X.Y.Z`。`X.Y` 是系列，由后端与全部插件共享：插件与同系列的任何后端配合，遇到其他系列时拒绝，
+并写出双方的版本与对应的安装方法。`Z` 是各组件自己的补丁，所以 VS Code 1.2.3 与 CLion 1.2.1 都与后端 1.2.0
+兼容。系列发布的标签为 `vX.Y.0`；组件补丁的标签为 `backend-`、`vscode-`、`clion-` 或 `nvim-vX.Y.Z`，只发布该组件。
 
 ### 从源码构建
 
