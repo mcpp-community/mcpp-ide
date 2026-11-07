@@ -78,7 +78,7 @@ main = "src/bin/dev.cpp"
 [dependencies]
 # 0.3.1 reads a name in Windows' long spelling as the name it spells. The image C library, C++
 # runtime and loader remain the platform's.
-mcpplibs.os   = "0.3.1"
+mcpplibs.os   = "0.4.0"
 nlohmann.json = "3.12.0"
 
 # What every backend test shares (testsupport/): a module, as the backend's units are.

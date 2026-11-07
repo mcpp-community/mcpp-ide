@@ -545,7 +545,7 @@ int check_sources(std::span<const std::string>) {
                 else if (it->path().filename() != "dev.cpp")
                     for (std::string_view name : {"is_windows", "is_linux", "is_macos", "is_posix"})
                         if (row.find(std::format("os::{}", name)) != std::string_view::npos)
-                            problems.push_back(std::format("{}:{}: asks os::{}, which an ok image answers false; ask os::host()", rel, line, name));
+                            problems.push_back(std::format("{}:{}: asks os::{}, which an ok image answers false; ask os::host(), or os::on<P> for a platform module", rel, line, name));
                 at = nl + 1;
             }
         }

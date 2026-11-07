@@ -36,7 +36,7 @@ mcpp-nvim are 1.2.0 (from 0.2.1, 1.1.1, 0.2.1 and 0.2.1).
 - **The platform as one release.** The payloads' platform is `openkal-platform@0.24.4`, whose okrun
   enters an image in its convention's floating-point state (a decimal number is read on Windows as on
   the other systems), and every dependency is one release
-  named by its identity (`mcpplibs.os = "0.3.1"`); mcpp 2026.11.7.1 or later builds them.
+  named by its identity (`mcpplibs.os = "0.4.0"`); mcpp 2026.11.7.1 or later builds them.
 - **A Run shows its build as the terminal does.** Run and Debug build through a launch job: mcpp's
   own narration (Compiling, Finished) appears as it is written, in place of a fixed "building" line,
   and the build's steps in the status bar (CLion, VS Code while it builds for the debugger, the
