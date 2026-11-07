@@ -44,22 +44,33 @@ jobs:
   # over the platform's hosted arrangement) whose okrun the packages take. The `host-platform` row
   # builds and tests with the build programs (build.mcpp, the spec/ generators) as ok images run by
   # okrun. The native rows of the other systems run only with `native`: what is distributed is the image.
+  # The native rows of the backend job: Linux x64, which packs the image and tests with the host graph's
+  # platform, and the other systems only in a run with `native` -- the backend is distributed as the ok
+  # image, which `backend-openkal` tests on every system (design 2026-11-07, D18).
+  matrix:
+    runs-on: ubuntu-24.04
+    outputs:
+      backend: ${{ steps.pick.outputs.backend }}
+    steps:
+      - id: pick
+        env:
+          NATIVE: ${{ inputs.native && 'yes' || 'no' }}
+        run: |
+          rows='{"os":"ubuntu-24.04","platform":"linux-x64","llvm":"false","pack":true},{"os":"ubuntu-24.04","platform":"linux-x64","llvm":"false","host-platform":"openkal-platform@0.24.3"}'
+          if [ "$NATIVE" = yes ]; then
+            rows="$rows"',{"os":"ubuntu-24.04-arm","platform":"linux-arm64","llvm":"false"},{"os":"macos-15","platform":"darwin-arm64","llvm":"true"},{"os":"windows-2022","platform":"win32-x64","llvm":"true"}'
+          fi
+          echo "backend=[$rows]" | tee -a "$GITHUB_OUTPUT"
+
   backend:
     name: backend (${{ matrix.platform }}${{ matrix.host-platform && format(', host platform {0}', matrix.host-platform) || '' }})
+    needs: matrix
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', pack: true }
-          - { os: ubuntu-24.04-arm, platform: linux-arm64, llvm: 'false' }
-          - { os: macos-15, platform: darwin-arm64, llvm: 'true' }
-          - { os: windows-2022, platform: win32-x64, llvm: 'true' }
-          - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', host-platform: 'openkal-platform@0.24.0' }
-        # The backend is distributed only as the ok image the `pack` leg packs, and `backend-openkal` tests that
-        # image on every system. The native backend of the other systems is built and tested in a run with `native`.
-        exclude: ${{ inputs.native && fromJSON('[]') || fromJSON('[{"platform":"linux-arm64"},{"platform":"darwin-arm64"},{"platform":"win32-x64"}]') }}
+        include: ${{ fromJSON(needs.matrix.outputs.backend) }}
     defaults:
       run:
         shell: bash
