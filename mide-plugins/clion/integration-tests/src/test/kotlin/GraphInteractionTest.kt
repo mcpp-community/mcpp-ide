@@ -142,6 +142,12 @@ class GraphInteractionTest {
                 assertEquals(2, startup.get().get("protocol").getAsInt())
                 record("protocol2-startup")
                 if (disableJcef) {
+                    // The mcpp tool window shares the left side with Project, which the IDE opens as
+                    // the project's layout is restored: an action before that finishes is shown and
+                    // then covered. The person asks once the project is on screen; so does the test.
+                    val projectView = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("Project")
+                    val restored = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+                    while (projectView != null && !projectView.isVisible() && System.nanoTime() < restored) Thread.sleep(100)
                     invokeAction("mcpp.project.showModuleDependencyGraph")
                     // The sentence wraps in the narrow tool window; its accessible name is whole.
                     val explanation = ui.x("//div[contains(@accessiblename,'This IDE runs without JCEF')]")
