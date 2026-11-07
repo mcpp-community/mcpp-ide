@@ -5,6 +5,7 @@ import com.intellij.driver.model.OnDispatcher
 import com.intellij.driver.sdk.invokeAction
 import com.intellij.driver.sdk.singleProject
 import com.intellij.driver.sdk.waitForProjectOpen
+import com.intellij.driver.sdk.waitForIndicators
 import com.intellij.driver.sdk.ui.ui
 import com.intellij.driver.sdk.ui.remote.Component
 import com.intellij.ide.starter.ci.CIServer
@@ -124,6 +125,9 @@ class GraphInteractionTest {
         }
         context.runIdeWithDriver().useDriverAndCloseIde {
             waitForProjectOpen()
+            // The IDE settles after the project opens (its layout restored, its startup activities run): a tool
+            // window shown before then can be hidden again by them, on 2026.1 and 2026.2 alike.
+            waitForIndicators(kotlin.time.Duration.parse("3m"))
             withContext {
                 assertEquals(version, utility<ApplicationInfoFactory>().getInstance().getFullVersion())
                 System.getProperty("mcpp.clion.backendPath")?.let { backend ->
