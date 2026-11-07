@@ -145,23 +145,26 @@ class GraphInteractionTest {
                     // The mcpp tool window shares the left side with Project, which the IDE opens as
                     // the project's layout is restored: an action before that finishes is shown and
                     // then covered. The person asks once the project is on screen; so does the test.
-                    val projectView = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("Project")
-                    val restored = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
-                    while (projectView != null && !projectView.isVisible() && System.nanoTime() < restored) Thread.sleep(100)
+                    // CLion 2026.2 registers the Project window after the project reports open, so it is
+                    // looked up again until it exists and is shown, not asked once.
+                    val windows = utility<ToolWindowManagerFactory>().getInstance(singleProject())
+                    val restored = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60)
+                    while (windows.getToolWindow("Project")?.isVisible() != true && System.nanoTime() < restored) Thread.sleep(100)
+                    val before = "before the action: project=" + (windows.getToolWindow("Project")?.isVisible() ?: "absent") +
+                        " after " + "%.1fs".format((System.nanoTime() - restored) / 1e9 + 60) + "\n"
                     invokeAction("mcpp.project.showModuleDependencyGraph")
                     // The sentence wraps in the narrow tool window; its accessible name is whole.
                     val explanation = ui.x("//div[contains(@accessiblename,'This IDE runs without JCEF')]")
                     // Which window is on screen, each time that changes, for the report: the mcpp window
                     // shares the left side with Project, and only one of the two is shown at a time.
-                    val windows = utility<ToolWindowManagerFactory>().getInstance(singleProject())
                     val began = System.nanoTime()
-                    val timeline = StringBuilder()
+                    val timeline = StringBuilder(before)
                     var last = ""
                     val explained = began + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
                     while (!explanation.present() && System.nanoTime() < explained) {
                         val now = withContext(OnDispatcher.EDT) {
                             val mcpp = windows.getToolWindow("mcpp")
-                            "mcpp=" + (mcpp?.isVisible() ?: "absent") + " project=" + (projectView?.isVisible() ?: "absent")
+                            "mcpp=" + (mcpp?.isVisible() ?: "absent") + " project=" + (windows.getToolWindow("Project")?.isVisible() ?: "absent")
                         }
                         if (now != last) {
                             timeline.append("%.1fs %s\n".format((System.nanoTime() - began) / 1e9, now))
