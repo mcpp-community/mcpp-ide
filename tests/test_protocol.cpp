@@ -332,6 +332,38 @@ int main() {
     // The plan a build sent is the project's configuration from then on.
     auto after = result_of("mcpp-ide/project/summary", rooted);
     CHECK(after.contains("configuration"));
+
+    // A launch job (design 2026-11-07 §4.9): mcpp's narration while it builds, and the launch in
+    // job/finished, the program's arguments after `--`. With mcpp's launch-stream, the build's progress too.
+    const auto streamed = root.parent_path() / (root.filename().string() + "-stream");
+    std::filesystem::create_directories(streamed);
+    std::ofstream(streamed / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.1.0\"\n";
+    std::ofstream(streamed / ".mock-mcpp-features") << "launch-stream";
+    const auto finishedBefore = wire.notifications("mcpp-ide/job/finished").size();
+    const auto progressBefore = wire.notifications("mcpp-ide/job/progress").size();
+    const auto plain = result_of("mcpp-ide/job/start", Json{{"kind", "launch"}, {"root", root.generic_string()}, {"args", Json::array({"one"})}});
+    const auto live = result_of("mcpp-ide/job/start", Json{{"kind", "launch"}, {"root", streamed.generic_string()}, {"args", Json::array({"two"})}});
+    for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/job/finished").size() < finishedBefore + 2; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    const auto ends = wire.notifications("mcpp-ide/job/finished");
+    CHECK(ends.size() == finishedBefore + 2);
+    for (const auto& id : {plain["jobId"], live["jobId"]}) {
+        const auto end = std::ranges::find_if(ends, [&](const Json& n) { return n["jobId"] == id; });
+        CHECK(end != ends.end() && (*end)["status"] == "ok" && (*end)["kind"] == "launch");
+        if (end != ends.end()) CHECK((*end).contains("launch") && !(*end)["launch"]["argv"].empty());
+        const auto outputs = wire.notifications("mcpp-ide/job/output");
+        CHECK(std::ranges::any_of(outputs, [&](const Json& n) {
+            return n["jobId"] == id && n["text"].get<std::string>().find("Finished") != std::string::npos; }));
+    }
+    const auto progress = wire.notifications("mcpp-ide/job/progress");
+    CHECK(progress.size() > progressBefore);
+    CHECK(std::ranges::all_of(progress.begin() + static_cast<std::ptrdiff_t>(progressBefore), progress.end(),
+                              [&](const Json& n) { return n["jobId"] == live["jobId"]; }));
+    for (const auto& name : {"mcpp-ide/job/finished", "mcpp-ide/job/progress", "mcpp-ide/job/output"}) {
+        const auto& def = protocol["notifications"][name]["params"];
+        for (const auto& n : wire.notifications(name)) CHECK(conforms(n, def, protocol, name));
+    }
+    std::filesystem::remove_all(streamed);
     std::filesystem::remove_all(root);
     std::println("test_protocol: ok");
 }

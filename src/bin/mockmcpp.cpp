@@ -176,7 +176,17 @@ int main(int argc, char** argv) {
         // A second launch can deliberately return a different configuration.
         if (has("--runner"))
             if (auto selected = here_file(".mock-mcpp-runner-launch"); !selected.empty()) text = selected;
-        out(text.empty() ? fixture("launch.json") : text);
+        if (text.empty()) text = fixture("launch.json");
+        // `--message-format json` (mcpp's launch-stream): the build's events, then the envelope as the last line.
+        if (has("--message-format")) {
+            std::string line;
+            for (char c : text) if (c != '\n' && c != '\r') line += c;
+            out("{\"schemaVersion\":1,\"kind\":\"mcpp.event\",\"event\":\"progress\",\"finished\":1,\"total\":2}\n"
+                "{\"schemaVersion\":1,\"kind\":\"mcpp.event\",\"event\":\"progress\",\"finished\":2,\"total\":2}\n" + line + "\n");
+        } else {
+            out(text);
+        }
+        err("   Compiling app v0.1.0 (.)\n    Finished dev [unoptimized + debuginfo] in 0.01s\n");
         return 0;
     }
     if (first(0) == "test") { out(fixture(has("--list") ? "test-list.ndjson" : "test.ndjson")); return 0; }

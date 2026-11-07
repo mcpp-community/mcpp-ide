@@ -190,6 +190,13 @@ function M.status()
   end
   local text = 'mcpp ' .. s.target
   if s.running > 0 then
+    -- A build reports its steps: the job and its count, as mcpp counts them.
+    for id, p in pairs(session.state.progress) do
+      local job = session.state.running[id]
+      if job then
+        return text .. ' · ' .. (job.kind or '') .. ' ' .. p[1] .. '/' .. p[2]
+      end
+    end
     return text .. ' · ' .. t('{0} job(s) running', s.running)
   end
   if s.last then

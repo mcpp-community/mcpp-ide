@@ -168,6 +168,8 @@ export interface JobFinished {
   envelope?: { kind?: string; data?: unknown };
   diagnostics?: Diagnostic[];
   artifacts?: { kind: string; name: string; path: string }[];
+  /** A launch job's program, described (mcpp's `mcpp.launch` data). */
+  launch?: { argv: string[]; cwd: string; env?: Record<string, string>; program?: string };
 }
 
 /** `source/entries` (design 2026-10-30 part 2 §6.3): what a C++ file is to its project. */

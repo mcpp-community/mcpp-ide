@@ -186,8 +186,10 @@ end
 
 local before = session.state.last
 vim.cmd('Mcpp build')
-check('a build runs (the statusline says so)', vim.wait(10000, function() return mcppide.status():find('1 job', 1, true) ~= nil end, 20),
-  mcppide.status())
+check('a build runs (the statusline says so)', vim.wait(10000, function()
+  local said = mcppide.status()
+  return said:find('1 job', 1, true) ~= nil or said:find('build %d+/%d+') ~= nil
+end, 20), mcppide.status())
 local done = finished('build', before)
 check('the build finishes ok', done and done.status == 'ok', done and done.status)
 check('its narration is streamed into mcpp://output', output():find('$ ', 1, true) and output():find('build', 1, true)
@@ -217,6 +219,15 @@ local qf_items = vim.fn.getqflist()
 check('a failure is put in the quickfix list at its place', #qf_items == 1 and qf_items[1].lnum == 3
   and vim.api.nvim_buf_get_name(qf_items[1].bufnr):find('tests/t.cpp', 1, true) ~= nil, vim.inspect(qf_items[1]))
 check('and its sign is ✗', tests_mod.sign_of(root, 't') == '✗')
+
+-- ── a run (D19): a launch job builds as mcpp run does, its narration in mcpp://output ────────────
+before = session.state.last
+vim.cmd('Mcpp run')
+done = finished('launch', before)
+check('a run is a launch job that ends with the launch', done and done.status == 'ok' and type(done.launch) == 'table'
+  and type(done.launch.argv) == 'table' and #done.launch.argv > 0, vim.inspect(done and done.launch))
+check("the launch job's narration is in mcpp://output", output():find('Finished', 1, true) ~= nil, output():sub(-300))
+pcall(vim.cmd, 'silent! only')
 
 -- ── diagnostics ───────────────────────────────────────────────────────────────────────────────
 write('src/main.cpp', 'int main() { return undeclared_name; }\n')

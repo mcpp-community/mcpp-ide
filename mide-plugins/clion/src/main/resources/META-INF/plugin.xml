@@ -36,7 +36,7 @@
         <postStartupActivity implementation="io.github.mcppcommunity.mcppclion.McppStartup"/>
         <notificationGroup id="mcpp" displayType="BALLOON"/>
 
-        <toolWindow id="mcpp" anchor="right" icon="io.github.mcppcommunity.mcppclion.McppIcons.Logo"
+        <toolWindow id="mcpp" anchor="left" icon="io.github.mcppcommunity.mcppclion.McppIcons.Logo"
                     factoryClass="io.github.mcppcommunity.mcppclion.ui.McppPanels$Factory"/>
 
         <configurationType implementation="io.github.mcppcommunity.mcppclion.run.McppRunConfigurationType"/>

@@ -39,6 +39,8 @@ local state = {
   claimed = {},
   unclaimed = {},
   running = {},
+  -- The build's progress of each running job (`job/progress`): { finished, total }.
+  progress = {},
   last = nil,
   plans = {},
   stopping = false,
@@ -227,8 +229,14 @@ local function route(method, params)
   if method == 'job/started' then
     state.running[id] = params
     changed()
+  elseif method == 'job/progress' then
+    if params.finished and params.total then
+      state.progress[id] = { params.finished, params.total }
+      changed()
+    end
   elseif method == 'job/finished' then
     state.running[id] = nil
+    state.progress[id] = nil
     state.last = params
     changed()
   elseif method == 'job/plan' then

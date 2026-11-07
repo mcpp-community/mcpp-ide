@@ -108,7 +108,7 @@ function M.job(method, params, what, events)
   return done
 end
 
--- The program `run/launch` describes, in a terminal buffer of its own (argv, its working directory,
+-- The program a launch job built (its `launch`), in a terminal buffer of its own (argv, its working directory,
 -- the environment mcpp adds), where it reads its input.
 function M.terminal(launch)
   local from = vim.api.nvim_get_current_win()

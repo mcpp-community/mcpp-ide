@@ -664,5 +664,6 @@
   "The mcpp-ide backend {0} is of series {1}, and mcpp-vscode {2} of series {3}. Install the mcpp-ide backend {3} (`xlings install mcpp-ide@{3}.0`), or clear mcpp.ide.backendPath to use the bundled backend.": "mcpp-ide 后端 {0} 属于系列 {1}，mcpp-vscode {2} 属于系列 {3}。请安装 mcpp-ide 后端 {3}（`xlings install mcpp-ide@{3}.0`），或清空 mcpp.ide.backendPath 以使用内置后端。",
   "(the output was longer; its head and tail are shown)": "（输出更长，只显示开头和结尾）",
   "The test timed out.": "测试超时。",
-  "The test did not compile.": "测试没有编译通过。"
+  "The test did not compile.": "测试没有编译通过。",
+  "the program could not be built": "程序未能构建"
 }

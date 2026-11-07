@@ -167,13 +167,16 @@
       "result": { "type": ["object", "null"] }
     },
     "mcpp-ide/job/start": {
-      "description": "Queues a job on its project's lane: one at a time per project, in order; a build or test asked for again replaces the waiting one, and `supersede` cancels the running one.",
+      "description": "Queues a job on its project's lane: one at a time per project, in order; a build or test asked for again replaces the waiting one, and `supersede` cancels the running one. A `launch` job builds a program as mcpp run does (`mcpp run --print-launch`, with mcpp's launch-stream its build events), its program arguments in `args`, and ends with the program's launch in job/finished.",
       "params": {
         "type": "object",
         "required": ["kind", "root"],
         "properties": {
-          "kind": { "enum": ["build", "test", "pack", "toolchain", "add", "command"] },
+          "kind": { "enum": ["build", "test", "pack", "toolchain", "add", "launch", "command"] },
           "root": { "type": "string" },
+          "bin": { "type": "string", "description": "A launch job's program; absent: the project's one." },
+          "test": { "type": "string", "description": "A launch job's test (mcpp test <name> --print-launch)." },
+          "runner": { "type": "string", "description": "A launch job's named runner." },
           "target": { "type": "string", "description": "The target triple; absent: the mcpp.build.target setting; empty: this machine." },
           "profile": { "enum": ["dev", "release"] },
           "filter": { "type": "string" },
@@ -436,7 +439,8 @@
           "kind": { "type": "string" },
           "envelope": { "type": "object" },
           "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
-          "artifacts": { "type": "array" }
+          "artifacts": { "type": "array" },
+          "launch": { "type": "object", "description": "A launch job's program, described: the data of mcpp's mcpp.launch." }
         }
       }
     },

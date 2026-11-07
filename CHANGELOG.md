@@ -35,6 +35,14 @@ mcpp-nvim are 1.2.0 (from 0.2.1, 1.1.1, 0.2.1 and 0.2.1).
   result turns it into ✓ or ✗. CLion logs why a file has no run entry.
 - **The platform as a series.** The payloads' platform is `openkal-platform@^0.24`, kept in
   `mcpp.lock` (0.24.2), and os is `^0.3.1`; mcpp 2026.11.7.1 or later builds them.
+- **A Run shows its build as the terminal does.** Run and Debug build through a launch job: mcpp's
+  own narration (Compiling, Finished) appears as it is written, in place of a fixed "building" line,
+  and the build's steps in the status bar (CLion, VS Code while it builds for the debugger, the
+  Neovim statusline), as for a Build. With mcpp 2026.11.7.2 an unchanged program's launch is
+  described on mcpp's fast path, 0.01 s where it was 0.1 to 0.3 s, so the program starts at once.
+  CLion records how long the build and the program's start took in `idea.log`.
+- **The mcpp tool window beside Project.** CLion's mcpp tool window is on the left, where VS Code
+  shows mcpp, and the first mcpp project opened puts its button on the stripe.
 - **Tested as it is run.** The backend is distributed only as an ok image, and CI tests it as one on
   every system: its tests are built as ok images of the system's architecture and run through the
   platform's runner (`backend-openkal`). The native backend is built and tested on Linux x64, and on

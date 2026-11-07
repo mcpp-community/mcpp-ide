@@ -76,17 +76,14 @@ function actions.job(row, args, root)
   end
 end
 
+-- The program, built by a launch job (design 2026-11-07 §4.9): mcpp's narration in mcpp://output as
+-- it is written and its progress in the statusline, then the program in a terminal of its own.
 function actions.run(_, args, root)
-  vim.api.nvim_echo({ { t('mcpp: building…') } }, false, {})
-  local launch, err = session.call('run/launch', { root = root, args = session.value('mcpp.task.runArgs') or {}, bin = args[1] })
-  if err then
-    if err.data and err.data.narration then
-      views.append(err.data.narration)
-      views.reveal()
-    end
-    return report(err)
+  local params = { kind = 'launch', root = root, args = session.value('mcpp.task.runArgs') or {}, bin = args[1] }
+  local done = views.job('job/start', params, 'run')
+  if done and done.status == 'ok' and type(done.launch) == 'table' then
+    views.terminal(done.launch)
   end
-  views.terminal(launch)
 end
 
 function actions.debug(_, args, root)

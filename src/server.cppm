@@ -132,6 +132,7 @@ private:
     mcpp::ProjectMcpp probe_of(const std::filesystem::path& root);
     Json probe_json(const std::filesystem::path& root, const mcpp::ProjectMcpp& probe) const;
     bool has_feature(const std::filesystem::path& root, std::string_view feature);
+    std::vector<std::string> launch_args(const Json& p, bool stream, bool programArgs);
     // A line of the backend's log, at a level (0 error, 1 warning, 2 info, 3 debug): written to
     // standard error, which every editor keeps in its log, when mcpp.backend.logLevel lets it
     // through, and kept for the IDE report either way (§3.2).
@@ -240,6 +241,9 @@ Session::Session(rpc::Server& server) : rpc_(server) {
                 const auto& env = summary["envelope"];
                 if (env.is_object() && env.contains("data") && env["data"].is_object() && env["data"].contains("artifacts"))
                     s["artifacts"] = env["data"]["artifacts"];
+                // A launch job ends with the program it built, described (`mcpp.launch`).
+                if (env.is_object() && env.value("kind", "") == "mcpp.launch" && env.contains("data"))
+                    s["launch"] = env["data"];
             }
             std::filesystem::path root;
             {
@@ -728,11 +732,20 @@ std::expected<Json, rpc::Error> Session::job_start(const Json& p, std::function<
             r.args = {"add", dep};
             break;
         }
+        case jobs::Kind::launch: {
+            // A Run's or a Debug's build, reported as it goes: mcpp's narration, and with
+            // `launch-stream` its events, then the launch in `job/finished` (design 2026-11-07 §4.9).
+            const bool stream = p.value("test", "").empty() && has_feature(root, "launch-stream");
+            r.args = launch_args(p, stream, true);
+            r.mode = stream ? jobs::Mode::ndjson : jobs::Mode::envelope;
+            break;
+        }
         case jobs::Kind::command:
             r.args = {};
             break;
     }
-    for (const auto& a : extra) r.args.push_back(a);
+    if (*kind != jobs::Kind::launch)
+        for (const auto& a : extra) r.args.push_back(a);
     if (r.args.empty()) return std::unexpected(invalid("a command job names its arguments"));
     r.after = std::move(after);
     const auto id = jobs_->submit(std::move(r));
@@ -740,13 +753,17 @@ std::expected<Json, rpc::Error> Session::job_start(const Json& p, std::function<
     return Json{{"jobId", id}};
 }
 
-std::expected<Json, rpc::Error> Session::run_launch(const Json& p, const rpc::Context& ctx) {
-    const auto root = root_of(p);
-    if (root.empty()) return std::unexpected(invalid("run/launch names its project's root"));
-    // A test's program is described by `mcpp test <name> --print-launch` (mcpp's `test-launch`),
-    // with its framework's filter after `--` when cases are asked for.
+// The mcpp command that builds a program and describes its launch: `mcpp run --print-launch`, or
+// `mcpp test <name> --print-launch` for a test (mcpp's `test-launch`), with its framework's filter
+// after `--` when cases are asked for. `stream` asks a run for the build's events before the
+// envelope (mcpp's `launch-stream`), and `programArgs` are the program's own arguments, after `--`.
+std::vector<std::string> Session::launch_args(const Json& p, bool stream, bool programArgs) {
     const auto test = p.value("test", "");
     std::vector<std::string> args{test.empty() ? "run" : "test", "--print-launch"};
+    if (stream && test.empty()) {
+        args.push_back("--message-format");
+        args.push_back("json");
+    }
     const auto profile = p.value("profile", setting("mcpp.build.profile").is_string() ? setting("mcpp.build.profile").get<std::string>() : "dev");
     if (profile == "release") args.push_back("--release");
     else if (!profile.empty() && profile != "dev") {
@@ -765,10 +782,20 @@ std::expected<Json, rpc::Error> Session::run_launch(const Json& p, const rpc::Co
                 args.push_back("--");
                 for (const auto& a : filter) args.push_back(a);
             }
-    } else if (auto bin = p.value("bin", ""); !bin.empty()) {
-        args.push_back(bin);
+    } else {
+        if (auto bin = p.value("bin", ""); !bin.empty()) args.push_back(bin);
+        if (const auto program = strings_of(p.value("args", Json::array())); programArgs && !program.empty()) {
+            args.push_back("--");
+            args.insert(args.end(), program.begin(), program.end());
+        }
     }
-    auto r = query(root, std::move(args));
+    return args;
+}
+
+std::expected<Json, rpc::Error> Session::run_launch(const Json& p, const rpc::Context& ctx) {
+    const auto root = root_of(p);
+    if (root.empty()) return std::unexpected(invalid("run/launch names its project's root"));
+    auto r = query(root, launch_args(p, false, false));
     if (!r) return std::unexpected(r.error());
     if (ctx.cancelled()) return std::unexpected(rpc::Error{rpc::REQUEST_CANCELLED, "cancelled"});
     if (r->exitCode != 0 || !r->envelope.is_object() || r->envelope.value("kind", "") != "mcpp.launch")
