@@ -1,10 +1,12 @@
 // The wire: frames split anywhere reassemble, a header without a length is
 // skipped, a request before initialize is refused, an unknown method answers
 // METHOD_NOT_FOUND, a cancelled request answers REQUEST_CANCELLED.
-#include "support.hpp"
 import std;
+import mcppide.testsupport;
 import nlohmann.json;
 import mcppide.rpc;
+
+using testsupport::check;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -17,10 +19,10 @@ int main() {
         const auto all = "Bogus: 1\r\n\r\n" + a + b;
         for (char c : all) r.feed(std::string_view(&c, 1));
         auto first = r.next();
-        CHECK(first && Json::parse(*first)["id"] == 1);
+        check(first && Json::parse(*first)["id"] == 1);
         auto second = r.next();
-        CHECK(second && Json::parse(*second)["id"] == 2);
-        CHECK(!r.next());
+        check(second && Json::parse(*second)["id"] == 2);
+        check(!r.next());
     }
     {
         std::mutex m;
@@ -42,20 +44,20 @@ int main() {
             return Json{{"done", true}};
         });
         s.dispatch(R"({"jsonrpc":"2.0","id":1,"method":"slow"})");
-        CHECK(out.back()["error"]["code"] == rpc::NOT_INITIALIZED);
+        check(out.back()["error"]["code"] == rpc::NOT_INITIALIZED);
         s.dispatch(R"({"jsonrpc":"2.0","id":2,"method":"initialize"})");
-        CHECK(out.back()["result"]["ok"] == true);
+        check(out.back()["result"]["ok"] == true);
         s.dispatch(R"({"jsonrpc":"2.0","id":3,"method":"nope"})");
-        CHECK(out.back()["error"]["code"] == rpc::METHOD_NOT_FOUND);
+        check(out.back()["error"]["code"] == rpc::METHOD_NOT_FOUND);
         s.dispatch(R"({"jsonrpc":"2.0","id":4,"method":"slow"})");
         s.dispatch(R"({"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":4}})");
         s.drain();
         bool cancelled = false;
         for (const auto& msg : out) cancelled = cancelled || (msg.value("id", 0) == 4 && msg.contains("error") &&
                                                               msg["error"]["code"] == rpc::REQUEST_CANCELLED);
-        CHECK(!cancelled);   // the handler answered (it saw the flag) with a result, which is kept
+        check(!cancelled);   // the handler answered (it saw the flag) with a result, which is kept
         s.dispatch("not json");
-        CHECK(out.back()["error"]["code"] == rpc::PARSE_ERROR);
+        check(out.back()["error"]["code"] == rpc::PARSE_ERROR);
     }
     std::println("test_rpc: ok");
 }

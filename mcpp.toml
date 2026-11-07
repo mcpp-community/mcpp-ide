@@ -80,3 +80,7 @@ main = "src/bin/dev.cpp"
 # runtime and loader remain the platform's.
 mcpplibs.os   = "0.3.1"
 nlohmann.json = "3.12.0"
+
+# What every backend test shares (testsupport/): a module, as the backend's units are.
+[dev-dependencies]
+mcpp-ide-testsupport = { path = "testsupport" }

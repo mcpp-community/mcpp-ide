@@ -88,6 +88,8 @@ jobs:
         run: mcpp test
       - name: Every string has its translation
         run: mcpp run mcpp-ide-dev -- check-i18n
+      - name: No header, no preprocessor branch, no compile-time platform question
+        run: mcpp run mcpp-ide-dev -- check-sources
       - name: The backend as the editor packages carry it
         if: matrix.pack
         run: |

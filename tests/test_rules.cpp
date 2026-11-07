@@ -3,13 +3,15 @@
 // scanner's structure and cursor contexts, the completions, hovers, jumps, version contexts and
 // diagnostics equal tests/rules/golden, which that implementation wrote (with the documents of its
 // parser tests, golden/snippets.json). A difference is printed with its file and position.
-#include "support.hpp"
 import std;
+import mcppide.testsupport;
 import nlohmann.json;
 import mcppide.text;
 import mcppide.manifest;
 import mcppide.buildscript;
 import mcppide.toml;
+
+using testsupport::check;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -279,7 +281,7 @@ int main() {
     std::vector<std::filesystem::path> files;
     for (const auto& e : std::filesystem::directory_iterator(root / "corpus")) files.push_back(e.path());
     std::ranges::sort(files);
-    CHECK(!files.empty());
+    check(!files.empty());
     for (const auto& f : files) {
         const auto golden = Json::parse(testsupport::read(root / "golden" / (f.filename().string() + ".json")));
         if (f.extension() == ".toml") check_manifest(f, golden);
@@ -297,19 +299,19 @@ int main() {
         Json{{"name", "zlibx"}, {"namespace", "x"}, {"versions", {"9.0.0"}}},
     })}}}};
     const auto versions = manifest::catalogue_versions(envelope, "zlib");
-    CHECK(versions.size() == 3 && versions[0].version == "1.3.1" && versions[2].version == "1.2.13");
-    CHECK(versions[0].summary && *versions[0].summary == "A compression library");
+    check(versions.size() == 3 && versions[0].version == "1.3.1" && versions[2].version == "1.2.13");
+    check(versions[0].summary && *versions[0].summary == "A compression library");
     const auto lines = text::lines_of("[dependencies]\nzlib = \"1.\n");
     const auto at = manifest::dependency_version_context(lines, 1, 9);
-    CHECK(at && at->name == "zlib" && at->insideString);
+    check(at && at->name == "zlib" && at->insideString);
     const auto suggestions = manifest::version_suggestions(*at, versions);
-    CHECK(suggestions.size() == 3 && suggestions[0].insertSnippet == "1.3.1" && suggestions[0].kind == "version");
+    check(suggestions.size() == 3 && suggestions[0].insertSnippet == "1.3.1" && suggestions[0].kind == "version");
     // A suggestion's detail in the user's language.
     const auto zh = manifest::completions(text::lines_of("[dependencies]\n"), 1, 0, "zh-cn");
-    CHECK(!zh.empty() && zh[0].detail != "SemVer version dependency");
+    check(!zh.empty() && zh[0].detail != "SemVer version dependency");
 
     if (failures) std::println(std::cerr, "{} mismatch(es)", failures);
-    CHECK(failures == 0);
+    check(failures == 0);
     std::println("rules: the goldens hold");
     return 0;
 }

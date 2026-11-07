@@ -1,22 +1,19 @@
-// What every backend test shares: a check that says where it failed, and the
-// paths of the fixtures and the mock mcpp.
-#pragma once
-#include <cstdio>
-#include <cstdlib>
+// mcppide.testsupport: what every backend test shares -- a check that says where it failed, and the
+// paths of the fixtures and the built programs. A module, as the backend's own units are: no test
+// includes a header (mcpp-ide-dev check-sources).
+export module mcppide.testsupport;
 
-#define CHECK(cond)                                                                 \
-    do {                                                                            \
-        if (!(cond)) {                                                              \
-            std::fprintf(stderr, "%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #cond); \
-            std::exit(1);                                                           \
-        }                                                                           \
-    } while (0)
+import std;
 
-#include <filesystem>
-#include <fstream>
-#include <string>
+export namespace testsupport {
 
-namespace testsupport {
+// A failed check names its place and ends the test.
+inline void check(bool cond, std::source_location at = std::source_location::current()) {
+    if (cond) return;
+    std::println(std::cerr, "{}:{}: check failed in {}", at.file_name(), at.line(), at.function_name());
+    std::exit(1);
+}
+
 // A name in the generic spelling: `/` between components. The tests run as ok images too, whose
 // names are `/`-separated on every system, while a Windows host spells this file's own path and the
 // temporary directory with `\`.
@@ -24,8 +21,10 @@ inline std::filesystem::path generic(std::string text) {
     for (auto& c : text) if (c == '\\') c = '/';
     return std::filesystem::path(text);
 }
-// The repository, from this file's own path.
-inline std::filesystem::path repo() { return generic(__FILE__).parent_path().parent_path(); }
+// The repository, from this file's own path (testsupport/src/testsupport.cppm).
+inline std::filesystem::path repo() {
+    return generic(std::source_location::current().file_name()).parent_path().parent_path().parent_path();
+}
 // The temporary directory, in the generic spelling.
 inline std::filesystem::path temp() { return generic(std::filesystem::temp_directory_path().string()); }
 // A path as the `file:` URI an LSP client names it by.
@@ -52,4 +51,5 @@ inline std::filesystem::path built(const std::string& name) {
     }
     return best;
 }
+
 }  // namespace testsupport

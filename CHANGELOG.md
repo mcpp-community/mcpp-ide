@@ -47,6 +47,11 @@ mcpp-nvim are 1.2.0 (from 0.2.1, 1.1.1, 0.2.1 and 0.2.1).
   payload an editor names as `C:\Users\x\…` is read through mcpplibs.os into its generic spelling
   before anything is built from it, so it is absolute and its parts are components. Found by the
   backend's tests running as images on Windows.
+- **No header in the backend's sources or tests.** The tests share a module (`mcppide.testsupport`,
+  in `testsupport/`) where they included `support.hpp`, and a failed check names its place through
+  `std::source_location`. `mcpp-ide-dev check-sources`, run by CI, reports a header, a preprocessor
+  branch and a compile-time platform question (`os::is_<platform>`, which an ok image answers false)
+  in the backend, its tests and the test support.
 - **The mcpp tool window beside Project.** CLion's mcpp tool window is on the left, where VS Code
   shows mcpp, and the first mcpp project opened puts its button on the stripe.
 - **Tested as it is run.** The backend is distributed only as an ok image, and CI tests it as one on
