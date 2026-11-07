@@ -114,8 +114,15 @@ interface ToolWindowManagerRemote { fun getToolWindow(id: String): ToolWindowRem
 @Remote("com.intellij.openapi.wm.ToolWindow")
 interface ToolWindowRemote {
     fun isVisible(): Boolean
+    fun isActive(): Boolean
+    fun isAutoHide(): Boolean
+    fun isSplitMode(): Boolean
+    fun isShowStripeButton(): Boolean
+    fun getType(): ToolWindowTypeRemote
     fun getContentManager(): ContentManagerRemote
 }
+@Remote("com.intellij.openapi.wm.ToolWindowType")
+interface ToolWindowTypeRemote { fun name(): String }
 @Remote("com.intellij.ui.content.ContentManager")
 interface ContentManagerRemote {
     fun getContentCount(): Int
