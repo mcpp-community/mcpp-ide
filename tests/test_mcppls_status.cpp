@@ -8,6 +8,7 @@ import nlohmann.json;
 import mcppide.rpc;
 import mcppide.server;
 import mcppide.languageservice;
+import mcpplibs.os;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -72,7 +73,12 @@ int main() {
     const auto root = base / "project";
     std::filesystem::create_directories(payload / "bin");
     std::filesystem::create_directories(root);
-    std::filesystem::copy_file(mock, payload / "bin" / mock.filename());
+    // The mock as the payload's server. An ok image creates no executable file (openkal states no
+    // permission bits), so where a program needs its executable bit the payload names it by a link.
+    if (mcpplibs::os::host() == mcpplibs::os::platform::windows)
+        std::filesystem::copy_file(mock, payload / "bin" / mock.filename());
+    else
+        std::filesystem::create_symlink(mock, payload / "bin" / mock.filename());
     std::ofstream(payload / "payload.json") << std::format(R"({{"server": {{"path": "bin/{}"}}}})", mock.filename().string());
     std::ofstream(root / "mcpp.toml") << "[package]\nname = \"p\"\nversion = \"0.1.0\"\n";
 

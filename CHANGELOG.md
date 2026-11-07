@@ -35,6 +35,10 @@ mcpp-nvim are 1.2.0 (from 0.2.1, 1.1.1, 0.2.1 and 0.2.1).
   result turns it into ✓ or ✗. CLion logs why a file has no run entry.
 - **The platform as a series.** The payloads' platform is `openkal-platform@^0.24`, kept in
   `mcpp.lock` (0.24.2), and os is `^0.3.1`; mcpp 2026.11.7.1 or later builds them.
+- **Tested as it is run.** The backend is distributed only as an ok image, and CI tests it as one on
+  every system: its tests are built as ok images of the system's architecture and run through the
+  platform's runner (`backend-openkal`). The native backend is built and tested on Linux x64, and on
+  every system in a manual CI run with `native`.
 
 ## 0.2.1
 

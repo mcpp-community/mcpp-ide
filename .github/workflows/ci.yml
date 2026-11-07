@@ -5,7 +5,19 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      native:
+        description: "Also build and test the backend natively on every system (it is distributed only as an ok image)"
+        type: boolean
+        required: false
+        default: false
   workflow_call:
+    inputs:
+      native:
+        description: "Also build and test the backend natively on every system"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -31,7 +43,7 @@ jobs:
   # universal self-contained package (both images; okrun for Linux, macOS and Windows, each built
   # over the platform's hosted arrangement) whose okrun the packages take. The `host-platform` row
   # builds and tests with the build programs (build.mcpp, the spec/ generators) as ok images run by
-  # okrun.
+  # okrun. The native rows of the other systems run only with `native`: what is distributed is the image.
   backend:
     name: backend (${{ matrix.platform }}${{ matrix.host-platform && format(', host platform {0}', matrix.host-platform) || '' }})
     runs-on: ${{ matrix.os }}
@@ -45,6 +57,9 @@ jobs:
           - { os: macos-15, platform: darwin-arm64, llvm: 'true' }
           - { os: windows-2022, platform: win32-x64, llvm: 'true' }
           - { os: ubuntu-24.04, platform: linux-x64, llvm: 'false', host-platform: 'openkal-platform@0.24.0' }
+        # The backend is distributed only as the ok image the `pack` leg packs, and `backend-openkal` tests that
+        # image on every system. The native backend of the other systems is built and tested in a run with `native`.
+        exclude: ${{ inputs.native && fromJSON('[]') || fromJSON('[{"platform":"linux-arm64"},{"platform":"darwin-arm64"},{"platform":"win32-x64"}]') }}
     defaults:
       run:
         shell: bash
@@ -91,6 +106,34 @@ jobs:
         with:
           name: backend
           path: backend
+
+  # The backend as users run it, on each system the editors run on: its tests built as ok images of the
+  # system's architecture and run through the platform's runner. The mock mcpp, the mock mcppls and the dev
+  # tool they start are test tools, built natively first.
+  backend-openkal:
+    name: backend (${{ matrix.platform }}, openkal)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, platform: linux-x64, arch: x86_64, llvm: 'false' }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64, arch: aarch64, llvm: 'false' }
+          - { os: macos-15, platform: darwin-arm64, arch: aarch64, llvm: 'true' }
+          - { os: windows-2022, platform: win32-x64, arch: x86_64, llvm: 'true' }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+        with:
+          llvm: ${{ matrix.llvm }}
+      - name: The test tools
+        run: mcpp build
+      - name: The tests, as ok images, through the runner
+        run: mcpp test --profile release --target ${{ matrix.arch }}-openkal
 
   # The VS Code extension (mide-plugins/vscode), mcpp-vscode 0.9.0 over the backend. Its gates
   # (the registry, the translations, the unit suite) on the three desktop systems; the manifest
