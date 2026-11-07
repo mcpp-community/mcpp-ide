@@ -33,6 +33,9 @@ export const CLI_COMMANDS = {
   showCachePanel: "mcpp.showCachePanel",
   /** Build in the editor's title bar, with an icon (mcpp.build has none in 0.9.0's manifest). */
   editorBuild: "mcpp.editor.build",
+  /** The editor title's Run menu: the active file's entry, run or debugged (1.2.0, D16). */
+  runThisFile: "mcpp.runThisFile",
+  debugThisFile: "mcpp.debugThisFile",
 } as const;
 
 /** The language-service entries that existed in 0.4.x (kept as aliases, see below). */
