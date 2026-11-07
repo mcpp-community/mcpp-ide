@@ -1,0 +1,2 @@
+{"member":"","test":"unit/parse","status":"built","exit_code":0,"signal":null,"duration_ms":0,"timed_out":false,"compile_output":"","run_output":"","reason":"","build_ms":12,"protocol":1,"listed":[{"id":"parsing/an empty line","name":"an empty line","file":"tests/unit/parse.cpp","line":4},{"id":"parsing/a field","name":"a field","file":"tests/unit/parse.cpp","line":5}]}
+{"summary":{"member":"","passed":0,"failed":0,"not_run":0,"not_run_reason":"","built":1,"elapsed_ms":20,"build_ms":12,"run_ms":0}}

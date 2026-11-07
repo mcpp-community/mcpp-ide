@@ -6,6 +6,7 @@ local session = require('mcpp.session')
 local flow = require('mcpp.flow')
 local views = require('mcpp.views')
 local diagnostics = require('mcpp.diagnostics')
+local tests = require('mcpp.tests')
 
 local M = {}
 local t = session.t
@@ -57,26 +58,32 @@ local actions = {}
 
 function actions.job(row, args, root)
   local params = { kind = row.action.job, root = root }
-  if row.action.job == 'test' and args[1] then
+  local testing = row.action.job == 'test'
+  if testing and args[1] then
     params.filter = args[1]
   end
-  local done = views.job('job/start', params, row.action.job)
+  -- A test job: each result in mcpp://tests, its failures in the quickfix list, its signs (D16).
+  if testing then
+    tests.begin(root)
+  end
+  local done = views.job('job/start', params, row.action.job, testing and { test = tests.add } or nil)
+  if testing then
+    tests.finish()
+    tests.reveal()
+  end
   if done and row.action['then'] == 'languageService' then
     actions.languageService()
   end
 end
 
+-- The program, built by a launch job (design 2026-11-07 §4.9): mcpp's narration in mcpp://output as
+-- it is written and its progress in the statusline, then the program in a terminal of its own.
 function actions.run(_, args, root)
-  vim.api.nvim_echo({ { t('mcpp: building…') } }, false, {})
-  local launch, err = session.call('run/launch', { root = root, args = session.value('mcpp.task.runArgs') or {}, bin = args[1] })
-  if err then
-    if err.data and err.data.narration then
-      views.append(err.data.narration)
-      views.reveal()
-    end
-    return report(err)
+  local params = { kind = 'launch', root = root, args = session.value('mcpp.task.runArgs') or {}, bin = args[1] }
+  local done = views.job('job/start', params, 'run')
+  if done and done.status == 'ok' and type(done.launch) == 'table' then
+    views.terminal(done.launch)
   end
-  views.terminal(launch)
 end
 
 function actions.debug(_, args, root)

@@ -15,10 +15,13 @@
 // those releases offered (the frozen table) and the workspace is not known.
 //
 // A SERVER IS A COMMAND. mcppls's payload (the VSIX's and the CLion package's `payload/`, the one Zed's
-// install puts in the user data directory) carries the server as one okb of both architectures that the
-// platform's runner starts: payload.json's `server` names `runner` and `path` (`bin/okrun bin/mcppls.okb`),
-// or a program alone. A candidate is a payload directory or a program, and what is asked for its version
-// is the command it stands for.
+// install puts in the user data directory) carries the server as one okb of both architectures that a
+// runner starts. payload.json says which, as mcppls's specification S6 states it: payload version 5 (mcppls
+// 0.0.20 and later) names the runner of each platform under `platforms.<key>.runner`, and the command is
+// that runner and `server.path`; version 4 (0.0.18, 0.0.19) serves the one `platform` it names, with
+// `server.runner` and `server.path` (`bin/okrun bin/mcppls.okb`); earlier ones name a program alone. A payload
+// that does not serve this system is refused, naming the platforms it does serve. A candidate is a payload
+// directory or a program, and what is asked for its version is the command it stands for.
 export module mcppide.languageservice;
 
 import std;
@@ -51,13 +54,26 @@ struct Status {
 struct Candidate {
     std::vector<std::filesystem::path> command;
     std::string source;
+    std::string problem;   // a payload refused: why (S6 section 4); the command is then empty
 };
+
+// mcppls's name for this system (mcppls S6 section 1): the system and the architecture as VS Code names
+// extension targets -- linux-x64, linux-arm64, darwin-arm64, darwin-x64, win32-x64, win32-arm64. The one
+// place the editors' adapters take it from.
+std::string host_platform();
+
+// The server of a payload directory for `platform` (S6 section 4): the command, or why there is none.
+struct PayloadServer {
+    std::vector<std::filesystem::path> command;
+    std::string problem;
+};
+PayloadServer payload_server(const std::filesystem::path& payload, std::string_view platform = host_platform());
 
 // The version in `mcppls --version`'s output: the first word that starts with a digit.
 std::string version_in(std::string_view output);
 
-// The command payload.json's `server` names in a payload directory: the runner and the image, or the
-// program. Empty when the directory holds no payload or what it names is not there.
+// The command a payload directory's payload.json names for this system: the runner and the image, or the
+// program. Empty when the directory holds no payload, serves another system, or what it names is not there.
 std::vector<std::filesystem::path> payload_command(const std::filesystem::path& payload);
 
 // The command a path the adapter named stands for: a payload directory's server, or the program itself.
@@ -136,7 +152,17 @@ std::filesystem::path within(const std::filesystem::path& payload, const std::st
     return payload / relative;
 }
 
-std::vector<std::filesystem::path> payload_command(const std::filesystem::path& payload) {
+std::string host_platform() {
+    const bool arm = mcpplibs::os::ARCH == mcpplibs::os::architecture::aarch64;
+    switch (mcpplibs::os::host()) {
+        case mcpplibs::os::platform::windows: return arm ? "win32-arm64" : "win32-x64";
+        case mcpplibs::os::platform::macos: return arm ? "darwin-arm64" : "darwin-x64";
+        default: break;
+    }
+    return arm ? "linux-arm64" : "linux-x64";
+}
+
+PayloadServer payload_server(const std::filesystem::path& payload, std::string_view platform) {
     std::error_code ec;
     std::ifstream in(payload / "payload.json", std::ios::binary);
     if (!in) return {};
@@ -144,12 +170,39 @@ std::vector<std::filesystem::path> payload_command(const std::filesystem::path& 
     if (!manifest.is_object() || !manifest.contains("server") || !manifest["server"].is_object()) return {};
     const Json& server = manifest["server"];
     if (!server.contains("path") || !server["path"].is_string()) return {};
+    const int version = manifest.contains("payload-version") && manifest["payload-version"].is_number_integer()
+        ? manifest["payload-version"].get<int>() : 0;
+    const auto refused = [&](std::string why) { return PayloadServer{{}, std::format("the mcppls payload {}: {}", payload.string(), why)}; };
+    std::optional<std::string> runner;
+    if (version >= 6) return refused(std::format("payload-version {} is not one this mcpp-ide reads (4, 5)", version));
+    if (version == 5) {
+        // One payload for every platform: this system's entry names its runner.
+        if (!manifest.contains("platforms") || !manifest["platforms"].is_object()) return refused("version 5 without platforms");
+        const Json& platforms = manifest["platforms"];
+        if (!platforms.contains(std::string(platform)) || !platforms[std::string(platform)].is_object()) {
+            std::string served;
+            for (const auto& item : platforms.items()) served += (served.empty() ? "" : ", ") + item.key();
+            return refused(std::format("it serves {}, and this system is {}", served.empty() ? std::string("no platform") : served, platform));
+        }
+        const Json& entry = platforms[std::string(platform)];
+        if (entry.contains("runner") && entry["runner"].is_string()) runner = entry["runner"].get<std::string>();
+    } else {
+        // Version 4 serves the one platform it names; earlier ones name none.
+        if (version == 4 && manifest.contains("platform") && manifest["platform"].is_string() &&
+            manifest["platform"].get<std::string>() != platform)
+            return refused(std::format("it serves {}, and this system is {}", manifest["platform"].get<std::string>(), platform));
+        if (server.contains("runner") && server["runner"].is_string()) runner = server["runner"].get<std::string>();
+    }
     std::vector<std::filesystem::path> command;
-    if (server.contains("runner") && server["runner"].is_string()) command.push_back(within(payload, server["runner"].get<std::string>()));
+    if (runner) command.push_back(within(payload, *runner));
     command.push_back(within(payload, server["path"].get<std::string>()));
     for (const auto& part : command)
         if (part.empty() || !std::filesystem::is_regular_file(part, ec)) return {};
-    return command;
+    return {command, {}};
+}
+
+std::vector<std::filesystem::path> payload_command(const std::filesystem::path& payload) {
+    return payload_server(payload).command;
 }
 
 std::vector<std::filesystem::path> command_of(const std::filesystem::path& named) {
@@ -159,9 +212,23 @@ std::vector<std::filesystem::path> command_of(const std::filesystem::path& named
     return {};
 }
 
+// A candidate the adapter or the user data directory names: a payload's server, or a program.
+Candidate candidate_of(const std::filesystem::path& named, std::string source) {
+    std::error_code ec;
+    if (std::filesystem::is_directory(named, ec)) {
+        auto served = payload_server(named);
+        return {std::move(served.command), std::move(source), std::move(served.problem)};
+    }
+    return {command_of(named), std::move(source), {}};
+}
+
 std::vector<Candidate> candidates(const std::vector<std::string>& fromEditor) {
     std::vector<Candidate> out;
-    for (const auto& p : fromEditor) if (!p.empty()) out.push_back({command_of(p), "editor"});
+    // An editor names a payload in the host's spelling (`C:\Users\x\payload`); its generic one is the
+    // name every path built from it extends (mcpplibs.os).
+    for (const auto& p : fromEditor)
+        if (!p.empty())
+            out.push_back(candidate_of(mcpplibs::os::fs::from_utf8(mcpplibs::os::fs::generic(mcpplibs::os::fs::from_utf8(p))), "editor"));
     if (auto found = mcpplibs::os::env::find_executable("mcppls")) out.push_back({{*found}, "PATH"});
     const auto exe = std::string("mcppls") + std::string(mcpplibs::os::conventions().exe_suffix);
     if (auto xh = mcpplibs::os::env::get("XLINGS_HOME"))
@@ -171,8 +238,9 @@ std::vector<Candidate> candidates(const std::vector<std::string>& fromEditor) {
         out.push_back({command_of(*home / ".xlings" / "subos" / "default" / "bin" / exe), "xlings"});
     }
     // The payload Zed's install puts at `<user data>/mcppls/payload`.
-    if (auto data = mcpplibs::os::dirs::data()) out.push_back({payload_command(*data / "mcppls" / "payload"), "payload"});
-    std::erase_if(out, [](const Candidate& c) { return c.command.empty(); });
+    if (auto data = mcpplibs::os::dirs::data()) out.push_back(candidate_of(*data / "mcppls" / "payload", "payload"));
+    // A refused payload stays in the list, so that a search that finds nothing else can say why.
+    std::erase_if(out, [](const Candidate& c) { return c.command.empty() && c.problem.empty(); });
     return out;
 }
 
@@ -192,9 +260,15 @@ Status classify(const std::filesystem::path& program, std::string source, std::s
 
 // The first candidate is the one asked: the one the adapter named, else the first found.
 Status probe(const std::vector<std::string>& fromEditor) {
-    const auto found = candidates(fromEditor);
-    if (found.empty()) return Status{};
-    const auto& [command, source] = found.front();
+    const auto all = candidates(fromEditor);
+    std::vector<Candidate> found;
+    for (const auto& c : all) if (!c.command.empty()) found.push_back(c);
+    if (found.empty()) {
+        Status none;
+        for (const auto& c : all) if (!c.problem.empty()) { none.detail = c.problem; none.source = c.source; break; }
+        return none;
+    }
+    const auto& [command, source, problem] = found.front();
     mcpplibs::os::process::spawn_options o;
     o.program = command.front();
     for (std::size_t i = 1; i < command.size(); ++i) o.args.push_back(command[i].string());

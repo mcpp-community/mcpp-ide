@@ -124,6 +124,33 @@ function M.setup(opts)
     end,
   })
   vim.api.nvim_create_autocmd('User', { group = group, pattern = 'McppStatus', callback = on_started })
+  -- The ▶ of a program's or a test's main and of each case, or its last result (D16).
+  vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufWritePost' }, {
+    group = group, pattern = { '*.cpp', '*.cc', '*.cxx', '*.cppm', '*.ixx', '*.mpp' },
+    callback = function(a)
+      require('mcpp.tests').signs(a.buf)
+    end,
+  })
+  -- Once the backend is ready (McppStatus fires on every change of the statusline; the signs are
+  -- asked for when the session starts, and after a read or a write).
+  local signed = false
+  vim.api.nvim_create_autocmd('User', {
+    group = group, pattern = 'McppStatus',
+    callback = function()
+      if session.state.ready == signed then
+        return
+      end
+      signed = session.state.ready
+      if not signed then
+        return
+      end
+      for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_loaded(buf) then
+          require('mcpp.tests').signs(buf)
+        end
+      end
+    end,
+  })
   -- mcppls attached: it serves build.mcpp now, and the backend leaves it what it answers better.
   vim.api.nvim_create_autocmd('LspAttach', {
     group = group,
@@ -163,6 +190,13 @@ function M.status()
   end
   local text = 'mcpp ' .. s.target
   if s.running > 0 then
+    -- A build reports its steps: the job and its count, as mcpp counts them.
+    for id, p in pairs(session.state.progress) do
+      local job = session.state.running[id]
+      if job then
+        return text .. ' · ' .. (job.kind or '') .. ' ' .. p[1] .. '/' .. p[2]
+      end
+    end
     return text .. ' · ' .. t('{0} job(s) running', s.running)
   end
   if s.last then

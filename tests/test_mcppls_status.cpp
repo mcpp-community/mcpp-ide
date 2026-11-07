@@ -2,12 +2,15 @@
 // the frozen table for 0.0.18 and 0.0.19; mcppls's actions offered in each editor under the id
 // mcppls gives that editor, and none where it gives none; a change of state told once. The mock
 // mcppls sits in a payload made here, as an editor's own payload would.
-#include "support.hpp"
 import std;
+import mcppide.testsupport;
 import nlohmann.json;
 import mcppide.rpc;
 import mcppide.server;
 import mcppide.languageservice;
+import mcpplibs.os;
+
+using testsupport::check;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -57,22 +60,27 @@ int main() {
     {
         const auto r = ls::parse_status(R"({"schema": 1, "capabilities": ["status", 7], "workspace": {"state": "ready"},
                                             "actions": [{"id": "restart", "vscode": "mcppls.restartServer"}, {"title": "no id"}]})");
-        CHECK(r.source == "status");
-        CHECK(r.capabilities == Json::array({"status"}));
-        CHECK(r.actions.size() == 1 && r.workspace["state"] == "ready");
+        check(r.source == "status");
+        check(r.capabilities == Json::array({"status"}));
+        check(r.actions.size() == 1 && r.workspace["state"] == "ready");
         const auto broken = ls::parse_status("mcppls: unknown command status");
-        CHECK(broken.source == "frozen" && !broken.detail.empty());
-        CHECK(broken.actions == ls::frozen_actions());
+        check(broken.source == "frozen" && !broken.detail.empty());
+        check(broken.actions == ls::frozen_actions());
     }
 
     const auto mock = testsupport::built("mcpp-ide-mock-mcppls");
-    CHECK(!mock.empty());
-    const auto base = std::filesystem::temp_directory_path() / std::format("mcppide-mcppls-{}", std::chrono::steady_clock::now().time_since_epoch().count());
+    check(!mock.empty());
+    const auto base = testsupport::temp() / std::format("mcppide-mcppls-{}", std::chrono::steady_clock::now().time_since_epoch().count());
     const auto payload = base / "payload";
     const auto root = base / "project";
     std::filesystem::create_directories(payload / "bin");
     std::filesystem::create_directories(root);
-    std::filesystem::copy_file(mock, payload / "bin" / mock.filename());
+    // The mock as the payload's server. An ok image creates no executable file (openkal states no
+    // permission bits), so where a program needs its executable bit the payload names it by a link.
+    if (mcpplibs::os::host() == mcpplibs::os::platform::windows)
+        std::filesystem::copy_file(mock, payload / "bin" / mock.filename());
+    else
+        std::filesystem::create_symlink(mock, payload / "bin" / mock.filename());
     std::ofstream(payload / "payload.json") << std::format(R"({{"server": {{"path": "bin/{}"}}}})", mock.filename().string());
     std::ofstream(root / "mcpp.toml") << "[package]\nname = \"p\"\nversion = \"0.1.0\"\n";
 
@@ -82,7 +90,7 @@ int main() {
     auto result = [&](std::string_view method, Json params) {
         auto answer = wire.call(method, std::move(params));
         if (!answer.contains("result")) std::println(std::cerr, "{}: {}", method, answer.dump());
-        CHECK(answer.contains("result"));
+        check(answer.contains("result"));
         return answer["result"];
     };
     const Json candidates = Json::array({payload.generic_string()});
@@ -93,38 +101,38 @@ int main() {
     // 0.0.19: no `status`; the actions are the frozen table's, and the workspace is not known.
     std::ofstream(payload / "mock-version") << "0.0.19\n";
     auto old = result("mcpp-ide/languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
-    CHECK(old["state"] == "ok" && old["version"] == "0.0.19");
-    CHECK(old["statusSource"] == "frozen" && old["workspace"].is_null());
-    CHECK(old["serverActions"] == ls::frozen_actions());
+    check(old["state"] == "ok" && old["version"] == "0.0.19");
+    check(old["statusSource"] == "frozen" && old["workspace"].is_null());
+    check(old["serverActions"] == ls::frozen_actions());
 
     // 0.0.20: the status document.
     std::ofstream(payload / "mock-version") << "0.0.20\n";
     std::ofstream(root / ".mock-mcppls-state") << "starting\n";
     auto now = result("mcpp-ide/languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
-    CHECK(now["statusSource"] == "status");
-    CHECK(now["workspace"]["state"] == "starting");
-    CHECK(now["capabilities"] == Json::array({"status"}));
-    CHECK(now["serverActions"].size() == 3);
+    check(now["statusSource"] == "status");
+    check(now["workspace"]["state"] == "starting");
+    check(now["capabilities"] == Json::array({"status"}));
+    check(now["serverActions"].size() == 3);
 
     // The commands each editor is offered: mcppls's action under that editor's id, or not at all.
     auto jetbrains = result("mcpp-ide/commands/list", Json{{"editor", "jetbrains"}});
-    CHECK(command(jetbrains, "mcpp.languageServer.restart")["action"]["command"] == "community.mcpp.mcppls.RestartServer");
-    CHECK(command(jetbrains, "mcpp.languageServer.restartEngine").is_null());
+    check(command(jetbrains, "mcpp.languageServer.restart")["action"]["command"] == "community.mcpp.mcppls.RestartServer");
+    check(command(jetbrains, "mcpp.languageServer.restartEngine").is_null());
     auto nvim = result("mcpp-ide/commands/list", Json{{"editor", "nvim"}});
-    CHECK(command(nvim, "mcpp.languageServer.restart")["action"]["command"] == "McpplsRestart");
+    check(command(nvim, "mcpp.languageServer.restart")["action"]["command"] == "McpplsRestart");
     auto vscode = result("mcpp-ide/commands/list", Json{{"editor", "vscode"}});
-    CHECK(command(vscode, "mcpp.languageServer.openLogFolder")["action"]["arguments"] == Json::array({"logs"}));
-    CHECK(command(vscode, "mcpp.languageServer.restartEngine")["action"]["command"] == "mcppls.restartClangd");
+    check(command(vscode, "mcpp.languageServer.openLogFolder")["action"]["arguments"] == Json::array({"logs"}));
+    check(command(vscode, "mcpp.languageServer.restartEngine")["action"]["command"] == "mcppls.restartClangd");
     auto cli = result("mcpp-ide/commands/list", Json{{"editor", "cli"}});
-    CHECK(std::ranges::none_of(cli["commands"], [](const Json& c) { return c["action"].value("kind", "") == "forward"; }));
+    check(std::ranges::none_of(cli["commands"], [](const Json& c) { return c["action"].value("kind", "") == "forward"; }));
 
     // A change of state is told once; asking again with nothing changed tells nothing.
     const int before = wire.count("mcpp-ide/languageService/changed");
     std::ofstream(root / ".mock-mcppls-state") << "ready\n";
     auto ready = result("mcpp-ide/languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
-    CHECK(ready["workspace"]["state"] == "ready");
+    check(ready["workspace"]["state"] == "ready");
     (void)result("mcpp-ide/languageService/status", Json{{"candidates", candidates}, {"root", root.generic_string()}});
-    CHECK(wire.count("mcpp-ide/languageService/changed") == before + 1);
+    check(wire.count("mcpp-ide/languageService/changed") == before + 1);
 
     std::error_code ignored;
     std::filesystem::remove_all(base, ignored);

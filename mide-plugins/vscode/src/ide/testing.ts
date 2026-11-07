@@ -17,7 +17,32 @@ import type { Jobs } from "./jobs";
 import { baseCaseName, caseId, parseCaseId, parseTestId, testId } from "./mapping";
 import type { IdeProjects } from "./projects";
 import type { Session } from "./session";
-import type { CaseResult, JobFinished, TestCases, TestResult } from "./protocol";
+import type { CaseResult, FailureLocation, JobFinished, TestCases, TestResult } from "./protocol";
+
+/** Text for the test terminal, whose lines end in `\r\n`. */
+function terminal(text: string): string {
+  return text.replace(/\r?\n/g, "\r\n");
+}
+
+/**
+ * Where a failure is shown (D16): the place its output names, in the program's source when the
+ * name is relative to the project; else the item's own line (a test's `main`, a case's macro).
+ */
+function failureAt(root: string, location: FailureLocation | null | undefined, item: vscode.TestItem): vscode.Location | undefined {
+  if (location) {
+    const file = path.isAbsolute(location.path) ? location.path : path.join(root, location.path);
+    return new vscode.Location(vscode.Uri.file(file), new vscode.Position(location.line, 0));
+  }
+  return item.uri && item.range ? new vscode.Location(item.uri, item.range) : undefined;
+}
+
+/** The output a result carries, said to its item, with a note when the record cut it short. */
+function attribute(run: vscode.TestRun, item: vscode.TestItem, output: string | undefined, truncated: boolean | undefined,
+                   at: vscode.Location | undefined): void {
+  if (!output) return;
+  run.appendOutput(terminal(output.endsWith("\n") ? output : `${output}\n`), at, item);
+  if (truncated) run.appendOutput(terminal(`${t("(the output was longer; its head and tail are shown)")}\n`), at, item);
+}
 
 interface Program {
   root: string;
@@ -149,14 +174,21 @@ export class Testing implements vscode.Disposable {
       const handle = await this.jobs.start(
         { root: program.root, test: program.test, framework: program.framework, cases: names, color: true },
         {
-          output: (text) => run.appendOutput(text.replace(/\r?\n/g, "\r\n")),
+          output: (text) => run.appendOutput(terminal(text)),
           caseResult: (r: CaseResult) => {
             const item = byName.get(r.case) ?? byName.get(baseCaseName(program.framework, r.case));
             if (!item) return;
             seen.add(item);
+            // Every case's own output reaches its item, passed or not (D16).
+            const at = r.status === "failed" ? failureAt(program.root, r.location, item) : undefined;
+            attribute(run, item, r.output, r.outputTruncated, at);
             if (r.status === "passed") run.passed(item, r.durationMs);
             else if (r.status === "skipped") run.skipped(item);
-            else run.failed(item, new vscode.TestMessage(r.message || r.status), r.durationMs);
+            else {
+              const message = new vscode.TestMessage(r.message || r.output || r.status);
+              message.location = at;
+              run.failed(item, message, r.durationMs);
+            }
           },
         },
         "test/runCases",
@@ -177,15 +209,24 @@ export class Testing implements vscode.Disposable {
       const index = new Map(items.map((i) => [parseTestId(i.id)!.test, i]));
       const filter = items.length === 1 && request.include ? parseTestId(items[0].id)!.test : undefined;
       const handle = await this.jobs.start({ kind: "test", root, filter, color: true }, {
-        output: (text) => run.appendOutput(text.replace(/\r?\n/g, "\r\n")),
+        output: (text) => run.appendOutput(terminal(text)),
         testResult: (r: TestResult) => {
           const item = index.get(r.test);
           if (!item) return;
           const ms = r.durationMs;
+          const failing = r.status === "failed" || r.status === "timedOut" || r.status === "errored";
+          const at = failing ? failureAt(root, r.location, item) : undefined;
+          // The program's output reaches its item whatever the result (D16).
+          attribute(run, item, r.output, r.outputTruncated, at);
           if (r.status === "passed") run.passed(item, ms);
-          else if (r.status === "skipped") run.skipped(item);
-          else {
-            const message = new vscode.TestMessage(r.output || r.reason || r.status);
+          else if (r.status === "skipped") {
+            if (r.reason) run.appendOutput(terminal(`${r.reason}\n`), undefined, item);
+            run.skipped(item);
+          } else {
+            const headline = r.status === "timedOut" ? t("The test timed out.")
+              : r.compileFailed ? t("The test did not compile.") : undefined;
+            const message = new vscode.TestMessage([headline, r.output || r.reason || r.status].filter(Boolean).join("\n"));
+            message.location = at;
             if (r.status === "errored") run.errored(item, message, ms); else run.failed(item, message, ms);
           }
         },

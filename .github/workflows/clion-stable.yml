@@ -132,4 +132,5 @@ jobs:
             ${{ runner.temp }}/clion-stable-result/graphs/checks.json
             ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/result.json
             ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/checks.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/no-jcef-window.txt
           if-no-files-found: warn

@@ -46,20 +46,23 @@ object Locate {
     }
 
     /**
-     * A payload of mcppls (`payload.json` beside `bin/`), with the program its `server` starts made
-     * executable again: the runner, else a program server. A plugin's install may not keep the bit;
-     * mcppls-clion puts it back when it starts its server, and the backend may run that program
-     * before, to read mcppls's version. Only a relative path with no `..` part is followed.
+     * A payload of mcppls (`payload.json` beside `bin/`), with the programs that start its server made
+     * executable again (mcppls specification S6): every platform's runner of a version 5 payload, the
+     * runner of a version 4 one, else a program server. A plugin's install may not keep the bit;
+     * mcppls-clion puts it back when it starts its server, and the backend, which chooses this system's
+     * entry, may run that program before, to read mcppls's version. Only a relative path with no `..`
+     * part is followed.
      */
     fun runnablePayload(payload: File): File {
-        val server = runCatching {
-            JsonParser.parseString(File(payload, "payload.json").readText()).asJsonObject.getAsJsonObject("server")
-        }.getOrNull()
-        val named = listOf("runner", "path").firstNotNullOfOrNull { key ->
-            server?.get(key)?.takeIf { it.isJsonPrimitive }?.asString
-        }
-        named?.takeIf { !File(it).isAbsolute && it.split('/', '\\').none { part -> part == ".." } }
-            ?.let { File(payload, it) }?.takeIf { it.isFile }?.let(::runnable)
+        val manifest = runCatching { JsonParser.parseString(File(payload, "payload.json").readText()).asJsonObject }.getOrNull()
+        val server = manifest?.get("server")?.takeIf { it.isJsonObject }?.asJsonObject
+        fun named(obj: com.google.gson.JsonObject?, key: String): String? =
+            obj?.get(key)?.takeIf { it.isJsonPrimitive }?.asString
+        val runners = manifest?.get("platforms")?.takeIf { it.isJsonObject }?.asJsonObject?.entrySet()
+            ?.mapNotNull { (_, entry) -> entry.takeIf { it.isJsonObject }?.asJsonObject?.let { named(it, "runner") } }
+            ?: listOfNotNull(named(server, "runner") ?: named(server, "path"))
+        runners.filter { !File(it).isAbsolute && it.split('/', '\\').none { part -> part == ".." } }
+            .map { File(payload, it) }.filter { it.isFile }.forEach { runnable(it) }
         return payload
     }
 

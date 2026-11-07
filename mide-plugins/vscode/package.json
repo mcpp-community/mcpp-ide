@@ -2,7 +2,7 @@
   "name": "mcpp-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "publisher": "mcpp-community",
   "license": "Apache-2.0",
   "icon": "media/logo.png",
@@ -89,6 +89,18 @@
           "when": "mcpp.inProject && mcpp.editorTitleButtons"
         }
       ],
+      "editor/title/run": [
+        {
+          "command": "mcpp.runThisFile",
+          "group": "mcpp@1",
+          "when": "mcpp.activeEntry == program || mcpp.activeEntry == test"
+        },
+        {
+          "command": "mcpp.debugThisFile",
+          "group": "mcpp@2",
+          "when": "mcpp.activeEntryDebug"
+        }
+      ],
       "view/title": [
         {
           "command": "mcpp.refreshCacheStats",
@@ -120,6 +132,14 @@
         {
           "command": "mcpp.debug",
           "when": "mcpp.inProject"
+        },
+        {
+          "command": "mcpp.runThisFile",
+          "when": "mcpp.activeEntry == program || mcpp.activeEntry == test"
+        },
+        {
+          "command": "mcpp.debugThisFile",
+          "when": "mcpp.activeEntryDebug"
         },
         {
           "command": "mcpp.pack",
@@ -156,6 +176,18 @@
       {
         "command": "mcpp.debug",
         "title": "%command.mcpp.debug.title%",
+        "category": "%category%",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "mcpp.runThisFile",
+        "title": "%command.mcpp.runThisFile.title%",
+        "category": "%category%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "mcpp.debugThisFile",
+        "title": "%command.mcpp.debugThisFile.title%",
         "category": "%category%",
         "icon": "$(debug-alt)"
       },

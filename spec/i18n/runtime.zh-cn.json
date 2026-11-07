@@ -808,5 +808,10 @@
   "{0} days or more": "{0} 天及以上",
   "{0} in {1} entries": "{0}，共 {1} 项",
   "{0} incomplete entries": "{0} 项不完整",
-  "{0} · {1} entries": "{0} · {1} 项"
+  "{0} · {1} entries": "{0} · {1} 项",
+  "timed out": "超时",
+  "did not compile": "没有编译通过",
+  "built, not run": "已构建，未运行",
+  "mcpp test in {0}": "{0} 中的 mcpp test",
+  "(the output was longer; its head and tail are shown)": "（输出更长，只显示开头和结尾）"
 }

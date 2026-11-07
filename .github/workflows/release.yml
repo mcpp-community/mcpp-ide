@@ -1,29 +1,56 @@
 name: Release
 
 # A release: CI on the commit (which builds the backend's ok-image bundle, its universal package with
-# every system's okrun, and both editor packages carrying the bundle), then a GitHub release with the
-# editor packages, the bundle, the universal package and their checksums. Open VSX and
-# JetBrains consume the exact published archives independently after that release exists.
+# every system's okrun, and both editor packages carrying the bundle), then a GitHub release of what
+# the tag publishes, with its checksums. Open VSX and JetBrains consume the exact published archives
+# independently after that release exists.
+#
+# WHAT A TAG PUBLISHES (design 2026-11-07, D15; .github/scripts/release-plan.sh): a version is X.Y.Z,
+# X.Y the series every component shares and Z each component's own patch.
+#
+#   vX.Y.0              a series release: the backend, the VS Code extension, the CLion plugin and
+#                       the Neovim plugin (a source tree, which xim takes from the tag's archive)
+#   backend-vX.Y.Z      the backend's ok-image bundle and package (xim's mcpp-ide)
+#   vscode-vX.Y.Z       the VSIX (Open VSX)
+#   clion-vX.Y.Z        the CLion ZIP (JetBrains Marketplace)
+#   nvim-vX.Y.Z         the Neovim plugin: the tag's source archive (xim's mcpp-ide-nvim)
+#
+# The tag's version must be the component's own, and every component one series.
 
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    tags: ['v*', 'backend-v*', 'vscode-v*', 'clion-v*', 'nvim-v*']
 
 permissions:
   contents: read
 
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      components: ${{ steps.plan.outputs.components }}
+      version: ${{ steps.plan.outputs.version }}
+      title: ${{ steps.plan.outputs.title }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: plan
+        shell: bash   # -eo pipefail: a refused tag fails the step through tee
+        run: bash .github/scripts/release-plan.sh "$GITHUB_REF_NAME" | tee -a "$GITHUB_OUTPUT"
+
   ci:
+    needs: plan
     uses: ./.github/workflows/ci.yml
 
   release:
-    needs: ci
+    needs: [plan, ci]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.publish.outputs.version }}
+    env:
+      COMPONENTS: ${{ needs.plan.outputs.components }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      TITLE: ${{ needs.plan.outputs.title }}
     defaults:
       run:
         shell: bash
@@ -38,20 +65,33 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
           mkdir -p dist
-          cp artifacts/mcpp-vscode-vsix/*.vsix artifacts/mcpp-clion-zip/*.zip dist/
-          cp artifacts/backend/mcpp-ide.okb "dist/mcpp-ide-${version}.okb"
-          cp "artifacts/backend/mcpp-ide-${version}"-openkal*.tar.gz dist/
-          (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
-          gh release create "v${version}" dist/* --target "$GITHUB_SHA" --title "mcpp-ide ${version}" --notes-file CHANGELOG.md
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          backend="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
+          for c in $COMPONENTS; do
+            case "$c" in
+              backend)
+                cp artifacts/backend/mcpp-ide.okb "dist/mcpp-ide-${backend}.okb"
+                cp "artifacts/backend/mcpp-ide-${backend}"-openkal*.tar.gz dist/ ;;
+              vscode) cp artifacts/mcpp-vscode-vsix/*.vsix dist/ ;;
+              clion) cp artifacts/mcpp-clion-zip/*.zip dist/ ;;
+              nvim) ;;   # the tag's source archive is the plugin
+            esac
+          done
+          notes="$RUNNER_TEMP/notes.md"
+          printf '%s\n\n' "$TITLE" > "$notes"; cat CHANGELOG.md >> "$notes"
+          if [ -n "$(ls dist)" ]; then
+            (cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+            gh release create "$GITHUB_REF_NAME" dist/* --target "$GITHUB_SHA" --title "$TITLE" --notes-file "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" --target "$GITHUB_SHA" --title "$TITLE" --notes-file "$notes"
+          fi
 
   openvsx:
-    needs: release
+    needs: [plan, release]
+    if: contains(needs.plan.outputs.components, 'vscode')
     runs-on: ubuntu-24.04
     env:
-      VERSION: ${{ needs.release.outputs.version }}
+      VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -62,7 +102,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release download "v$VERSION" -p 'mcpp-vscode-*.vsix' -p SHA256SUMS -D published
+          gh release download "$GITHUB_REF_NAME" -p 'mcpp-vscode-*.vsix' -p SHA256SUMS -D published
           (cd published && sha256sum -c --ignore-missing SHA256SUMS)
       - name: Publish to Open VSX
         env:
@@ -80,9 +120,10 @@ jobs:
           (cd mide-plugins/vscode && npx ovsx publish "$GITHUB_WORKSPACE/$vsix" --pat "$OPENVSX_TOKEN")
 
   jetbrains:
-    needs: release
+    needs: [plan, release]
+    if: contains(needs.plan.outputs.components, 'clion')
     uses: ./.github/workflows/publish-jetbrains.yml
     with:
-      tag: v${{ needs.release.outputs.version }}
+      tag: ${{ github.ref_name }}
     secrets:
       JETBRAINS_TOKEN: ${{ secrets.JETBRAINS_TOKEN }}

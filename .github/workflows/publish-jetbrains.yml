@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Published GitHub release tag, e.g. v0.2.1
+        description: Published GitHub release tag, vX.Y.0 or clion-vX.Y.Z
         required: true
   workflow_call:
     inputs:
@@ -38,8 +38,9 @@ jobs:
           python3 - <<'PY'
           import os, re
           from pathlib import Path
-          match = re.fullmatch(r'v(\d+\.\d+\.\d+)', os.environ['TAG'])
-          assert match, 'Expected a versioned release tag'
+          # A series release (vX.Y.0) or the CLion plugin's patch (clion-vX.Y.Z), design 2026-11-07, D15.
+          match = re.fullmatch(r'(?:clion-)?v(\d+\.\d+\.\d+)', os.environ['TAG'])
+          assert match, 'Expected vX.Y.0 or clion-vX.Y.Z'
           with Path(os.environ['GITHUB_ENV']).open('a') as out:
               out.write('VERSION=' + match[1] + '\n')
           PY

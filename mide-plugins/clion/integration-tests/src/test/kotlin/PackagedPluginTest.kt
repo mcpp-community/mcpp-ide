@@ -12,6 +12,7 @@ import com.intellij.driver.sdk.ui.ui
 import com.intellij.driver.model.OnDispatcher
 import com.intellij.driver.sdk.singleProject
 import com.intellij.driver.sdk.waitForProjectOpen
+import com.intellij.driver.sdk.waitForIndicators
 import com.intellij.ide.starter.ci.CIServer
 import com.intellij.ide.starter.ci.NoCIServer
 import com.intellij.ide.starter.di.di
@@ -114,8 +115,15 @@ interface ToolWindowManagerRemote { fun getToolWindow(id: String): ToolWindowRem
 @Remote("com.intellij.openapi.wm.ToolWindow")
 interface ToolWindowRemote {
     fun isVisible(): Boolean
+    fun isActive(): Boolean
+    fun isAutoHide(): Boolean
+    fun isSplitMode(): Boolean
+    fun isShowStripeButton(): Boolean
+    fun getType(): ToolWindowTypeRemote
     fun getContentManager(): ContentManagerRemote
 }
+@Remote("com.intellij.openapi.wm.ToolWindowType")
+interface ToolWindowTypeRemote { fun name(): String }
 @Remote("com.intellij.ui.content.ContentManager")
 interface ContentManagerRemote {
     fun getContentCount(): Int
@@ -343,6 +351,8 @@ class PackagedPluginTest {
         }
         context.runIdeWithDriver(runTimeout = 3.minutes).useDriverAndCloseIde {
             waitForProjectOpen()
+            // As GraphInteractionTest: windows shown before the IDE settles can be hidden again.
+            waitForIndicators(kotlin.time.Duration.parse("3m"))
             withContext {
                 val application = utility<ApplicationInfoFactory>().getInstance()
                 assertEquals(version, application.getFullVersion(), "the requested stable IDE actually runs")
@@ -434,8 +444,12 @@ class PackagedPluginTest {
                 assertNotNull(utility<CppToolchainsFactory>().getInstance().getDefaultToolchain(), "CLion has a debugger toolchain")
                 val debug = execute("debug", "debug-native-launch")
                 assertTrue(debug.getProcessHandler()!!.getClass().getName().contains("CidrDebugProcess"), "CLion's native debugger owns the process")
-                val debugWindow = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("Debug")
-                assertTrue(debugWindow?.isVisible() == true, "the native debugger view is visible")
+                // The Debug window is shown as the session starts, after the process does.
+                val windows = utility<ToolWindowManagerFactory>().getInstance(singleProject())
+                val shown = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+                while (windows.getToolWindow("Debug")?.isVisible() != true && System.nanoTime() < shown) Thread.sleep(100)
+                assertTrue(windows.getToolWindow("Debug")?.isVisible() == true, "the native debugger view is visible")
+                val debugWindow = windows.getToolWindow("Debug")
                 record("native-debugger-process-and-view")
                 val debugger = utility<DebuggerManagerFactory>().getInstance(singleProject())
                 val debugFile = requireNotNull(utility<LocalFileSystemFactory>().getInstance().refreshAndFindFileByPath(source.toString()))

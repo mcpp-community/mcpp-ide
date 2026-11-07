@@ -5,6 +5,7 @@ import com.intellij.driver.model.OnDispatcher
 import com.intellij.driver.sdk.invokeAction
 import com.intellij.driver.sdk.singleProject
 import com.intellij.driver.sdk.waitForProjectOpen
+import com.intellij.driver.sdk.waitForIndicators
 import com.intellij.driver.sdk.ui.ui
 import com.intellij.driver.sdk.ui.remote.Component
 import com.intellij.ide.starter.ci.CIServer
@@ -124,6 +125,9 @@ class GraphInteractionTest {
         }
         context.runIdeWithDriver().useDriverAndCloseIde {
             waitForProjectOpen()
+            // The IDE settles after the project opens (its layout restored, its startup activities run): a tool
+            // window shown before then can be hidden again by them, on 2026.1 and 2026.2 alike.
+            waitForIndicators(kotlin.time.Duration.parse("3m"))
             withContext {
                 assertEquals(version, utility<ApplicationInfoFactory>().getInstance().getFullVersion())
                 System.getProperty("mcpp.clion.backendPath")?.let { backend ->
@@ -142,10 +146,49 @@ class GraphInteractionTest {
                 assertEquals(2, startup.get().get("protocol").getAsInt())
                 record("protocol2-startup")
                 if (disableJcef) {
+                    // The mcpp tool window shares the left side with Project, which the IDE opens as
+                    // the project's layout is restored: an action before that finishes is shown and
+                    // then covered. The person asks once the project is on screen; so does the test.
+                    // CLion 2026.2 registers the Project window after the project reports open, so it is
+                    // looked up again until it exists and is shown, not asked once.
+                    val windows = utility<ToolWindowManagerFactory>().getInstance(singleProject())
+                    val restored = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60)
+                    while (windows.getToolWindow("Project")?.isVisible() != true && System.nanoTime() < restored) Thread.sleep(100)
+                    val before = "before the action: project=" + (windows.getToolWindow("Project")?.isVisible() ?: "absent") +
+                        " after " + "%.1fs".format((System.nanoTime() - restored) / 1e9 + 60) + "\n"
                     invokeAction("mcpp.project.showModuleDependencyGraph")
-                    val explanation = ui.x("//div[contains(@visible_text,'This IDE runs without JCEF') or contains(@text,'This IDE runs without JCEF')]")
-                    val explained = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
-                    while (!explanation.present() && System.nanoTime() < explained) Thread.sleep(100)
+                    // The sentence wraps in the narrow tool window; its accessible name is whole.
+                    val explanation = ui.x("//div[contains(@accessiblename,'This IDE runs without JCEF')]")
+                    // Which window is on screen, each time that changes, for the report: the mcpp window
+                    // shares the left side with Project, and only one of the two is shown at a time.
+                    val began = System.nanoTime()
+                    val timeline = StringBuilder(before)
+                    var last = ""
+                    val explained = began + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+                    while (!explanation.present() && System.nanoTime() < explained) {
+                        val now = withContext(OnDispatcher.EDT) {
+                            val mcpp = windows.getToolWindow("mcpp")
+                            "mcpp=" + (mcpp?.isVisible() ?: "absent") + " project=" + (windows.getToolWindow("Project")?.isVisible() ?: "absent")
+                        }
+                        if (now != last) {
+                            timeline.append("%.1fs %s\n".format((System.nanoTime() - began) / 1e9, now))
+                            last = now
+                        }
+                        Thread.sleep(100)
+                    }
+                    if (!explanation.present()) {
+                        // What the window shows instead, for the report.
+                        val window = windows.getToolWindow("mcpp")
+                        val state = withContext(OnDispatcher.EDT) {
+                            if (window == null) "no mcpp tool window"
+                            else "visible=" + window.isVisible() + " active=" + window.isActive() +
+                                " type=" + runCatching { window.getType().name() }.getOrElse { "?" } +
+                                " autoHide=" + window.isAutoHide() + " split=" + window.isSplitMode() +
+                                " stripe=" + window.isShowStripeButton() + " selected=" +
+                                window.getContentManager().getSelectedContent()?.getDisplayName()
+                        }
+                        Files.writeString(output.resolve("no-jcef-window.txt"), state + "\n" + timeline)
+                    }
                     assertTrue(explanation.present(), "the graph explains why drawing is unavailable")
                     record("no-jcef-explanation-visible")
                 } else {

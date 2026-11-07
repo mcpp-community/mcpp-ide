@@ -96,7 +96,7 @@ mapped onto Neovim:
 | Action | In Neovim | Subcommands |
 |---|---|---|
 | job, rpc | mcpp's narration streamed into `mcpp://output`, its end said there and, when it fails, as a notification | `build`, `test [filter]`, `autoConfigureModules`, `refreshCompilationDatabase`, `library.updateIndex` |
-| run | `run/launch` builds; its `argv`, `cwd` and `env` start in a terminal buffer | `run [bin]` |
+| run | a launch job builds, its narration in `mcpp://output` and its progress in the statusline; the launch's `argv`, `cwd` and `env` start in a terminal buffer | `run [bin]` |
 | debug | `debug/configuration` handed to nvim-dap; offered only when nvim-dap is loaded | `debug [bin]` |
 | cache | the backend's plan, confirmed at the level it asks for (`vim.ui.select`), applied as a job | `clean`, `cleanStaleArtifacts`, `cleanProjectArtifacts`, `gcGlobalCache`, `pruneGlobalCache`, `verifyGlobalCache`, `cleanLegacyCache` |
 | panel | the view model as text in a floating window, or as choices | `showTargets`, `showToolchains`, `showCachePanel`, `refreshCacheStats`, `project.showDependencyGraph`, `project.showModuleDependencyGraph`; `library.search [keyword]` (choose a package and a version: `mcpp add`); `pack` (format, mode, linkage: `mcpp pack`) |

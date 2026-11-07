@@ -120,10 +120,36 @@ class McppJobState(private val c: McppRunConfiguration, env: ExecutionEnvironmen
 /**
  * A test job whose results fill the IDE's test tree: each `test/result` becomes the TeamCity
  * service messages the test runner reads, located at the file that holds the test's `main`.
+ *
+ * EVERY TEST AND CASE HAS ITS OWN OUTPUT (design 2026-11-07, D16): `testStdOut` carries a program's
+ * whole output and a case's own (GoogleTest's console between `[ RUN ]` and its result), passed or
+ * not; a failure's `details` start with the place its output names (`file:line`, which the console
+ * filter links), then the output.
  */
 class TestJobProcessHandler(session: McppSession, params: JsonObject, private val mains: Map<String, String>, method: String = "job/start") :
     JobProcessHandler(session, params, method) {
     private fun escape(s: String) = s.replace("|", "||").replace("'", "|'").replace("\n", "|n").replace("\r", "|r").replace("[", "|[").replace("]", "|]")
+
+    /** `path:line` of a result's `location` (its line 0-based), or "". */
+    private fun place(p: JsonObject): String = runCatching {
+        val l = p.getAsJsonObject("location")
+        "${l["path"].asString}:${l["line"].asInt + 1}"
+    }.getOrDefault("")
+
+    /** The output a result carries, as its test's standard output, with a note when it was cut short. */
+    private fun stdout(out: StringBuilder, name: String, p: JsonObject) {
+        val output = p["output"]?.takeIf { it.isJsonPrimitive }?.asString ?: ""
+        if (output.isEmpty()) return
+        val note = if (p["outputTruncated"]?.asBoolean == true) "\n(the output was longer; its head and tail are shown)\n" else ""
+        out.append("##teamcity[testStdOut name='$name' out='${escape(output + note)}']\n")
+    }
+
+    /** `testFailed` with the failure's place first in its details, then what the result says. */
+    private fun failed(out: StringBuilder, name: String, message: String, p: JsonObject, details: String) {
+        val at = place(p)
+        val text = listOf(at, details).filter { it.isNotBlank() }.joinToString("\n")
+        out.append("##teamcity[testFailed name='$name' message='${escape(message)}' details='${escape(text)}']\n")
+    }
     /** The program whose cases are reported, once its first case is (test/runCases). */
     private var suite: String? = null
 
@@ -143,10 +169,14 @@ class TestJobProcessHandler(session: McppSession, params: JsonObject, private va
                 val hint = caseUrl(session, p["root"]?.asString ?: "", program, p["case"].asString, mains[program])
                     ?.let { " locationHint='${escape(it)}'" } ?: ""
                 out.append("##teamcity[testStarted name='$name'$hint]\n")
+                stdout(out, name, p)
                 when (p["status"]?.asString) {
                     "passed" -> {}
                     "skipped" -> out.append("##teamcity[testIgnored name='$name']\n")
-                    else -> out.append("##teamcity[testFailed name='$name' message='${escape(p["message"]?.asString ?: "")}']\n")
+                    else -> {
+                        val message = p["message"]?.asString ?: ""
+                        failed(out, name, message.lineSequence().firstOrNull() ?: "", p, message)
+                    }
                 }
                 out.append("##teamcity[testFinished name='$name' duration='${p["durationMs"]?.asLong ?: 0}']\n")
                 notifyTextAvailable(out.toString(), ProcessOutputTypes.STDOUT)
@@ -159,12 +189,19 @@ class TestJobProcessHandler(session: McppSession, params: JsonObject, private va
                 val name = escape(p["test"].asString)
                 val hint = mains[p["test"].asString]?.let { " locationHint='file://${escape(it)}'" } ?: ""
                 val out = StringBuilder("##teamcity[testStarted name='$name'$hint]\n")
-                val output = p["output"]?.asString ?: ""
-                if (output.isNotEmpty()) out.append("##teamcity[testStdOut name='$name' out='${escape(output)}']\n")
+                stdout(out, name, p)
+                val reason = p["reason"]?.asString?.ifBlank { null }
                 when (p["status"]?.asString) {
                     "passed" -> {}
-                    "skipped" -> out.append("##teamcity[testIgnored name='$name']\n")
-                    else -> out.append("##teamcity[testFailed name='$name' message='${escape(p["reason"]?.asString?.ifBlank { null } ?: p["status"].asString)}']\n")
+                    "skipped" -> out.append("##teamcity[testIgnored name='$name'${reason?.let { " message='${escape(it)}'" } ?: ""}]\n")
+                    else -> {
+                        val message = when {
+                            p["timedOut"]?.asBoolean == true -> "The test timed out"
+                            p["compileFailed"]?.asBoolean == true -> "The test did not compile"
+                            else -> reason ?: "The test failed (${p["status"].asString})"
+                        }
+                        failed(out, name, message, p, "")
+                    }
                 }
                 out.append("##teamcity[testFinished name='$name' duration='${p["durationMs"]?.asLong ?: 0}']\n")
                 notifyTextAvailable(out.toString(), ProcessOutputTypes.STDOUT)
@@ -203,24 +240,95 @@ class McppTestState(private val c: McppRunConfiguration, env: ExecutionEnvironme
     }
 }
 
-/** The backend's answer to "how does the program start" for a configuration (mcpp run --print-launch). */
-internal fun launch(c: McppRunConfiguration, debugEngine: String? = null): CompletableFuture<JsonObject> {
-    val session = McppSession.get(c.project)
-    val params = JsonObject().apply {
-        addProperty("root", c.root)
-        if (c.options.target.isNotBlank()) addProperty("target", c.options.target)
-        if (c.options.profile.isNotBlank()) addProperty("profile", c.options.profile)
-        if (c.options.bin.isNotBlank()) addProperty("bin", c.options.bin)
-        add("args", JsonArray().apply { c.programArgs.forEach { add(it) } })
-        if (debugEngine != null) addProperty("engine", debugEngine)
+/** The parameters of the launch of a configuration: its program, its arguments, and the debugger's engine when debugging. */
+internal fun launchParams(c: McppRunConfiguration, debugEngine: String? = null): JsonObject = JsonObject().apply {
+    addProperty("root", c.root)
+    if (c.options.target.isNotBlank()) addProperty("target", c.options.target)
+    if (c.options.profile.isNotBlank()) addProperty("profile", c.options.profile)
+    if (c.options.bin.isNotBlank()) addProperty("bin", c.options.bin)
+    add("args", JsonArray().apply { c.programArgs.forEach { add(it) } })
+    if (debugEngine != null) addProperty("engine", debugEngine)
+}
+
+/**
+ * A backend job followed to its end (design 2026-11-07 §4.9): mcpp's narration and its progress as
+ * they arrive, then the job's `job/finished`. A launch job (`kind: launch`) builds a program as
+ * `mcpp run` does and ends with the program's launch (`launch`), so a Run shows the build as the
+ * terminal shows it rather than a fixed line, and the program starts the moment it is built.
+ */
+internal class FollowedJob(
+    private val session: McppSession,
+    private val params: JsonObject,
+    private val onOutput: (String) -> Unit,
+    private val onProgress: (Int, Int) -> Unit = { _, _ -> },
+) {
+    val finished = CompletableFuture<JsonObject>()
+    @Volatile var jobId: String? = null
+        private set
+    private val early = mutableListOf<Pair<String, JsonObject>>()
+    private val subscriptions = mutableListOf<() -> Unit>()
+
+    fun start(): FollowedJob {
+        for (m in listOf("job/output", "job/progress", "job/finished"))
+            subscriptions += session.on(m) { p -> route(m, p.asJsonObject) }
+        val requested = System.nanoTime()
+        session.ensureMcppForAction().thenCompose { ready ->
+            if (ready) session.request("job/start", params)
+            else CompletableFuture.failedFuture<JsonElement>(IllegalStateException("mcpp is not installed"))
+        }.whenComplete { r, e ->
+            if (e != null) { close(); finished.completeExceptionally(e.cause ?: e); return@whenComplete }
+            val id = r.asJsonObject["jobId"].asString
+            LOG.info("mcpp ${params["kind"]?.asString} job $id accepted in ${(System.nanoTime() - requested) / 1_000_000} ms")
+            val replay: List<Pair<String, JsonObject>>
+            synchronized(early) { jobId = id; replay = early.filter { it.second["jobId"]?.asString == id }; early.clear() }
+            replay.forEach { (m, p) -> handle(m, p) }
+        }
+        return this
     }
-    return session.ensureMcppForAction().thenCompose { ready ->
-        if (ready) session.request(if (debugEngine == null) "run/launch" else "debug/configuration", params)
-        else CompletableFuture.failedFuture<JsonElement>(IllegalStateException("mcpp is not installed"))
-    }.thenApply {
-        if (debugEngine == null) it.asJsonObject else it.asJsonObject.getAsJsonObject("launch")
+
+    fun cancel() {
+        val id = jobId ?: run { close(); finished.cancel(false); return }
+        session.request("job/cancel", JsonObject().apply { addProperty("jobId", id) })
+    }
+
+    private fun route(method: String, p: JsonObject) {
+        synchronized(early) { if (jobId == null) { early += method to p; return } }
+        if (p["jobId"]?.asString == jobId) handle(method, p)
+    }
+
+    private fun handle(method: String, p: JsonObject) {
+        when (method) {
+            "job/output" -> onOutput(p["text"].asString)
+            "job/progress" -> {
+                val done = p["finished"]?.takeIf { !it.isJsonNull }?.asInt
+                val total = p["total"]?.takeIf { !it.isJsonNull }?.asInt
+                if (done != null && total != null) onProgress(done, total)
+            }
+            "job/finished" -> { close(); finished.complete(p) }
+        }
+    }
+
+    private fun close() {
+        subscriptions.forEach { it() }
+        subscriptions.clear()
+    }
+
+    companion object {
+        private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(FollowedJob::class.java)
     }
 }
+
+/** The launch of a finished launch job, or why there is none: the status and mcpp's diagnostics. */
+internal fun launchOf(finished: JsonObject, session: McppSession): JsonObject {
+    val launch = finished["launch"]?.takeIf { it.isJsonObject }?.asJsonObject
+    if (finished["status"]?.asString == "ok" && launch != null) return launch
+    val messages = finished.getAsJsonArray("diagnostics")?.mapNotNull { it.asJsonObject["message"]?.asString }.orEmpty()
+    throw IllegalStateException(messages.firstOrNull() ?: session.t("the program could not be built"))
+}
+
+/** The debugger's configuration of the program a launch job built (debug/configuration; mcpp takes its fast path). */
+internal fun debugLaunch(c: McppRunConfiguration, engine: String): CompletableFuture<JsonObject> =
+    McppSession.get(c.project).request("debug/configuration", launchParams(c, engine)).thenApply { it.asJsonObject.getAsJsonObject("launch") }
 
 internal fun commandLine(l: JsonObject, pty: Boolean): GeneralCommandLine {
     val argv = l.getAsJsonArray("argv").map { it.asString }
@@ -232,26 +340,30 @@ internal fun commandLine(l: JsonObject, pty: Boolean): GeneralCommandLine {
 }
 
 /**
- * The program: built and described by the backend, then started in a PTY so it reads input and
- * colours its output as in a terminal. The build happens before the program's own process exists,
- * so this handler stands for both.
+ * The program: built by a launch job, whose narration is this console's output as it is written,
+ * then started in a PTY so it reads input and colours its output as in a terminal. The build happens
+ * before the program's own process exists, so this handler stands for both.
  */
-class LaunchingProcessHandler(private val c: McppRunConfiguration) : ProcessHandler() {
+class LaunchingProcessHandler(private val c: McppRunConfiguration) : ProcessHandler(), AnsiEscapeDecoder.ColoredTextAcceptor {
     @Volatile private var inner: ProcessHandler? = null
     @Volatile private var cancelled = false
+    @Volatile private var job: FollowedJob? = null
+    private val decoder = AnsiEscapeDecoder()
+
+    override fun coloredTextAvailable(text: String, attributes: Key<*>) = notifyTextAvailable(text, attributes)
 
     override fun startNotify() {
         super.startNotify()
         val session = McppSession.get(c.project)
-        notifyTextAvailable("${session.t("mcpp: building…")}\n", ProcessOutputTypes.SYSTEM)
-        launch(c).whenComplete { l, e ->
-            if (e != null) {
-                val cause = e.cause ?: e
-                val narration = (cause as? io.github.mcppcommunity.mcppclion.backend.BackendError)?.data?.takeIf { it.isJsonObject }
-                    ?.asJsonObject?.get("narration")?.asString
-                if (narration != null) notifyTextAvailable(narration, ProcessOutputTypes.STDERR)
-                notifyTextAvailable("${cause.message}\n", ProcessOutputTypes.STDERR)
-                notifyProcessTerminated(1)
+        val started = System.nanoTime()
+        val params = launchParams(c).apply { addProperty("kind", "launch"); addProperty("color", true) }
+        val followed = FollowedJob(session, params, { text -> decoder.escapeText(text.replace("\r\n", "\n"), ProcessOutputTypes.SYSTEM, this) })
+        job = followed
+        followed.start().finished.whenComplete { finished, e ->
+            val built = System.nanoTime()
+            val l = runCatching { if (e != null) throw (e.cause ?: e) else launchOf(finished, session) }.getOrElse {
+                notifyTextAvailable("${it.message}\n", ProcessOutputTypes.STDERR)
+                notifyProcessTerminated(finished?.get("exitCode")?.takeIf { x -> !x.isJsonNull }?.asInt?.takeIf { x -> x != 0 } ?: 1)
                 return@whenComplete
             }
             if (cancelled) { notifyProcessTerminated(130); return@whenComplete }
@@ -266,12 +378,13 @@ class LaunchingProcessHandler(private val c: McppRunConfiguration) : ProcessHand
             })
             inner = handler
             handler.startNotify()
+            LOG.info("mcpp run: built in ${(built - started) / 1_000_000} ms, program started ${(System.nanoTime() - built) / 1_000_000} ms later")
         }
     }
 
     override fun destroyProcessImpl() {
         cancelled = true
-        inner?.destroyProcess() ?: notifyProcessTerminated(130)
+        inner?.destroyProcess() ?: run { job?.cancel(); notifyProcessTerminated(130) }
     }
 
     override fun detachProcessImpl() {
@@ -281,6 +394,10 @@ class LaunchingProcessHandler(private val c: McppRunConfiguration) : ProcessHand
 
     override fun detachIsDefault(): Boolean = false
     override fun getProcessInput(): OutputStream? = inner?.processInput
+
+    companion object {
+        private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(LaunchingProcessHandler::class.java)
+    }
 }
 
 class McppProgramState(private val c: McppRunConfiguration, env: ExecutionEnvironment) : CommandLineState(env) {

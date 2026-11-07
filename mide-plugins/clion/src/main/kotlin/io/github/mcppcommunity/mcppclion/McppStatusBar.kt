@@ -33,6 +33,7 @@ class McppStatusBarWidget(private val project: Project) : StatusBarWidget, Statu
     @Volatile private var version: String = ""
     @Volatile private var program: String = ""
     @Volatile private var running: String = ""
+    @Volatile private var kind: String = ""
     private val subscriptions = mutableListOf<() -> Unit>()
 
     override fun ID(): String = McppStatusBarFactory.ID
@@ -41,7 +42,14 @@ class McppStatusBarWidget(private val project: Project) : StatusBarWidget, Statu
     override fun install(statusBar: StatusBar) {
         bar = statusBar
         val session = McppSession.get(project)
-        subscriptions += session.on("job/started") { p -> running = p.asJsonObject["kind"]?.asString ?: "job"; update() }
+        subscriptions += session.on("job/started") { p -> kind = p.asJsonObject["kind"]?.asString ?: "job"; running = kind; update() }
+        // The build's progress, as mcpp counts its steps (`job/progress`), beside the job that builds.
+        subscriptions += session.on("job/progress") { p ->
+            val o = p.asJsonObject
+            val done = o["finished"]?.takeIf { !it.isJsonNull }?.asInt
+            val total = o["total"]?.takeIf { !it.isJsonNull }?.asInt
+            if (done != null && total != null && running.isNotEmpty()) { running = "$kind $done/$total"; update() }
+        }
         subscriptions += session.on("job/finished") { running = ""; update() }
         subscriptions += session.on("project/mcppChanged") { ask() }
         ask()

@@ -1,0 +1,29 @@
+# The components of this repository, by path (README "Versions"; .github/scripts/changes.sh). One
+# `<component>\t<pattern>` line each; a pattern is a shell `case` glob over the path from the
+# repository's root, in which `*` crosses `/`. The first line that matches a path names its component;
+# a path no line matches, and the component `all`, run every job.
+#
+# `@core <component>`: the component whose change reaches every other (each plugin is tested over it).
+@core	backend
+# backend: the program every editor package carries, its protocol, the editors' declarations spec/
+# generates, the graph page, and their tests.
+backend	src/*
+backend	protocol/*
+backend	spec/*
+backend	webui/*
+backend	testsupport/*
+backend	tests/*
+backend	mcpp.toml
+backend	mcpp.lock
+backend	build.mcpp
+# The editor plugins, each tested over the backend of the change it is made against.
+vscode	mide-plugins/vscode/*
+clion	mide-plugins/clion/*
+nvim	mide-plugins/nvim/*
+# What only people read.
+docs	docs/*
+docs	agents/*
+docs	*.md
+docs	LICENSE
+# The workflows, the scripts and the pins every job runs with.
+all	.github/*

@@ -69,10 +69,20 @@ the editor I use (VS Code, CLion or Neovim) from its latest release, and check i
 | Agents, other clients | `mcpp-ide-<version>-openkal-bundle-all.tar.gz` (both images; okrun for Linux x64/arm64, macOS arm64, Windows x64), `mcpp-ide-<version>.okb` with okrun, or `xlings install mcpp-ide` | run `bin/mcpp-ide serve` (`bin\mcpp-ide.exe` on Windows), or `okrun mcpp-ide-<version>.okb serve` |
 
 Each editor package serves every system: it carries the backend as one ok-image bundle
-(`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.24.0) and okrun for
+(`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.24) and okrun for
 Linux x64/arm64, macOS arm64 and Windows x64. The Neovim plugin carries none: it starts the
 `mcpp-ide` command xlings installs (okrun on the same bundle).
 VS Code and CLion check for the local build tool only when a user starts an action that needs it.
+
+**Versions.** A version is `X.Y.Z`. `X.Y`, the series, is shared by the backend and every plugin: a
+plugin works with any backend of its series and refuses another, naming both versions and the
+install that matches. `Z` is each component's own patch, so VS Code 1.2.3 and CLion 1.2.1 both work
+with backend 1.2.0. A series release is tagged `vX.Y.0`; a component's patch is tagged
+`backend-`, `vscode-`, `clion-` or `nvim-vX.Y.Z` and publishes that component alone. A pull request runs the jobs of
+the components it changes ([`.github/components.tsv`](.github/components.tsv)): a change of the backend runs
+everything, a change of one plugin runs that plugin's jobs over the backend main built from the same inputs,
+a change of the documentation its checks; `.github/` and any path the table does not name run everything.
+The one required check is `ci`.
 If `mcpp` is absent, they show one notification linking to the
 [mcpp repository](https://github.com/mcpp-community/mcpp).
 
@@ -107,9 +117,10 @@ The backend is C++23 with modules, built by mcpp; the repository's tools are a p
 files are not committed. A change to what mcpp reports starts with `mcpp-ide-dev capture` and the
 diff in `protocol/fixtures`.
 
-A release runs the repository CI, publishes the checked archives and
-`SHA256SUMS` on GitHub, then independently submits the same VSIX to Open VSX
-and the same CLion ZIP to JetBrains Marketplace. The JetBrains job checks the
+A release runs the repository CI, publishes the checked archives of what its
+tag names (`.github/scripts/release-plan.sh`) and `SHA256SUMS` on GitHub, then
+independently submits the same VSIX to Open VSX and the same CLion ZIP to
+JetBrains Marketplace when the release carries them. The JetBrains job checks the
 archive digest, plugin XML ID and version before upload and retains a receipt;
 Marketplace availability follows JetBrains review. `OPENVSX_TOKEN` and
 `JETBRAINS_TOKEN` are repository secrets. The Visual Studio Marketplace upload

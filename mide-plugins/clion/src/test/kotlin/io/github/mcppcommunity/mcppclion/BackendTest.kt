@@ -66,6 +66,14 @@ class BackendTest {
         Locate.runnablePayload(payload)
         assertTrue("outside the payload", !outside.canExecute())
         outside.delete()
+        // Version 5 (mcppls 0.0.20 on): every platform's runner, whichever this system's entry is.
+        val linux = File(payload, "libexec/okrun/linux-x86_64/okrun").apply { parentFile.mkdirs(); writeText(""); setExecutable(false) }
+        val mac = File(payload, "libexec/okrun/macos-aarch64/okrun").apply { parentFile.mkdirs(); writeText(""); setExecutable(false) }
+        File(payload, "payload.json").writeText("""{"payload-version": 5, "server": {"path": "bin/mcppls.okb"}, "platforms": {
+            "linux-x64": {"runner": "libexec/okrun/linux-x86_64/okrun"}, "darwin-arm64": {"runner": "libexec/okrun/macos-aarch64/okrun"}}}""")
+        Locate.runnablePayload(payload)
+        assertTrue("linux's runner", linux.canExecute())
+        assertTrue("macOS's runner", mac.canExecute())
         payload.deleteRecursively()
     }
 

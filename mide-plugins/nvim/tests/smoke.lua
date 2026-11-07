@@ -66,7 +66,7 @@ if not mock then
 end
 write('mcpp.toml', manifest)
 write('src/main.cpp', 'int main() { return 0; }\n')
-write('tests/test_smoke.cpp', 'int main() { return 0; }\n')
+write('tests/test_smoke.cpp', '#include <cstdio>\nint main() { std::puts("test_smoke: ok"); return 0; }\n')
 -- The mock's builds take a moment, so one can be cancelled while it runs.
 if mock then
   vim.env.MOCK_MCPP_SLOW_MS = '1200'
@@ -103,6 +103,17 @@ local function first(items) return items[1] end
 vim.opt.runtimepath:prepend(plugin)
 local mcppide = require('mcpp')
 local session = require('mcpp.session')
+
+-- ── the series (mcpp design 2026-11-07, D15) ───────────────────────────────────────────────────
+check('one series works together, whatever the patches',
+  session.incompatibility({ protocol = 2, series = '1.2', serverInfo = { version = '1.2.4' } }, '1.2.0') == nil
+    and session.incompatibility({ protocol = 2, serverInfo = { version = '1.2.1' } }, '1.2.3') == nil)
+local older = session.incompatibility({ protocol = 2, serverInfo = { version = '0.2.1' } }, '1.2.0')
+check('another series is refused, naming both versions and what installs this one',
+  older ~= nil and older:find('0.2.1', 1, true) ~= nil and older:find('series 0.2', 1, true) ~= nil
+    and older:find('mcpp-ide@1.2.0', 1, true) ~= nil, older)
+check('another protocol is refused', session.incompatibility({ protocol = 1, series = '1.2' }, '1.2.0') ~= nil)
+check('the plugin is of the backend series this repository builds', session.series_of(session.version) == '1.2')
 local diagnostics = require('mcpp.diagnostics')
 local views = require('mcpp.views')
 
@@ -175,14 +186,54 @@ end
 
 local before = session.state.last
 vim.cmd('Mcpp build')
-check('a build runs (the statusline says so)', vim.wait(10000, function() return mcppide.status():find('1 job', 1, true) ~= nil end, 20),
-  mcppide.status())
+check('a build runs (the statusline says so)', vim.wait(10000, function()
+  local said = mcppide.status()
+  return said:find('1 job', 1, true) ~= nil or said:find('build %d+/%d+') ~= nil
+end, 20), mcppide.status())
 local done = finished('build', before)
 check('the build finishes ok', done and done.status == 'ok', done and done.status)
 check('its narration is streamed into mcpp://output', output():find('$ ', 1, true) and output():find('build', 1, true)
   and output():find('Compiling', 1, true) ~= nil, output():sub(1, 200))
 check('its end is said there', output():find('mcpp build: ok', 1, true) ~= nil)
 check('the statusline shows the last build', mcppide.status():find('build ok', 1, true) ~= nil, mcppide.status())
+
+-- ── a test run (D16) ─────────────────────────────────────────────────────────────────────────
+before = session.state.last
+vim.cmd('Mcpp test')
+done = finished('test', before)
+check('a test run finishes ok', done and done.status == 'ok', done and done.status)
+local tests_buf = vim.fn.bufnr('mcpp://tests')
+local said = tests_buf ~= -1 and table.concat(vim.api.nvim_buf_get_lines(tests_buf, 0, -1, false), '\n') or ''
+check('mcpp://tests has a section for the test, with its status and its output, though it passed',
+  said:find('test_smoke', 1, true) ~= nil and said:find('passed', 1, true) ~= nil and said:find('test_smoke: ok', 1, true) ~= nil,
+  said:sub(1, 300))
+check('a run without failures leaves the quickfix list empty', #vim.fn.getqflist() == 0, #vim.fn.getqflist())
+local tests_mod = require('mcpp.tests')
+check('the sign of a test that passed is ✓', tests_mod.sign_of(root, 'test_smoke') == '✓', tests_mod.sign_of(root, 'test_smoke'))
+-- A failure lands in the quickfix list at the place its output names.
+tests_mod.begin(root)
+tests_mod.add('test/result', { root = root, test = 't', status = 'failed', durationMs = 1, output = 'tests/t.cpp:3: failed\n',
+                               location = { path = 'tests/t.cpp', line = 2 } })
+tests_mod.finish()
+local qf_items = vim.fn.getqflist()
+check('a failure is put in the quickfix list at its place', #qf_items == 1 and qf_items[1].lnum == 3
+  and vim.api.nvim_buf_get_name(qf_items[1].bufnr):find('tests/t.cpp', 1, true) ~= nil, vim.inspect(qf_items[1]))
+check('and its sign is ✗', tests_mod.sign_of(root, 't') == '✗')
+
+-- ── a run (D19): a launch job builds as mcpp run does, its narration in mcpp://output ────────────
+before = session.state.last
+vim.cmd('Mcpp run')
+done = finished('launch', before)
+check('a run is a launch job that ends with the launch', done and done.status == 'ok' and type(done.launch) == 'table'
+  and type(done.launch.argv) == 'table' and #done.launch.argv > 0, vim.inspect(done and done.launch))
+check("the launch job's narration is in mcpp://output", output():find('Finished', 1, true) ~= nil, output():sub(-300))
+-- The program's terminal is closed with its buffer, so the run below opens one of its own.
+for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+  if vim.bo[buf].buftype == 'terminal' and vim.b[buf].mcpp_program then
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+  end
+end
+pcall(vim.cmd, 'silent! only')
 
 -- ── diagnostics ───────────────────────────────────────────────────────────────────────────────
 write('src/main.cpp', 'int main() { return undeclared_name; }\n')

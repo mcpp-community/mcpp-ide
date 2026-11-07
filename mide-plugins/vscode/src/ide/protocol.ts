@@ -168,6 +168,8 @@ export interface JobFinished {
   envelope?: { kind?: string; data?: unknown };
   diagnostics?: Diagnostic[];
   artifacts?: { kind: string; name: string; path: string }[];
+  /** A launch job's program, described (mcpp's `mcpp.launch` data). */
+  launch?: { argv: string[]; cwd: string; env?: Record<string, string>; program?: string };
 }
 
 /** `source/entries` (design 2026-10-30 part 2 §6.3): what a C++ file is to its project. */
@@ -192,6 +194,12 @@ export interface TestCases {
 }
 
 /** `test/caseResult`: one case's outcome, read from the framework's report. */
+/** Where a failure is: the first `file:line` its output names, the line 0-based. */
+export interface FailureLocation {
+  path: string;
+  line: number;
+}
+
 export interface CaseResult {
   jobId: string;
   root: string;
@@ -200,15 +208,26 @@ export interface CaseResult {
   status: "passed" | "failed" | "skipped";
   durationMs: number;
   message: string;
+  /** The case's own output (GoogleTest's console between `[ RUN ]` and its result); empty without boundaries. */
+  output?: string;
+  outputTruncated?: boolean;
+  location?: FailureLocation | null;
 }
 
+/** One program's result, mcpp's status value for value (design 2026-11-07, D16). */
 export interface TestResult {
   jobId: string;
   root: string;
   member: string;
   test: string;
   status: "passed" | "failed" | "timedOut" | "skipped" | "errored";
+  timedOut?: boolean;
+  compileFailed?: boolean;
+  builtOnly?: boolean;
   durationMs: number;
+  /** The program's whole output, compile then run, passed or not. */
   output: string;
+  outputTruncated?: boolean;
+  location?: FailureLocation | null;
   reason: string;
 }

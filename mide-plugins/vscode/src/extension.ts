@@ -346,7 +346,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
   extensionContext.subscriptions.push(
     session,
     jobs,
-    new Debugging(session, ideProjects, ensureMcppForAction),
+    new Debugging(session, ideProjects, ensureMcppForAction, jobs),
     testing,
     new McppCodeLens(session, testing, (root) => projectMcpp.get(root)),
     jobs.onDidChangeRunning.event((n) => void vscode.commands.executeCommand("setContext", "mcpp.jobRunning", n > 0)),

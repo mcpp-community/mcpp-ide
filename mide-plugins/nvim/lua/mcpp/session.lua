@@ -13,7 +13,7 @@ local uv = vim.uv or vim.loop
 local is_windows = vim.fn.has('win32') == 1
 
 -- mcpp-nvim's version: mcpp-ide's, whose release carries it.
-M.version = '0.2.1'
+M.version = '1.2.0'
 
 -- Neovim's version, as its release names it.
 function M.nvim_version()
@@ -39,6 +39,8 @@ local state = {
   claimed = {},
   unclaimed = {},
   running = {},
+  -- The build's progress of each running job (`job/progress`): { finished, total }.
+  progress = {},
   last = nil,
   plans = {},
   stopping = false,
@@ -208,6 +210,8 @@ local function deliver(owner, method, params)
     on.output(params.text or '')
   elseif method == 'job/started' and on.started then
     on.started(params)
+  elseif (method == 'test/result' or method == 'test/caseResult') and on.test then
+    on.test(method, params)
   elseif method == 'job/finished' then
     state.claimed[params.jobId] = nil
     owner.handle.done = params
@@ -225,8 +229,14 @@ local function route(method, params)
   if method == 'job/started' then
     state.running[id] = params
     changed()
+  elseif method == 'job/progress' then
+    if params.finished and params.total then
+      state.progress[id] = { params.finished, params.total }
+      changed()
+    end
   elseif method == 'job/finished' then
     state.running[id] = nil
+    state.progress[id] = nil
     state.last = params
     changed()
   elseif method == 'job/plan' then
@@ -251,11 +261,12 @@ end
 local JOB_EVENTS = {
   ['job/started'] = true, ['job/output'] = true, ['job/plan'] = true, ['job/progress'] = true,
   ['job/diagnostic'] = true, ['job/artifact'] = true, ['job/record'] = true, ['job/finished'] = true,
-  ['test/result'] = true, ['test/summary'] = true,
+  ['test/result'] = true, ['test/summary'] = true, ['test/caseResult'] = true,
 }
 
 -- Inside a flow: asks for a job (`job/start`, or another method that answers a job id) and follows
--- it. `events`: output(text), started(params); the handle's wait() answers its end. Returns the
+-- it. `events`: output(text), started(params), test(method, result) for each `test/result` and
+-- `test/caseResult`; the handle's wait() answers its end. Returns the
 -- handle, or nil and the error.
 function M.job(method, params, events)
   local result, err = M.call(method, params)
@@ -428,10 +439,37 @@ function M.attach(buf)
   vim.lsp.buf_attach_client(buf, client.id)
 end
 
+-- `X.Y` of a version `X.Y` or `X.Y.Z`: the series, shared by the backend and every editor plugin
+-- (mcpp design 2026-11-07, D15); nil for anything else.
+function M.series_of(version)
+  if type(version) ~= 'string' then
+    return nil
+  end
+  local x, y = version:match('^%s*(%d+)%.(%d+)')
+  return x and (x .. '.' .. y) or nil
+end
+
+-- Why the backend that answered `info` does not work with this plugin, or nil: protocol 2, and this
+-- plugin's series (a backend before 1.2 states none; its version's `X.Y` is taken).
+function M.incompatibility(info, own)
+  if info.protocol ~= 2 then
+    return 'the mcpp-ide backend does not speak protocol 2; update it, or point mcpp.ide.backendPath at one that does'
+  end
+  local backend = type(info.serverInfo) == 'table' and info.serverInfo.version or 'unknown'
+  local series = type(info.series) == 'string' and info.series or M.series_of(backend) or 'unknown'
+  local mine = M.series_of(own) or 'unknown'
+  if series == mine and mine ~= 'unknown' then
+    return nil
+  end
+  return string.format('the mcpp-ide backend %s is of series %s, and mcpp-nvim %s of series %s; install the mcpp-ide '
+    .. 'backend %s (`xlings install mcpp-ide@%s.0`)', backend, series, own, mine, mine, mine)
+end
+
 -- Runs once the client is initialized: `info` is the backend's initialize answer.
 local function initialize(info)
-  if not info then
-    vim.notify('mcpp-ide: initialize failed', vim.log.levels.ERROR)
+  local refused = info and M.incompatibility(info, M.version)
+  if not info or refused then
+    vim.notify(refused and ('mcpp: ' .. refused) or 'mcpp-ide: initialize failed', vim.log.levels.ERROR)
     local client = state.client
     state.client = nil
     if client then

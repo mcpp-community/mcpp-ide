@@ -18,6 +18,11 @@
 //       Every runtime string the backend, the panels and the plugins pass to t(...) has a Chinese
 //       entry in spec/i18n/runtime.zh-cn.json; every editor string a Chinese one in
 //       manifest.zh-cn.json.
+//   mcpp-ide-dev check-sources
+//       No C++ source of the backend, its tests or its test support includes a header or branches on
+//       the platform in the preprocessor, and none asks `os::is_<platform>`: the system is
+//       mcpplibs.os's, and every platform branch of a program shipped as an ok image is a run-time
+//       one (`os::can_run_on` and `os::host()`; design 2026-11-08 S3, S4).
 //
 // The VS Code declarations are kept in the repository (mcpp-vscode packs its own directory, and its
 // gates read the manifest); CI checks they are spec/'s. The CLion declarations go where its build
@@ -511,24 +516,63 @@ int check_i18n(std::span<const std::string>) {
     return missing.empty() && missingEditor.empty() ? 0 : 1;
 }
 
+// ── check-sources ───────────────────────────────────────────────────────────
+
+int check_sources(std::span<const std::string>) {
+    const auto root = repo();
+    std::size_t files = 0;
+    std::vector<std::string> problems;
+    std::error_code ec;
+    for (const char* dir : {"src", "tests", "testsupport"})
+        for (fs::recursive_directory_iterator it(root / dir, ec), end; !ec && it != end; it.increment(ec)) {
+            if (!it->is_regular_file(ec)) continue;
+            const auto ext = it->path().extension().string();
+            if (ext != ".cpp" && ext != ".cppm" && ext != ".hpp" && ext != ".h") continue;
+            ++files;
+            const auto rel = it->path().lexically_relative(root).generic_string();
+            if (ext == ".hpp" || ext == ".h") { problems.push_back(std::format("{}: a header; a module states what it shares", rel)); continue; }
+            const auto text = slurp(it->path());
+            std::size_t line = 0;
+            for (std::size_t at = 0; at <= text.size();) {
+                const auto nl = std::min(text.find('\n', at), text.size());
+                const std::string_view row(text.data() + at, nl - at);
+                ++line;
+                const auto first = row.find_first_not_of(" \t");
+                const auto code = first == std::string_view::npos ? std::string_view{} : row.substr(first);
+                if (code.starts_with("#include")) problems.push_back(std::format("{}:{}: includes a header", rel, line));
+                else if (code.starts_with("#if") || code.starts_with("#elif")) problems.push_back(std::format("{}:{}: a preprocessor branch", rel, line));
+                // This program's own rule names what it looks for.
+                else if (it->path().filename() != "dev.cpp")
+                    for (std::string_view name : {"is_windows", "is_linux", "is_macos", "is_posix"})
+                        if (row.find(std::format("os::{}", name)) != std::string_view::npos)
+                            problems.push_back(std::format("{}:{}: asks os::{}, which an ok image answers false; ask os::host(), or os::on<P> for a platform module", rel, line, name));
+                at = nl + 1;
+            }
+        }
+    for (const auto& p : problems) std::println(std::cerr, "{}", p);
+    std::println("check-sources: {} files, {} problems", files, problems.size());
+    return problems.empty() ? 0 : 1;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
     try {
         if (args.empty() || args[0] == "--help") {
-            std::println("mcpp-ide-dev capture | gen vscode | gen jetbrains --out DIR | check-i18n");
+            std::println("mcpp-ide-dev capture | gen vscode | gen jetbrains --out DIR | check-i18n | check-sources");
             return args.empty() ? 2 : 0;
         }
         const std::span<const std::string> rest(args.begin() + 1, args.end());
         if (args[0] == "capture") return capture(rest);
         if (args[0] == "check-i18n") return check_i18n(rest);
+        if (args[0] == "check-sources") return check_sources(rest);
         if (args[0] == "gen" && !rest.empty()) {
             const std::span<const std::string> more(rest.begin() + 1, rest.end());
             if (rest[0] == "vscode") return gen_vscode(more);
             if (rest[0] == "jetbrains") return gen_jetbrains(more);
         }
-        std::println(std::cerr, "mcpp-ide-dev: unknown command (capture, gen vscode|jetbrains, check-i18n)");
+        std::println(std::cerr, "mcpp-ide-dev: unknown command (capture, gen vscode|jetbrains, check-i18n, check-sources)");
         return 2;
     } catch (const std::exception& e) {
         std::println(std::cerr, "mcpp-ide-dev: {}", e.what());
