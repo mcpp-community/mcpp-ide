@@ -91,6 +91,21 @@ object McppPanels {
     class Factory : ToolWindowFactory, DumbAware {
         override suspend fun isApplicableAsync(project: Project): Boolean = project.basePath?.let { File(it, "mcpp.toml").isFile } ?: false
 
+        /**
+         * The button on the left stripe, beside Project, as VS Code's activity bar carries mcpp
+         * (design 2026-11-07 §4.9). The new UI keeps a plugin's tool window under "More Tool Windows"
+         * until it is placed; it is placed once, here, as the window is registered -- before anything
+         * can show it -- and what the user does with the button afterwards is kept. Placing it from a
+         * startup activity raced an early `activate`: the window was shown and then hidden again.
+         */
+        override fun init(toolWindow: ToolWindow) {
+            val placed = "io.github.mcppcommunity.mcppclion.toolWindowPlaced"
+            val properties = com.intellij.ide.util.PropertiesComponent.getInstance()
+            if (properties.getBoolean(placed)) return
+            toolWindow.isShowStripeButton = true
+            properties.setValue(placed, true)
+        }
+
         override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
             val session = McppSession.get(project)
             fun add(view: McppView, component: javax.swing.JComponent, title: String): Content {
