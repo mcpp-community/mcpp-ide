@@ -125,7 +125,7 @@ jobs:
         env:
           NATIVE: ${{ inputs.native && 'yes' || 'no' }}
         run: |
-          rows='{"os":"ubuntu-24.04","platform":"linux-x64","llvm":"false","pack":true},{"os":"ubuntu-24.04","platform":"linux-x64","llvm":"false","host-platform":"openkal-platform@0.24.3"}'
+          rows='{"os":"ubuntu-24.04","platform":"linux-x64","llvm":"false","pack":true},{"os":"ubuntu-24.04","platform":"linux-x64","llvm":"false","host-platform":"openkal-platform@0.24.4"}'
           if [ "$NATIVE" = yes ]; then
             rows="$rows"',{"os":"ubuntu-24.04-arm","platform":"linux-arm64","llvm":"false"},{"os":"macos-15","platform":"darwin-arm64","llvm":"true"},{"os":"windows-2022","platform":"win32-x64","llvm":"true"}'
           fi
