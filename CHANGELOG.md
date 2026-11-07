@@ -34,8 +34,8 @@ mcpp-nvim are 1.2.0 (from 0.2.1, 1.1.1, 0.2.1 and 0.2.1).
   debugs it. Neovim's sign column shows ▶ on a program's and a test's `main` and on each case, and a
   result turns it into ✓ or ✗. CLion logs why a file has no run entry.
 - **The platform as one release.** The payloads' platform is `openkal-platform@0.24.3`, whose okrun
-  reserves a thread's stack for an image's main thread on Windows, and os is `^0.3.1`; mcpp
-  2026.11.7.1 or later builds them.
+  reserves a thread's stack for an image's main thread on Windows, and every dependency is one release
+  named by its identity (`mcpplibs.os = "0.3.1"`); mcpp 2026.11.7.1 or later builds them.
 - **A Run shows its build as the terminal does.** Run and Debug build through a launch job: mcpp's
   own narration (Compiling, Finished) appears as it is written, in place of a fixed "building" line,
   and the build's steps in the status bar (CLion, VS Code while it builds for the debugger, the
