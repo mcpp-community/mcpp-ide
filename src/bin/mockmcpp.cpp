@@ -189,7 +189,13 @@ int main(int argc, char** argv) {
         err("   Compiling app v0.1.0 (.)\n    Finished dev [unoptimized + debuginfo] in 0.01s\n");
         return 0;
     }
-    if (first(0) == "test") { out(fixture(has("--list") ? "test-list.ndjson" : "test.ndjson")); return 0; }
+    // A program that implements the test protocol: its listing (`--cases`) and a run of a selection
+    // (`--case`), each a record with the protocol's fields (mcpp docs/50 §8).
+    if (first(0) == "test") {
+        out(fixture(has("--list") ? "test-list.ndjson" : has("--cases") ? "test-cases.ndjson"
+                    : has("--case") ? "test-protocol.ndjson" : "test.ndjson"));
+        return 0;
+    }
     if (first(0) == "search") { out(fixture("search.json")); return 0; }
     if (first(0) == "index" && first(1) == "list") { out(fixture("index-list.json")); return 0; }
     if (first(0) == "pack" && has("--help")) { out(fixture("pack-help.txt")); return 0; }

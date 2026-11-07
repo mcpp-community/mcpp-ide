@@ -30,6 +30,10 @@ struct Framework {
     std::string listFormat;       // "gtest-list" | "catch2-json" | "lines"
     std::vector<std::string> filter, report;
     std::string join, escape, reportFormat;
+    // The version of the mtest test protocol the framework's programs implement (0: none). Their
+    // cases are their `"name"_test` literals in the source, listed by `mcpp test --cases`, run by
+    // `mcpp test --case` and reported in mcpp's records (mcpp's feature `test-protocol`).
+    int protocol = 0;
 };
 
 // spec/test-frameworks.json, in its order.
@@ -86,6 +90,22 @@ std::map<std::string, std::string> case_outputs(const Framework& f, std::string_
 
 // A report the framework wrote.
 std::vector<Outcome> read_report(const Framework& f, std::string_view text);
+
+// The cases of a test program that implements the test protocol, as a record of `mcpp test
+// --message-format json` states them (mcpp docs/50 §8): `listed` (from `--cases`), each with its
+// place (0-based line); and each case's outcome from `cases`, with its first failure's message and
+// place.
+struct ProtocolCase {
+    std::string id;
+    std::string file;
+    int line = -1;
+};
+std::vector<ProtocolCase> protocol_listing(const Json& record);
+struct ProtocolOutcome {
+    Outcome outcome;
+    Json location;   // {path, line} or null
+};
+std::vector<ProtocolOutcome> protocol_outcomes(const Json& record);
 
 }  // namespace mcppide::testing
 
@@ -269,6 +289,7 @@ const std::vector<Framework>& frameworks() {
             v.join = f.value("join", ",");
             v.escape = f.value("escape", "");
             v.reportFormat = f.value("reportFormat", "");
+            v.protocol = f.value("protocol", 0);
             out.push_back(std::move(v));
         }
         return out;
@@ -295,6 +316,7 @@ const Framework* framework_of(const std::vector<std::string>& packages, const sc
             return std::ranges::any_of(packages, [&](const std::string& in) { return in == p || in.starts_with(p + ":"); });
         });
         if (!linked) continue;
+        if (f.protocol && !found.cases.empty()) return &f;
         const auto names = macros_of(f, extra);
         if (std::ranges::any_of(found.calls, [&](const scan::Call& c) { return std::ranges::find(names, c.name) != names.end(); }))
             return &f;
@@ -304,6 +326,10 @@ const Framework* framework_of(const std::vector<std::string>& packages, const sc
 
 std::vector<Case> static_cases(const Framework& f, const scan::Result& found, const Json& extra) {
     std::vector<Case> out;
+    if (f.protocol) {
+        for (const auto& c : found.cases) out.push_back(Case{c.id, c.line, "static"});
+        return out;
+    }
     const auto names = macros_of(f, extra);
     for (const auto& call : found.calls) {
         if (std::ranges::find(names, call.name) == names.end()) continue;
@@ -470,6 +496,42 @@ std::map<std::string, std::string> case_outputs(const Framework& f, std::string_
     }
     // A case the program ended in (a crash): what it printed until then.
     if (!current.empty()) out[current] = std::move(text);
+    return out;
+}
+
+std::vector<ProtocolCase> protocol_listing(const Json& record) {
+    std::vector<ProtocolCase> out;
+    for (const auto& c : record.value("listed", Json::array())) {
+        if (!c.is_object()) continue;
+        const int line = c.value("line", 0);
+        out.push_back({c.value("id", ""), c.value("file", ""), line > 0 ? line - 1 : -1});
+    }
+    return out;
+}
+
+std::vector<ProtocolOutcome> protocol_outcomes(const Json& record) {
+    std::vector<ProtocolOutcome> out;
+    for (const auto& c : record.value("cases", Json::array())) {
+        if (!c.is_object()) continue;
+        ProtocolOutcome o;
+        o.outcome.name = c.value("id", "");
+        const auto status = c.value("status", "");
+        o.outcome.status = status == "pass" || status == "xfail" ? "passed" : status == "skip" ? "skipped" : "failed";
+        o.outcome.durationMs = static_cast<std::int64_t>(c.value("duration_ms", 0.0));
+        o.location = nullptr;
+        const auto failures = c.value("failures", Json::array());
+        if (!failures.empty() && failures[0].is_object()) {
+            const auto& f = failures[0];
+            o.outcome.message = std::format("{}:{}: {}", f.value("file", ""), f.value("line", 0), f.value("message", ""));
+            if (f.contains("expected"))
+                o.outcome.message += std::format(" (expected {}, actual {})", f.value("expected", ""), f.value("actual", ""));
+            const int line = f.value("line", 0);
+            o.location = Json{{"path", f.value("file", "")}, {"line", line > 0 ? line - 1 : 0}};
+        } else {
+            o.outcome.message = c.value("reason", "");
+        }
+        out.push_back(std::move(o));
+    }
     return out;
 }
 

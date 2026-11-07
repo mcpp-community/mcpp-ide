@@ -23,6 +23,12 @@ mcpp-nvim are 1.2.0 (from 0.2.1, 1.1.1, 0.2.1 and 0.2.1).
   `run_fail` is failed, or timed out when mcpp says so; `compile_fail` is failed and says it did not
   compile; `not_run` is skipped with mcpp's reason; `built` is skipped as built only. 0.2.1 mapped
   values mcpp never writes, so every failure was "errored" and a timeout was never seen.
+- **Cases by the test protocol.** A test program that implements the mtest test protocol (mcpp
+  2026.11.8.1, feature `test-protocol`) is listed by `mcpp test --cases` and its cases run by
+  `mcpp test --case`, whatever framework wrote it; each case's result, duration and first failure's
+  place come from mcpp's record. A file of mtest's cases shows its `"name"_test` literals, named
+  with their suites (`parsing/an empty line`), before anything is built. GoogleTest, Catch2 and
+  doctest without the protocol are listed and run as before (`spec/test-frameworks.json`).
 - **Every test's own output.** Each test and each case carries its whole output, passed or not
   (head and tail past 1 MiB), and a failure carries the place its output names. A case run divides
   the program's output among its cases by GoogleTest's boundaries. VS Code says the output to the

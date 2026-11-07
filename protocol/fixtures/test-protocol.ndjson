@@ -1,0 +1,2 @@
+{"member":"","test":"unit/parse","status":"run_fail","exit_code":1,"signal":null,"duration_ms":4,"timed_out":false,"compile_output":"","run_output":"","reason":"","build_ms":0,"protocol":1,"cases":[{"id":"parsing/an empty line","status":"pass","duration_ms":1},{"id":"parsing/a field","status":"fail","duration_ms":2,"failures":[{"file":"tests/unit/parse.cpp","line":7,"message":"1 == 2","expected":"2","actual":"1"}]}]}
+{"summary":{"member":"","passed":0,"failed":1,"not_run":0,"not_run_reason":"","built":0,"elapsed_ms":9,"build_ms":0,"run_ms":4}}

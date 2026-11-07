@@ -149,6 +149,49 @@ TEST(Math,
         check(testing::case_outputs(fw("catch2"), "[ RUN      ] x\n").empty());
     }
 
+    // mtest's cases: `"name"_test` literals, prefixed by the suites they are declared in; never a
+    // literal in a comment or one not followed by `_test`. The framework is claimed by its package
+    // and its cases, and a record of `mcpp test` lists and reports them (the test protocol).
+    {
+        const auto r = scan::scan(R"(import mcpplibs.mtest;
+using namespace mcpplibs::mtest;
+// "commented"_test
+suite parsing{"parsing", [] {
+    "an empty line"_test = [] { expect(true); };
+    suite fields{"fields", [] {
+        "one field"_test[tag{"x"}] = [] {};
+    }};
+    const char* s = "not a case";
+}};
+mcpplibs::mtest::suite other{"other", [] { "after"_test = [] {}; }};
+int main() { "top"_test = [] {}; return report(); }
+)", {});
+        check(r.cases.size() == 4);
+        check(r.cases.size() == 4 && r.cases[0].id == "parsing/an empty line" && r.cases[0].line == 4);
+        check(r.cases.size() == 4 && r.cases[1].id == "parsing/fields/one field");
+        check(r.cases.size() == 4 && r.cases[2].id == "other/after" && r.cases[3].id == "top");
+        check(testing::framework_of({"app", "mcpplibs.mtest"}, r, Json::object()) == &fw("mtest"));
+        check(testing::framework_of({"app"}, r, Json::object()) == nullptr);
+        const auto cases = testing::static_cases(fw("mtest"), r, Json::object());
+        check(cases.size() == 4 && cases[0].name == "parsing/an empty line" && cases[0].line == 4);
+
+        const auto record = Json::parse(R"({"test":"parse","protocol":1,
+            "listed":[{"id":"parsing/an empty line","file":"tests/parse.cpp","line":5}],
+            "cases":[{"id":"a","status":"pass","duration_ms":1.5},
+                     {"id":"b","status":"fail","duration_ms":2,"failures":[{"file":"tests/parse.cpp","line":9,"message":"1 == 2","expected":"2","actual":"1"}]},
+                     {"id":"c","status":"skip","duration_ms":0,"reason":"later"},
+                     {"id":"d","status":"xfail","duration_ms":0}]})");
+        const auto listed = testing::protocol_listing(record);
+        check(listed.size() == 1 && listed[0].id == "parsing/an empty line" && listed[0].line == 4);
+        const auto outcomes = testing::protocol_outcomes(record);
+        check(outcomes.size() == 4);
+        check(outcomes.size() == 4 && outcomes[0].outcome.status == "passed" && outcomes[0].outcome.durationMs == 1);
+        check(outcomes.size() == 4 && outcomes[1].outcome.status == "failed" && outcomes[1].location["line"] == 8
+              && outcomes[1].outcome.message.contains("expected 2, actual 1"));
+        check(outcomes.size() == 4 && outcomes[2].outcome.status == "skipped" && outcomes[2].outcome.message == "later");
+        check(outcomes.size() == 4 && outcomes[3].outcome.status == "passed");
+    }
+
     // source/entries and test/cases over a project on disk (no mcpp: the plan's packages are not
     // known, so no framework is claimed, and the static entries still answer).
     {

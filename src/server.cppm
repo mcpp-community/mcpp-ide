@@ -189,6 +189,9 @@ private:
     // The whole output of the last test record of each running test job, for a case run to divide
     // among its cases when the job ends (test/runCases).
     std::map<std::string, std::string, std::less<>> programOutput_;
+    // The last test record of each running test job, whole: a program that implements the test
+    // protocol reports its cases in it (test/runCases).
+    std::map<std::string, Json, std::less<>> testRecord_;
     // The configuration (and platforms) the last plan of each project named.
     std::map<std::filesystem::path, Json> plans_;
     // What `mcpp pack` accepts, read from its help once per mcpp (SPEC-014: `--pkg-format` names the
@@ -264,6 +267,7 @@ Session::Session(rpc::Server& server) : rpc_(server) {
                     jobOf_.erase(it);
                 }
                 if (auto it = programOutput_.find(id); it != programOutput_.end()) programOutput_.erase(it);
+                if (auto it = testRecord_.find(id); it != testRecord_.end()) testRecord_.erase(it);
             }
             rpc_.notify("mcpp-ide/job/finished", s);
             // Every envelope names the mcpp that wrote it: another version than the one probed (a
@@ -424,6 +428,7 @@ void Session::on_record(std::string_view jobId, const Json& record) {
         {
             std::lock_guard lock(mutex_);
             programOutput_[std::string(jobId)] = record.value("compile_output", "") + record.value("run_output", "");
+            testRecord_[std::string(jobId)] = record;
         }
         rpc_.notify("mcpp-ide/test/result", n);
     } else if (type == "summary") {
@@ -1523,10 +1528,55 @@ std::expected<Json, rpc::Error> Session::test_cases(const Json& p) {
         trusted = trusted_;
     }
     const auto* f = testing::framework_of(plan_packages(root, trusted), found, extra);
+    std::vector<testing::Case> cases;
+    if (f) {
+        out["framework"] = f->id;
+        cases = testing::static_cases(*f, found, extra);
+    }
+    // A PROGRAM THAT IMPLEMENTS THE TEST PROTOCOL LISTS ITS OWN CASES (mcpp's `test-protocol`):
+    // `mcpp test <test> --cases`, whatever framework wrote it; its cases then run by `--case`.
+    if (p.value("list", false) && trusted && has_feature(root, "test-protocol")) {
+        mcpp::Client client;
+        {
+            std::lock_guard lock(mutex_);
+            client = client_;
+        }
+        if (client.ready()) {
+            mcpp::RunOptions o;
+            o.cwd = root;
+            o.args = {"test", "--message-format", "json"};
+            for (const auto& a : target_args(p)) o.args.push_back(a);
+            o.args.push_back(test);
+            o.args.push_back("--cases");
+            o.deny = deny();
+            o.client = client_label();
+            if (auto r = client.records(o))
+                for (const auto& rec : r->records) {
+                    if (!rec.is_object() || rec.value("test", "") != test || !rec.contains("listed")) continue;
+                    const auto* protocol = testing::framework("mtest");
+                    if (!protocol || !rec["protocol"].is_number()) continue;
+                    std::vector<testing::Case> listed;
+                    for (const auto& c : testing::protocol_listing(rec)) {
+                        auto known = std::ranges::find_if(cases, [&](const testing::Case& s) { return s.name == c.id; });
+                        listed.push_back(testing::Case{c.id, known != cases.end() && known->line >= 0 ? known->line : c.line, "listed"});
+                    }
+                    cases = std::move(listed);
+                    out["framework"] = protocol->id;
+                    out["listed"] = true;
+                    f = protocol;
+                }
+        }
+    }
     if (!f) return out;
-    out["framework"] = f->id;
-    auto cases = testing::static_cases(*f, found, extra);
-    if (p.value("list", false) && trusted) {
+    if (out.value("listed", false)) {
+        for (const auto& c : cases) {
+            Json row{{"name", c.name}, {"source", c.source}};
+            if (c.line >= 0) row["line"] = c.line;
+            out["cases"].push_back(row);
+        }
+        return out;
+    }
+    if (p.value("list", false) && trusted && !f->protocol) {
         mcpp::Client client;
         {
             std::lock_guard lock(mutex_);
@@ -1573,8 +1623,14 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
     std::filesystem::create_directories(dir, ec);
     if (ec) return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, ec.message()});
     const auto report = dir / "report";
-    Json args = Json::array({"--"});
-    for (const auto& a : testing::run_args(*f, cases, report)) args.push_back(a);
+    Json args = Json::array();
+    if (f->protocol) {
+        // The protocol selects by identifier, and the record reports each case (mcpp docs/08).
+        for (const auto& c : cases) { args.push_back("--case"); args.push_back(c); }
+    } else {
+        args.push_back("--");
+        for (const auto& a : testing::run_args(*f, cases, report)) args.push_back(a);
+    }
     Json job{{"kind", "test"}, {"root", root.generic_string()}, {"filter", test}, {"args", args}, {"color", p.value("color", true)}};
     for (const auto* key : {"profile", "target"}) if (p.contains(key)) job[key] = p[key];
     const std::string framework = f->id;
@@ -1588,7 +1644,21 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
             std::lock_guard lock(mutex_);
             if (auto it = programOutput_.find(jobId); it != programOutput_.end()) programOutput = it->second;
         }
-        if (fw) {
+        if (fw && fw->protocol) {
+            Json record;
+            {
+                std::lock_guard lock(mutex_);
+                if (auto it = testRecord_.find(jobId); it != testRecord_.end()) record = it->second;
+            }
+            bool truncated = false;
+            for (const auto& o : testing::protocol_outcomes(record)) {
+                auto output = views::bounded_output(o.outcome.status == "failed" ? std::string_view(o.outcome.message) : std::string_view{}, truncated);
+                rpc_.notify("mcpp-ide/test/caseResult", Json{{"jobId", jobId}, {"root", root.generic_string()}, {"test", test},
+                                                    {"case", o.outcome.name}, {"status", o.outcome.status}, {"durationMs", o.outcome.durationMs},
+                                                    {"message", o.outcome.message}, {"output", std::move(output)},
+                                                    {"outputTruncated", truncated}, {"location", o.location}});
+            }
+        } else if (fw) {
             const auto outputs = testing::case_outputs(*fw, programOutput);
             for (const auto& o : testing::read_report(*fw, text)) {
                 // Each case with its own output (passed or not) and a failure's place (D16).

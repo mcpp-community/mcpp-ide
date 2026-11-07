@@ -1,6 +1,21 @@
 {
-  "description": "The test frameworks whose cases the editors show (mcpp design 2026-10-30 part 2 §7.2). A test program belongs to a framework when its plan holds one of the framework's packages and its source calls one of the framework's macros. `name` says how a case's full name is made from the macro's arguments; `list` lists the cases (run only for a program whose source calls a macro); `filter` selects cases, `{}` being the cases joined by `join`, each with the characters of `escape` preceded by a backslash (a GoogleTest name is two identifiers, which hold none of its filter's special characters); `report` writes the results to the file `{}`, read as `reportFormat`. boost-ext.ut is not here: its runner takes no filter from the command line, so its tests run as programs.",
+  "description": "The test frameworks whose cases the editors show (mcpp design 2026-10-30 part 2 §7.2). A test program belongs to a framework when its plan holds one of the framework's packages and its source calls one of the framework's macros. `name` says how a case's full name is made from the macro's arguments; `list` lists the cases (run only for a program whose source calls a macro); `filter` selects cases, `{}` being the cases joined by `join`, each with the characters of `escape` preceded by a backslash (a GoogleTest name is two identifiers, which hold none of its filter's special characters); `report` writes the results to the file `{}`, read as `reportFormat`. A framework with `protocol` implements the mtest test protocol (mcpp 2026.11.8.1, feature `test-protocol`): its cases are its `\"name\"_test` literals, listed by `mcpp test --cases`, run by `mcpp test --case` and reported in mcpp's records; a program of any framework that implements the protocol (GoogleTest through mcpplibs.mtest.gtest) is listed and run so. boost-ext.ut is not here: its runner takes no filter from the command line, so its tests run as programs.",
   "frameworks": [
+    {
+      "id": "mtest",
+      "title": "mtest",
+      "packages": ["mcpplibs.mtest"],
+      "protocol": 1,
+      "macros": [],
+      "name": "literal",
+      "list": [],
+      "listFormat": "lines",
+      "filter": [],
+      "join": ",",
+      "escape": "",
+      "report": [],
+      "reportFormat": ""
+    },
     {
       "id": "gtest",
       "title": "GoogleTest",

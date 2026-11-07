@@ -25,9 +25,18 @@ struct Call {
     std::vector<std::string> arguments;
 };
 
+// A case of the mtest library (`"name"_test`): its identifier -- the names of the suites it is
+// declared in and its own, joined by `/` -- and where its name is (0-based).
+struct Literal {
+    std::string id;
+    int line = 0;
+    int column = 0;
+};
+
 struct Result {
     std::optional<int> mainLine;   // 0-based
     std::vector<Call> calls;
+    std::vector<Literal> cases;    // `"name"_test`, in `suite x{"name", ...}` scopes
 };
 
 // Scans `text` for `main` and for calls of the macros named in `macros`.
@@ -155,6 +164,17 @@ Result scan(std::string_view text, const std::vector<std::string>& macros) {
     bool atDeclaration = true;      // the next identifier starts a declaration
     bool lineHasCode = false;       // a `#` is a directive only first on its line
     std::string previous;           // the previous identifier, for `int main(`
+    // A suite of the mtest library: `suite <name>{"<id>", ...}`, whose `{` opens the scope its
+    // cases' identifiers are prefixed in. `suiteState` follows the declaration: 1 after `suite`,
+    // 2 after its variable's name, 3 after the `{` (the next literal is the suite's identifier).
+    struct Scope { std::string name; int depth; };
+    std::vector<Scope> suites;
+    int suiteState = 0, suiteDepth = 0;
+    auto prefix = [&] {
+        std::string out;
+        for (const auto& s : suites) if (!s.name.empty()) out += s.name + "/";
+        return out;
+    };
     while (!c.done()) {
         const char ch = c.peek();
         if (ch == '\n') { lineHasCode = false; c.step(); continue; }
@@ -164,7 +184,22 @@ Result scan(std::string_view text, const std::vector<std::string>& macros) {
         if (ch == '#' && !lineHasCode) { c.skip_directive(); atDeclaration = true; previous.clear(); continue; }
         lineHasCode = true;
         if (c.on_raw()) { c.skip_raw(); atDeclaration = false; previous.clear(); continue; }
-        if (ch == '"' || ch == '\'') { c.skip_quoted(ch); atDeclaration = false; previous.clear(); continue; }
+        if (ch == '"') {
+            const auto from = c.at;
+            const int line = c.line, column = c.column();
+            c.skip_quoted(ch);
+            const auto value = literal_value(text.substr(from, c.at - from));
+            if (suiteState == 3) {
+                suites.push_back({value, suiteDepth});
+                suiteState = 0;
+            } else if (text.substr(c.at, 5) == "_test" && !(c.at + 5 < text.size() && ident_char(text[c.at + 5]))) {
+                r.cases.push_back(Literal{prefix() + value, line, column});
+            }
+            atDeclaration = false;
+            previous.clear();
+            continue;
+        }
+        if (ch == '\'') { c.skip_quoted(ch); atDeclaration = false; previous.clear(); continue; }
         if (ident_start(ch)) {
             const auto from = c.at;
             const int line = c.line, column = c.column();
@@ -179,6 +214,10 @@ Result scan(std::string_view text, const std::vector<std::string>& macros) {
                 break;
             }
             const bool call = look.peek() == '(';
+            // `suite`, or `mtest::suite` (the identifier before `::` is kept in `previous`).
+            if (word == "suite" && (atDeclaration || previous == "mtest")) suiteState = 1;
+            else if (suiteState == 1) suiteState = 2;
+            else suiteState = 0;
             if (call && atDeclaration && std::ranges::find(macros, word) != macros.end()) {
                 c = look;
                 r.calls.push_back(Call{word, line, column, arguments(c)});
@@ -192,10 +231,18 @@ Result scan(std::string_view text, const std::vector<std::string>& macros) {
             atDeclaration = false;
             continue;
         }
-        if (ch == '{') { ++depth; atDeclaration = true; }
-        else if (ch == '}') { if (depth > 0) --depth; atDeclaration = true; }
-        else if (ch == ';') atDeclaration = true;
-        else atDeclaration = false;
+        if (ch == '{') {
+            if (suiteState == 2) { suiteState = 3; suiteDepth = depth; }
+            else suiteState = 0;
+            ++depth;
+            atDeclaration = true;
+        } else if (ch == '}') {
+            if (depth > 0) --depth;
+            while (!suites.empty() && suites.back().depth >= depth) suites.pop_back();
+            atDeclaration = true;
+        }
+        else if (ch == ';') { atDeclaration = true; suiteState = 0; }
+        else { atDeclaration = false; suiteState = 0; }
         // `std::main`, `x.main`: not the program's.
         if (ch != ':' ) previous.clear();
         c.step();

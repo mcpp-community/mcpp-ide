@@ -365,6 +365,35 @@ int main() {
         const auto& def = protocol["notifications"][name]["params"];
         for (const auto& n : wire.notifications(name)) check(conforms(n, def, protocol, name));
     }
+    // A program that implements the test protocol (mcpp's `test-protocol`): its cases listed by
+    // `mcpp test --cases`, a selection run by `--case`, and each case's result from the record.
+    const auto protocolRoot = root.parent_path() / (root.filename().string() + "-cases");
+    std::filesystem::create_directories(protocolRoot / "tests" / "unit");
+    std::ofstream(protocolRoot / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.1.0\"\n";
+    std::ofstream(protocolRoot / ".mock-mcpp-features") << "test-protocol";
+    std::ofstream(protocolRoot / "tests" / "unit" / "parse.cpp")
+        << "import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\nsuite parsing{\"parsing\", [] {\n"
+           "    \"an empty line\"_test = [] {};\n    \"a field\"_test = [] {};\n}};\n";
+    const auto listing = result_of("mcpp-ide/test/cases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}, {"list", true}});
+    check(listing["framework"] == "mtest" && listing.value("listed", false));
+    check(listing["cases"].size() == 2 && listing["cases"][0]["name"] == "parsing/an empty line" && listing["cases"][0]["line"] == 3);
+    const auto caseResultsBefore = wire.notifications("mcpp-ide/test/caseResult").size();
+    const auto run = result_of("mcpp-ide/test/runCases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}, {"framework", "mtest"},
+                                                             {"cases", Json::array({"parsing/an empty line", "parsing/a field"})}});
+    check(run.contains("jobId"));
+    for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/test/caseResult").size() < caseResultsBefore + 2; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    const auto caseResults = wire.notifications("mcpp-ide/test/caseResult");
+    check(caseResults.size() == caseResultsBefore + 2);
+    if (caseResults.size() == caseResultsBefore + 2) {
+        check(caseResults[caseResultsBefore]["case"] == "parsing/an empty line" && caseResults[caseResultsBefore]["status"] == "passed");
+        const auto& failed = caseResults[caseResultsBefore + 1];
+        check(failed["status"] == "failed" && failed["location"]["line"] == 6
+              && failed["message"].get<std::string>().contains("expected 2, actual 1"));
+        for (const auto& n : caseResults)
+            check(conforms(n, protocol["notifications"]["mcpp-ide/test/caseResult"]["params"], protocol, "mcpp-ide/test/caseResult"));
+    }
+    std::filesystem::remove_all(protocolRoot);
     std::filesystem::remove_all(streamed);
     std::filesystem::remove_all(root);
     std::println("test_protocol: ok");
