@@ -135,7 +135,7 @@ class McppSession(private val project: Project) : Disposable {
     private fun pluginVersion(): String = runCatching {
         (McppSession::class.java.classLoader as? com.intellij.ide.plugins.cl.PluginAwareClassLoader)?.pluginDescriptor?.version
     }.getOrNull() ?: runCatching {
-        com.intellij.ide.plugins.PluginManagerCore.getPlugin(com.intellij.openapi.extensions.PluginId.getId(PLUGIN_ID))?.version
+        com.intellij.ide.plugins.PluginManager.getPluginByClass(McppSession::class.java)?.version
     }.getOrNull() ?: "unknown"
 
     /** The plugin's directory: the parent of the lib/ holding this class's jar. */
