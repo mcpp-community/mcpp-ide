@@ -16,6 +16,14 @@ env:
   NODE_VERSION: 22
 
 jobs:
+  # Every component one series (design 2026-11-07, D15): the backend's two statements agree, and the
+  # VS Code, CLion and Neovim plugins share the backend's X.Y.
+  versions:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: bash .github/scripts/release-plan.sh
+
   # The backend on each system the editors run on: build every program (the backend, the mock mcpp,
   # the dev tool), run the tests -- the protocol against its schema and the fixtures against mcpp's
   # contract among them -- and check the translations. The `pack` leg then packs the backend as the
