@@ -14,18 +14,18 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.JBColor
-import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefBrowserBase
 import com.intellij.ui.jcef.JBCefJSQuery
+import com.intellij.util.ui.JBUI
 import io.github.mcppcommunity.mcppclion.McppSession
 import org.cef.browser.CefBrowser
 import org.cef.browser.CefFrame
 import org.cef.handler.CefLoadHandlerAdapter
 import java.io.File
 import javax.swing.JComponent
-import javax.swing.SwingConstants
 
 class GraphPage(private val project: Project, private val kind: String) : McppView, Disposable {
     override val id = "graph:$kind"
@@ -34,7 +34,9 @@ class GraphPage(private val project: Project, private val kind: String) : McppVi
     private val query: JBCefJSQuery? = browser?.let { JBCefJSQuery.create(it as JBCefBrowserBase) }
     @Volatile private var loaded = false
     private var pending: String? = null
-    val component: JComponent = browser?.component ?: JBLabel(session.t("This IDE runs without JCEF, which draws the graph."), SwingConstants.CENTER)
+    // Without JCEF the page says why. The tool window sits on the left beside Project, narrower than
+    // the sentence, so the text wraps; its accessible name is the whole sentence.
+    val component: JComponent = browser?.component ?: unavailable(session.t("This IDE runs without JCEF, which draws the graph."))
 
     init {
         if (browser != null && query != null) {
@@ -104,4 +106,13 @@ class GraphPage(private val project: Project, private val kind: String) : McppVi
     }
 
     override fun dispose() {}
+}
+
+private fun unavailable(text: String): JComponent = JBTextArea(text).apply {
+    isEditable = false
+    lineWrap = true
+    wrapStyleWord = true
+    isOpaque = false
+    border = JBUI.Borders.empty(12)
+    accessibleContext.accessibleName = text
 }

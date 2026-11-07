@@ -143,7 +143,8 @@ class GraphInteractionTest {
                 record("protocol2-startup")
                 if (disableJcef) {
                     invokeAction("mcpp.project.showModuleDependencyGraph")
-                    val explanation = ui.x("//div[contains(@visible_text,'This IDE runs without JCEF') or contains(@text,'This IDE runs without JCEF')]")
+                    // The sentence wraps in the narrow tool window; its accessible name is whole.
+                    val explanation = ui.x("//div[contains(@accessiblename,'This IDE runs without JCEF')]")
                     val explained = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
                     while (!explanation.present() && System.nanoTime() < explained) Thread.sleep(100)
                     assertTrue(explanation.present(), "the graph explains why drawing is unavailable")
