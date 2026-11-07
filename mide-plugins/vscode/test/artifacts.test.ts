@@ -369,6 +369,18 @@ test("shows editor title buttons only inside mcpp projects", () => {
   assert.equal(commands.find((command) => command.command === "mcpp.test")?.icon, "$(beaker)");
   assert.equal(commands.find((command) => command.command === "mcpp.editor.build")?.icon, "$(tools)");
   assert.ok(!commands.some((command) => command.command === "mcpp.inProject"));
+  // D16: while the active editor is a target's entry, the editor title's Run menu runs and debugs it,
+  // and the lenses above `main` carry the same icons.
+  const menus = manifest.contributes?.menus as Record<string, Array<{ command: string; group?: string; when?: string }>> | undefined;
+  assert.deepEqual(menus?.["editor/title/run"], [
+    { command: "mcpp.runThisFile", group: "mcpp@1", when: "mcpp.activeEntry == program || mcpp.activeEntry == test" },
+    { command: "mcpp.debugThisFile", group: "mcpp@2", when: "mcpp.activeEntryDebug" },
+  ]);
+  assert.equal(commands.find((command) => command.command === "mcpp.runThisFile")?.icon, "$(play)");
+  assert.equal(commands.find((command) => command.command === "mcpp.debugThisFile")?.icon, "$(debug-alt)");
+  const lens = readFileSync(path.join(root, "src", "ide", "codeLens.ts"), "utf8");
+  assert.match(lens, /const run = `\$\(play\) \$\{t\("Run"\)\}`/);
+  assert.match(lens, /const debug = `\$\(debug-alt\) \$\{t\("Debug"\)\}`/);
 });
 
 test("build.mcpp is a cpp document, not a language of its own", () => {
@@ -634,7 +646,9 @@ const workflows = path.join(root, "..", "..", ".github", "workflows");
 
 test("a release publishes the VSIX CI built, with its checksum", () => {
   const workflow = readFileSync(path.join(workflows, "release.yml"), "utf8");
-  assert.match(workflow, /push:\s*\n\s+tags: \['v\*'\]/);
+  // A series release (vX.Y.0) and each component's patch tag (D15); vscode-vX.Y.Z publishes the VSIX alone.
+  assert.match(workflow, /push:\s*\n\s+tags: \['v\*', 'backend-v\*', 'vscode-v\*', 'clion-v\*', 'nvim-v\*'\]/);
+  assert.match(workflow, /release-plan\.sh "\$GITHUB_REF_NAME"/);
   assert.match(workflow, /contents: write/);
   // The release publishes what CI on the commit built and tested, not a second build.
   assert.match(workflow, /uses: \.\/\.github\/workflows\/ci\.yml/);
@@ -665,9 +679,9 @@ test("a release verifies separate Open VSX and JetBrains uploads", () => {
   // Open VSX is a required destination: a missing token fails the release.
   assert.match(workflow, /OPENVSX_TOKEN: \$\{\{ secrets\.OPENVSX_TOKEN \}\}/);
   assert.match(workflow, /if \[ -z "\$\{OPENVSX_TOKEN:-\}" \]; then[\s\S]*?exit 1/);
-  assert.match(workflow, /openvsx:\s*\n\s+needs: release/);
-  assert.match(workflow, /gh release download "v\$VERSION" -p 'mcpp-vscode-\*\.vsix' -p SHA256SUMS/);
-  assert.match(workflow, /jetbrains:\s*\n\s+needs: release/);
+  assert.match(workflow, /openvsx:\s*\n\s+needs: \[plan, release\]\s*\n\s+if: contains\(needs\.plan\.outputs\.components, 'vscode'\)/);
+  assert.match(workflow, /gh release download "\$GITHUB_REF_NAME" -p 'mcpp-vscode-\*\.vsix' -p SHA256SUMS/);
+  assert.match(workflow, /jetbrains:\s*\n\s+needs: \[plan, release\]\s*\n\s+if: contains\(needs\.plan\.outputs\.components, 'clion'\)/);
   assert.match(workflow, /uses: \.\/\.github\/workflows\/publish-jetbrains\.yml/);
   assert.match(workflow, /JETBRAINS_TOKEN: \$\{\{ secrets\.JETBRAINS_TOKEN \}\}/);
   const jetbrains = readFileSync(path.join(workflows, "publish-jetbrains.yml"), "utf8");

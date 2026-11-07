@@ -13,6 +13,7 @@ import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.execution.runners.GenericProgramRunner
 import com.intellij.execution.ui.RunContentDescriptor
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.xdebugger.XDebugProcess
 import com.intellij.xdebugger.XDebugProcessStarter
@@ -27,6 +28,7 @@ import com.jetbrains.cidr.execution.debugger.backend.DebuggerDriver
 import com.jetbrains.cidr.execution.debugger.backend.lldb.LLDBDriver
 import com.jetbrains.cidr.execution.debugger.backend.lldb.LLDBDriverConfiguration
 import io.github.mcppcommunity.mcppclion.McppSession
+import java.util.concurrent.TimeUnit
 
 class McppDebugRunner : GenericProgramRunner<RunnerSettings>() {
     override fun getRunnerId(): String = "McppDebugRunner"
@@ -44,8 +46,21 @@ class McppDebugRunner : GenericProgramRunner<RunnerSettings>() {
         // itself creates it.
         val driver = createDriverConfiguration(project, CPPEnvironment(toolchain))
         val engine = if (driver is LLDBDriverConfiguration) "lldb" else "gdb"
-        val launch = ProgressManager.getInstance().runProcessWithProgressSynchronously<com.google.gson.JsonObject, Exception>(
-            { launch(c, engine).get() }, session.t("mcpp: building for the debugger…"), true, project)
+        // The build first, as a launch job: mcpp's narration and its progress on the indicator; then
+        // the debugger's configuration of what it built, which mcpp describes on its fast path.
+        val launch = ProgressManager.getInstance().runProcessWithProgressSynchronously<com.google.gson.JsonObject, Exception>({
+            val indicator = ProgressManager.getInstance().progressIndicator
+            val params = launchParams(c).apply { addProperty("kind", "launch"); addProperty("color", false) }
+            val job = FollowedJob(session, params,
+                { text -> text.lines().lastOrNull { it.isNotBlank() }?.let { indicator?.text2 = it.trim() } },
+                { done, total -> indicator?.isIndeterminate = false; indicator?.fraction = done.toDouble() / total.coerceAtLeast(1) }).start()
+            while (!job.finished.isDone) {
+                if (indicator?.isCanceled == true) { job.cancel(); throw ProcessCanceledException() }
+                runCatching { job.finished.get(100, TimeUnit.MILLISECONDS) }
+            }
+            launchOf(job.finished.get(), session)
+            debugLaunch(c, engine).get()
+        }, session.t("mcpp: building for the debugger…"), true, project)
         val throughRunner = launch["via"]?.isJsonNull == false
         val parameters = TrivialRunParameters(driver, commandLine(launch, pty = false))
         return XDebuggerManager.getInstance(project).newSessionBuilder(object : XDebugProcessStarter() {

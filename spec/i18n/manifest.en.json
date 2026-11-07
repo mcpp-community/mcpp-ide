@@ -42,6 +42,8 @@
   "command.mcpp.refreshCacheStats.title": "Refresh Cache Statistics",
   "command.mcpp.refreshCompilationDatabase.title": "Refresh the Module Build Description",
   "command.mcpp.run.title": "Run",
+  "command.mcpp.runThisFile.title": "Run This File's Entry",
+  "command.mcpp.debugThisFile.title": "Debug This File's Entry",
   "command.mcpp.selectDefaultToolchain.title": "Select the Global Default Toolchain",
   "command.mcpp.selfCheck.title": "Environment Self-check",
   "command.mcpp.showCacheEntry.title": "Show Cache Entry Details",

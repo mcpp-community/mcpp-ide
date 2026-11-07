@@ -77,6 +77,13 @@ struct Outcome {
     std::string message;
 };
 
+// Each case's own output in its program's output, by the framework's boundaries (design 2026-11-07,
+// D16): GoogleTest prints `[ RUN      ] Suite.Name` before a case and `[       OK ]`, `[  FAILED  ]` or
+// `[  SKIPPED ]` with the name after it, and the case's output is those lines and what is between
+// them. Empty for a framework whose console names no case boundary (Catch2 and doctest report a case
+// in their report; a failure's expression and place are its message).
+std::map<std::string, std::string> case_outputs(const Framework& f, std::string_view output);
+
 // A report the framework wrote.
 std::vector<Outcome> read_report(const Framework& f, std::string_view text);
 
@@ -425,6 +432,44 @@ std::vector<std::string> filter_args(const Framework& f, const std::vector<std::
             out.push_back(std::move(arg));
         }
     }
+    return out;
+}
+
+std::map<std::string, std::string> case_outputs(const Framework& f, std::string_view output) {
+    std::map<std::string, std::string> out;
+    if (f.id != "gtest") return out;
+    std::string current, text;
+    std::size_t at = 0;
+    while (at < output.size()) {
+        auto end = output.find('\n', at);
+        const auto stop = end == std::string_view::npos ? output.size() : end + 1;
+        const auto line = output.substr(at, stop - at);
+        at = stop;
+        // `[ RUN      ] Suite.Name`; the result lines name it again, then ` (N ms)`.
+        const auto tagged = [&](std::string_view tag) -> std::optional<std::string> {
+            if (!line.starts_with(tag)) return std::nullopt;
+            auto name = line.substr(tag.size());
+            while (!name.empty() && (name.back() == '\n' || name.back() == '\r')) name.remove_suffix(1);
+            if (const auto paren = name.find(" ("); paren != std::string_view::npos) name = name.substr(0, paren);
+            return std::string(name);
+        };
+        if (auto started = tagged("[ RUN      ] ")) {
+            current = *started;
+            text = std::string(line);
+            continue;
+        }
+        if (current.empty()) continue;
+        text += line;
+        for (std::string_view tag : {"[       OK ] ", "[  FAILED  ] ", "[  SKIPPED ] "})
+            if (auto ended = tagged(tag); ended && *ended == current) {
+                out[current] = std::move(text);
+                current.clear();
+                text.clear();
+                break;
+            }
+    }
+    // A case the program ended in (a crash): what it printed until then.
+    if (!current.empty()) out[current] = std::move(text);
     return out;
 }
 

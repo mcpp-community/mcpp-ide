@@ -42,6 +42,8 @@
   "command.mcpp.refreshCacheStats.title": "刷新缓存统计",
   "command.mcpp.refreshCompilationDatabase.title": "刷新模块构建描述",
   "command.mcpp.run.title": "运行",
+  "command.mcpp.runThisFile.title": "运行此文件的入口",
+  "command.mcpp.debugThisFile.title": "调试此文件的入口",
   "command.mcpp.selectDefaultToolchain.title": "选择全局默认工具链",
   "command.mcpp.selfCheck.title": "环境自检",
   "command.mcpp.showCacheEntry.title": "查看缓存条目详情",

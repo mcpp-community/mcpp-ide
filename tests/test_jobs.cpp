@@ -27,7 +27,7 @@ int main() {
     auto protocol = mcppide::mcpp::handshake(mock, fixtures);
     CHECK(protocol.has_value() && protocol->contract);
 
-    const auto root = std::filesystem::temp_directory_path() / std::format("mcppide-jobs-{}", mcpplibs::os::process::self()->id);
+    const auto root = testsupport::temp() / std::format("mcppide-jobs-{}", mcpplibs::os::process::self()->id);
     std::filesystem::create_directories(root);
     Seen seen;
     jobs::Sink sink;

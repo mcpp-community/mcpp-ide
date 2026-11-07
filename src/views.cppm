@@ -59,7 +59,22 @@ std::string platform_text(const Json& platform);
 // One record of a `--message-format json` stream (a build's events, a test's records), as the
 // adapters consume it: {"type": "plan" | "progress" | "diagnostic" | "artifact" | "test" | "summary" |
 // "other", ...}.
+//
+// A TEST'S STATUS IS mcpp's, VALUE FOR VALUE (mcpp docs/50, the test record; design 2026-11-07, D16):
+// `pass` is passed; `run_fail` failed, or timedOut when `timed_out`; `compile_fail` failed, with
+// `compileFailed`; `not_run` skipped, with mcpp's reason; `built` skipped, with `builtOnly` (`--no-run`).
+// Any other value is errored and logged once. Every record carries the test's whole output
+// (`compile_output` then `run_output`), passed or not, up to `kOutputLimit` bytes: past it the head
+// and the tail are kept and `outputTruncated` is set. A failure's `location` is the first `file:line:`
+// the output names, or null.
 Json stream_record(const Json& record);
+
+// The most of a test's or a case's output one record carries.
+inline constexpr std::size_t kOutputLimit = 1u << 20;
+// `text` within `limit` bytes: the head and the tail, with a line saying what was left out between.
+std::string bounded_output(std::string_view text, bool& truncated, std::size_t limit = kOutputLimit);
+// The first `file:line:` (or `file(line):`) at the start of a line of `output`: {"path", "line"} (0-based), or null.
+Json failure_location(std::string_view output);
 
 // "1.5 GiB" -- binary units, one decimal.
 std::string format_bytes(std::int64_t bytes);
@@ -476,6 +491,45 @@ Json targets(const Json& envelope, std::string_view selected, bool sets) {
     return result;
 }
 
+std::string bounded_output(std::string_view text, bool& truncated, std::size_t limit) {
+    truncated = text.size() > limit;
+    if (!truncated) return std::string(text);
+    const std::size_t half = limit / 2;
+    // Whole lines at either end: the head up to its last newline, the tail from its first.
+    std::size_t head = half;
+    if (const auto nl = text.substr(0, half).rfind('\n'); nl != std::string_view::npos) head = nl + 1;
+    std::size_t tail = text.size() - half;
+    if (const auto nl = text.find('\n', tail); nl != std::string_view::npos && nl + 1 < text.size()) tail = nl + 1;
+    return std::format("{}[... {} bytes of output left out ...]\n{}", text.substr(0, head), tail - head, text.substr(tail));
+}
+
+Json failure_location(std::string_view output) {
+    std::size_t at = 0;
+    while (at < output.size()) {
+        auto end = output.find('\n', at);
+        if (end == std::string_view::npos) end = output.size();
+        auto line = output.substr(at, end - at);
+        at = end + 1;
+        while (!line.empty() && (line.front() == ' ' || line.front() == '\t')) line.remove_prefix(1);
+        // `path:LINE:` (GCC, Clang, GoogleTest, Catch2) or `path(LINE):` (MSVC). The path holds a
+        // dot (a file name), and a drive's `C:` is not its line.
+        for (std::size_t i = line.size() > 2 && line[1] == ':' ? 2 : 0; i < line.size(); ++i) {
+            const char c = line[i];
+            if (c != ':' && c != '(') continue;
+            std::size_t j = i + 1, digits = 0;
+            while (j < line.size() && std::isdigit(static_cast<unsigned char>(line[j]))) { ++j; ++digits; }
+            if (digits == 0) continue;
+            const bool closes = c == '(' ? (j < line.size() && line[j] == ')' && j + 1 < line.size() && line[j + 1] == ':')
+                                         : (j == line.size() || line[j] == ':');
+            const auto path = line.substr(0, i);
+            if (!closes || path.find('.') == std::string_view::npos || path.find(' ') != std::string_view::npos) break;
+            const int number = std::stoi(std::string(line.substr(i + 1, digits)));
+            return Json{{"path", std::string(path)}, {"line", number > 0 ? number - 1 : 0}};
+        }
+    }
+    return nullptr;
+}
+
 Json stream_record(const Json& r) {
     if (!r.is_object()) return Json{{"type", "other"}, {"record", r}};
     // `mcpp test --message-format json`: one record per test, then the summary.
@@ -487,14 +541,33 @@ Json stream_record(const Json& r) {
     }
     if (r.contains("test") && r["test"].is_string()) {
         const auto raw = r.value("status", "");
-        const std::string status = raw == "pass" ? "passed"
-                                 : raw == "fail" ? (r.value("timed_out", false) ? "timedOut" : "failed")
-                                 : raw == "skip" || raw == "not_run" ? "skipped" : "errored";
+        const bool timedOut = r.value("timed_out", false);
+        std::string status;
+        std::string reason = r.value("reason", "");
+        Json out{{"type", "test"}, {"member", r.value("member", "")}, {"test", r["test"]}};
+        if (raw == "pass") status = "passed";
+        else if (raw == "run_fail") status = timedOut ? "timedOut" : "failed";
+        else if (raw == "compile_fail") { status = "failed"; out["compileFailed"] = true; }
+        else if (raw == "not_run") status = "skipped";
+        else if (raw == "built") { status = "skipped"; out["builtOnly"] = true; if (reason.empty()) reason = "built, not run (--no-run)"; }
+        else {
+            status = "errored";
+            static std::once_flag said;
+            std::call_once(said, [&] { std::println(std::cerr, "mcpp-ide: a test record's status `{}` is not mcpp's contract", raw); });
+        }
         std::string output = r.value("compile_output", "");
         output += r.value("run_output", "");
-        return Json{{"type", "test"}, {"member", r.value("member", "")}, {"test", r["test"]}, {"status", status},
-                    {"durationMs", r.value("duration_ms", 0)}, {"exitCode", r.contains("exit_code") ? r["exit_code"] : Json(nullptr)},
-                    {"reason", r.value("reason", "")}, {"output", output}};
+        bool truncated = false;
+        output = bounded_output(output, truncated);
+        out["status"] = status;
+        out["timedOut"] = timedOut;
+        out["durationMs"] = r.value("duration_ms", 0);
+        out["exitCode"] = r.contains("exit_code") ? r["exit_code"] : Json(nullptr);
+        out["reason"] = reason;
+        out["location"] = status == "failed" || status == "timedOut" ? failure_location(output) : Json(nullptr);
+        out["output"] = std::move(output);
+        out["outputTruncated"] = truncated;
+        return out;
     }
     const auto event = r.value("event", "");
     if (r.value("kind", "") == "mcpp.event") {

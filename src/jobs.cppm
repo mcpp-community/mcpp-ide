@@ -23,7 +23,7 @@ export namespace mcppide::jobs {
 
 using Json = nlohmann::json;
 
-enum class Kind { build, test, pack, clean, toolchain, add, command };
+enum class Kind { build, test, pack, clean, toolchain, add, launch, command };
 
 // What standard output carries: narration for a person, NDJSON records (a
 // `--message-format json` stream), or one envelope printed at the end.
@@ -109,13 +109,14 @@ std::string_view kind_name(Kind k) {
         case Kind::clean: return "clean";
         case Kind::toolchain: return "toolchain";
         case Kind::add: return "add";
+        case Kind::launch: return "launch";
         case Kind::command: return "command";
     }
     return "command";
 }
 
 std::optional<Kind> kind_from(std::string_view s) {
-    for (auto k : {Kind::build, Kind::test, Kind::pack, Kind::clean, Kind::toolchain, Kind::add, Kind::command})
+    for (auto k : {Kind::build, Kind::test, Kind::pack, Kind::clean, Kind::toolchain, Kind::add, Kind::launch, Kind::command})
         if (kind_name(k) == s) return k;
     return std::nullopt;
 }

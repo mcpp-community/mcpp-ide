@@ -131,6 +131,14 @@ class McppSession(private val project: Project) : Disposable {
         com.intellij.ide.plugins.PluginManagerCore.isLoaded(id)
     }.getOrDefault(false)
 
+    /**
+     * This plugin's version, as its descriptor states it: the series the backend must share (D15). The
+     * platform loads every plugin class through the plugin's own class loader, which names the descriptor.
+     */
+    private fun pluginVersion(): String = runCatching {
+        (McppSession::class.java.classLoader as? com.intellij.ide.plugins.cl.PluginAwareClassLoader)?.pluginDescriptor?.version
+    }.getOrNull() ?: "unknown"
+
     /** The plugin's directory: the parent of the lib/ holding this class's jar. */
     private fun pluginRoot(): File? = pluginDirectory()
 
@@ -191,7 +199,7 @@ class McppSession(private val project: Project) : Disposable {
         var protocol = "unknown"
         b.request("initialize", params).thenCompose { init ->
             protocol = init.asJsonObject["protocol"]?.toString() ?: "missing"
-            requireProtocol(init.asJsonObject)
+            requireProtocol(init.asJsonObject, pluginVersion())
             log.info("mcpp-ide: initialized (source=${located.source}, protocol=$protocol)")
             initialized = init.asJsonObject
             b.notify("initialized", JsonObject())
@@ -297,8 +305,17 @@ class McppSession(private val project: Project) : Disposable {
     }
 
     fun refreshEntries(path: String) {
-        request("source/entries", JsonObject().apply { addProperty("file", path) }).thenAccept { r ->
-            sources[path] = r.asJsonObject
+        request("source/entries", JsonObject().apply { addProperty("file", path) }).whenComplete { r, error ->
+            // Why the gutter has no ▶ for a file (D16): the backend could not say what the file is.
+            if (error != null) {
+                val cause = (error as? java.util.concurrent.CompletionException)?.cause ?: error
+                log.info("mcpp-ide: no run entries for $path: ${cause.message}")
+                return@whenComplete
+            }
+            val entries = r.asJsonObject
+            if (entries["kind"]?.asString !in setOf("program", "test"))
+                log.debug("mcpp-ide: $path is no target's entry (${entries["kind"]?.asString ?: "unknown"})")
+            sources[path] = entries
             restartMarkers()
         }
     }

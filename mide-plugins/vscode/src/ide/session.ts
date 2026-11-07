@@ -16,6 +16,12 @@ import { backendUnavailableHere, locateBackend, okrunDir, type Located } from ".
 import { mcpplsCandidates } from "./backend/mcppls";
 import { MCPPLS_EXTENSION } from "./mapping";
 import type { CommandEntry, InitializeResult, LanguageServiceStatus } from "./protocol";
+import { incompatibility, type Handshake } from "./compat";
+
+/** This extension's version, as its manifest states it: the series the backend must share (D15). */
+function ownVersion(): string {
+  return (vscode.extensions.getExtension("mcpp-community.mcpp-vscode")?.packageJSON as { version?: string } | undefined)?.version ?? "unknown";
+}
 
 // The language client, bundled into dist/vendor (tools/bundle-languageclient.mjs): the VSIX carries
 // no node_modules.
@@ -237,6 +243,18 @@ export class Session implements vscode.Disposable {
     try {
       await client.start();
       this.initResult = client.initializeResult as unknown as InitializeResult;
+      const refused = incompatibility(this.initResult as unknown as Handshake, ownVersion());
+      if (refused) {
+        const message = refused.kind === "protocol"
+          ? t("The mcpp-ide backend does not speak protocol 2. Update it, or clear mcpp.ide.backendPath to use the bundled backend.")
+          : t("The mcpp-ide backend {0} is of series {1}, and mcpp-vscode {2} of series {3}. Install the mcpp-ide backend {3} (`xlings install mcpp-ide@{3}.0`), or clear mcpp.ide.backendPath to use the bundled backend.",
+            refused.backendVersion, refused.backendSeries, refused.ownVersion, refused.ownSeries);
+        this.output.appendLine(`mcpp: ${message}`);
+        void vscode.window.showErrorMessage(`mcpp: ${message}`);
+        this.client = undefined;
+        await client.stop().catch(() => undefined);
+        return false;
+      }
       this.commandTable = (await this.request<{ commands: CommandEntry[] }>("commands/list", { editor: "vscode" })).commands;
       if (this.initResult.languageService) {
         this.languageServiceNow = this.initResult.languageService;

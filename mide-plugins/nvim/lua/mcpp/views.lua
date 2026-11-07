@@ -70,8 +70,9 @@ end
 
 -- Inside a flow: a job, its narration streamed into the output, its end said there and, when it
 -- did not succeed, as a notification. mcpp.task.clearTerminal and mcpp.task.revealTerminal apply
--- as they do to mcpp-vscode's terminal. Returns `job/finished`, or nil when it did not start.
-function M.job(method, params, what)
+-- as they do to mcpp-vscode's terminal. `events.test(method, result)` is given each test result.
+-- Returns `job/finished`, or nil when it did not start.
+function M.job(method, params, what, events)
   if session.value('mcpp.task.clearTerminal') ~= false then
     M.clear()
   end
@@ -85,6 +86,7 @@ function M.job(method, params, what)
       M.line('$ ' .. table.concat(p.argv or {}, ' '))
     end,
     output = M.append,
+    test = events and events.test or nil,
   })
   if not handle then
     M.line(t('mcpp: {0}', err.message))
@@ -106,7 +108,7 @@ function M.job(method, params, what)
   return done
 end
 
--- The program `run/launch` describes, in a terminal buffer of its own (argv, its working directory,
+-- The program a launch job built (its `launch`), in a terminal buffer of its own (argv, its working directory,
 -- the environment mcpp adds), where it reads its input.
 function M.terminal(launch)
   local from = vim.api.nvim_get_current_win()
