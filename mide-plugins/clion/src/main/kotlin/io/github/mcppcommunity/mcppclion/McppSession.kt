@@ -131,11 +131,12 @@ class McppSession(private val project: Project) : Disposable {
         com.intellij.ide.plugins.PluginManagerCore.isLoaded(id)
     }.getOrDefault(false)
 
-    /** This plugin's version, as its descriptor states it: the series the backend must share (D15). */
+    /**
+     * This plugin's version, as its descriptor states it: the series the backend must share (D15). The
+     * platform loads every plugin class through the plugin's own class loader, which names the descriptor.
+     */
     private fun pluginVersion(): String = runCatching {
         (McppSession::class.java.classLoader as? com.intellij.ide.plugins.cl.PluginAwareClassLoader)?.pluginDescriptor?.version
-    }.getOrNull() ?: runCatching {
-        com.intellij.ide.plugins.PluginManager.getPluginByClass(McppSession::class.java)?.version
     }.getOrNull() ?: "unknown"
 
     /** The plugin's directory: the parent of the lib/ holding this class's jar. */
