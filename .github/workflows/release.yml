@@ -41,6 +41,11 @@ jobs:
   ci:
     needs: plan
     uses: ./.github/workflows/ci.yml
+    # ci.yml's jobs read other runs' artifacts (a plugin borrows the backend main built); a called
+    # workflow's jobs are granted no more than its caller's job, so this one grants that read.
+    permissions:
+      contents: read
+      actions: read
 
   release:
     needs: [plan, ci]
