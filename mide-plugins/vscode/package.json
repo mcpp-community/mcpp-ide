@@ -134,6 +134,14 @@
           "when": "mcpp.inProject"
         },
         {
+          "command": "mcpp.runThisFile",
+          "when": "mcpp.activeEntry == program || mcpp.activeEntry == test"
+        },
+        {
+          "command": "mcpp.debugThisFile",
+          "when": "mcpp.activeEntryDebug"
+        },
+        {
           "command": "mcpp.pack",
           "when": "mcpp.inProject"
         },
@@ -172,12 +180,6 @@
         "icon": "$(debug-alt)"
       },
       {
-        "command": "mcpp.test",
-        "title": "%command.mcpp.test.title%",
-        "category": "%category%",
-        "icon": "$(beaker)"
-      },
-      {
         "command": "mcpp.runThisFile",
         "title": "%command.mcpp.runThisFile.title%",
         "category": "%category%",
@@ -188,6 +190,12 @@
         "title": "%command.mcpp.debugThisFile.title%",
         "category": "%category%",
         "icon": "$(debug-alt)"
+      },
+      {
+        "command": "mcpp.test",
+        "title": "%command.mcpp.test.title%",
+        "category": "%category%",
+        "icon": "$(beaker)"
       },
       {
         "command": "mcpp.clean",

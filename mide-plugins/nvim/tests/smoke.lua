@@ -66,7 +66,7 @@ if not mock then
 end
 write('mcpp.toml', manifest)
 write('src/main.cpp', 'int main() { return 0; }\n')
-write('tests/test_smoke.cpp', 'int main() { return 0; }\n')
+write('tests/test_smoke.cpp', '#include <cstdio>\nint main() { std::puts("test_smoke: ok"); return 0; }\n')
 -- The mock's builds take a moment, so one can be cancelled while it runs.
 if mock then
   vim.env.MOCK_MCPP_SLOW_MS = '1200'
@@ -227,6 +227,12 @@ done = finished('launch', before)
 check('a run is a launch job that ends with the launch', done and done.status == 'ok' and type(done.launch) == 'table'
   and type(done.launch.argv) == 'table' and #done.launch.argv > 0, vim.inspect(done and done.launch))
 check("the launch job's narration is in mcpp://output", output():find('Finished', 1, true) ~= nil, output():sub(-300))
+-- The program's terminal is closed with its buffer, so the run below opens one of its own.
+for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+  if vim.bo[buf].buftype == 'terminal' and vim.b[buf].mcpp_program then
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+  end
+end
 pcall(vim.cmd, 'silent! only')
 
 -- ── diagnostics ───────────────────────────────────────────────────────────────────────────────

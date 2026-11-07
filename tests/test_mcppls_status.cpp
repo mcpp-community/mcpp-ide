@@ -68,7 +68,7 @@ int main() {
 
     const auto mock = testsupport::built("mcpp-ide-mock-mcppls");
     CHECK(!mock.empty());
-    const auto base = std::filesystem::temp_directory_path() / std::format("mcppide-mcppls-{}", std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto base = testsupport::temp() / std::format("mcppide-mcppls-{}", std::chrono::steady_clock::now().time_since_epoch().count());
     const auto payload = base / "payload";
     const auto root = base / "project";
     std::filesystem::create_directories(payload / "bin");

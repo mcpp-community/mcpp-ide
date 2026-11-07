@@ -60,7 +60,7 @@ std::filesystem::path project(const std::filesystem::path& base, std::string_vie
 int main() {
     const auto mock = testsupport::built("mcpp-ide-mock-mcpp");
     CHECK(!mock.empty());
-    const auto base = std::filesystem::temp_directory_path() / std::format("mcppide-probe-{}", std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto base = testsupport::temp() / std::format("mcppide-probe-{}", std::chrono::steady_clock::now().time_since_epoch().count());
     const auto old = project(base, "old", {{".mock-mcpp-version", "2026.10.29.1"}});
     const auto sets = project(base, "sets", {{".mock-mcpp-version", "2026.10.30.1"}});
     const auto stated = project(base, "stated", {{".mock-mcpp-version", "2026.10.31.1"},

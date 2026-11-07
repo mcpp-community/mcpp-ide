@@ -24,7 +24,7 @@ int main() {
     CHECK(s.program != std::filesystem::path("/no/such/mcppls"));
     CHECK(ls::state_name(ls::State::outdated) == "outdated");
 
-    const auto payload = std::filesystem::temp_directory_path() / std::format("mcppide-payload-{}", std::random_device{}());
+    const auto payload = testsupport::temp() / std::format("mcppide-payload-{}", std::random_device{}());
     std::filesystem::create_directories(payload / "bin");
     auto write = [&](const std::filesystem::path& file, std::string_view text) { std::ofstream(file, std::ios::binary) << text; };
     write(payload / "bin" / "okrun", "runner");
@@ -81,7 +81,7 @@ int main() {
             std::ifstream in(testsupport::repo() / "tests" / "payloads" / std::string(name), std::ios::binary);
             return std::string(std::istreambuf_iterator<char>(in), {});
         };
-        const auto served = std::filesystem::temp_directory_path() / std::format("mcppide-published-{}", std::random_device{}());
+        const auto served = testsupport::temp() / std::format("mcppide-published-{}", std::random_device{}());
         std::filesystem::create_directories(served / "bin");
         for (const auto* system : {"linux-x86_64", "linux-aarch64", "macos-aarch64", "windows-x86_64"}) {
             std::filesystem::create_directories(served / "libexec" / "okrun" / system);

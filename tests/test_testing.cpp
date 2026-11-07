@@ -150,7 +150,7 @@ TEST(Math,
     // source/entries and test/cases over a project on disk (no mcpp: the plan's packages are not
     // known, so no framework is claimed, and the static entries still answer).
     {
-        const auto base = std::filesystem::temp_directory_path() / std::format("mcppide-testing-{}", std::random_device{}());
+        const auto base = testsupport::temp() / std::format("mcppide-testing-{}", std::random_device{}());
         std::filesystem::create_directories(base / "src");
         std::filesystem::create_directories(base / "tests" / "unit");
         std::ofstream(base / "mcpp.toml") << "[package]\nname = \"p\"\nversion = \"0.1.0\"\n";

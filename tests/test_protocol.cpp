@@ -99,7 +99,7 @@ int main() {
     // A session over the mock mcpp.
     const auto mock = testsupport::built("mcpp-ide-mock-mcpp");
     CHECK(!mock.empty());
-    const auto root = std::filesystem::temp_directory_path() / std::format("mcppide-protocol-{}", std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto root = testsupport::temp() / std::format("mcppide-protocol-{}", std::chrono::steady_clock::now().time_since_epoch().count());
     std::filesystem::create_directories(root / "src");
     std::ofstream(root / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.1.0\"\n";
     Wire wire;

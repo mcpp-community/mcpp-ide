@@ -212,8 +212,17 @@ namespace mcppide::server {
 
 namespace {
 rpc::Error invalid(std::string message) { return rpc::Error{rpc::INVALID_PARAMS, std::move(message)}; }
+// A name an editor or the environment spells in the host's rules (`C:\Users\x` on Windows), in the
+// generic spelling every name the backend builds, compares and reports uses: `/` between components
+// (mcpplibs.os). The backend runs as an ok image, whose names are `/`-separated on every system; a
+// `\` left in a name is read as part of a component there, so `C:\a\b` would be one relative name.
+std::filesystem::path host_path(std::string_view text) {
+    if (text.empty()) return {};
+    namespace fs = mcpplibs::os::fs;
+    return fs::from_utf8(fs::generic(fs::from_utf8(text)));
+}
 std::filesystem::path root_of(const Json& p) {
-    return p.contains("root") && p["root"].is_string() ? std::filesystem::path(p["root"].get<std::string>()) : std::filesystem::path{};
+    return p.contains("root") && p["root"].is_string() ? host_path(p["root"].get<std::string>()) : std::filesystem::path{};
 }
 Json project_json(const projects::Project& p) {
     return Json{{"root", p.root.generic_string()}, {"workspaceRoot", p.workspaceRoot.generic_string()},
@@ -459,7 +468,7 @@ std::expected<Json, rpc::Error> Session::mcpp_exec(const Json& p) {
         if (!a.is_string()) return std::unexpected(rpc::Error{rpc::INVALID_PARAMS, "args: an array of strings"});
         o.args.push_back(a.get<std::string>());
     }
-    o.cwd = p.contains("cwd") && p["cwd"].is_string() ? std::filesystem::path(p["cwd"].get<std::string>()) : std::filesystem::path{};
+    o.cwd = p.contains("cwd") && p["cwd"].is_string() ? host_path(p["cwd"].get<std::string>()) : std::filesystem::path{};
     o.deny = deny();
     o.client = client_label();
     const auto timeoutMs = p.contains("timeoutMs") && p["timeoutMs"].is_number_integer() && p["timeoutMs"].get<std::int64_t>() > 0
@@ -1007,7 +1016,7 @@ std::expected<Json, rpc::Error> Session::project_summary(const Json& p) {
 }
 
 std::expected<Json, rpc::Error> Session::project_new(const Json& p) {
-    const auto parent = std::filesystem::path(p.value("parent", ""));
+    const auto parent = host_path(p.value("parent", ""));
     const auto name = p.value("name", "");
     if (parent.empty() || name.empty()) return std::unexpected(invalid("project/new names a parent directory and a name"));
     if (name.find_first_of("/\\") != std::string::npos || name == "." || name == "..")
@@ -1558,7 +1567,7 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
     const auto* f = testing::framework(p.value("framework", ""));
     if (root.empty() || test.empty() || !f) return std::unexpected(invalid("test/runCases names a project, a test and its framework"));
     const auto cases = strings_of(p.value("cases", Json::array()));
-    const auto dir = std::filesystem::temp_directory_path() /
+    const auto dir = host_path(mcpplibs::os::fs::utf8(mcpplibs::os::dirs::temp())) /
                      std::format("mcpp-ide-cases-{}-{}", std::random_device{}(), std::chrono::steady_clock::now().time_since_epoch().count());
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);

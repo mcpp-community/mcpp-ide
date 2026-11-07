@@ -17,8 +17,17 @@
 #include <string>
 
 namespace testsupport {
+// A name in the generic spelling: `/` between components. The tests run as ok images too, whose
+// names are `/`-separated on every system, while a Windows host spells this file's own path and the
+// temporary directory with `\`.
+inline std::filesystem::path generic(std::string text) {
+    for (auto& c : text) if (c == '\\') c = '/';
+    return std::filesystem::path(text);
+}
 // The repository, from this file's own path.
-inline std::filesystem::path repo() { return std::filesystem::path(__FILE__).parent_path().parent_path(); }
+inline std::filesystem::path repo() { return generic(__FILE__).parent_path().parent_path(); }
+// The temporary directory, in the generic spelling.
+inline std::filesystem::path temp() { return generic(std::filesystem::temp_directory_path().string()); }
 // A path as the `file:` URI an LSP client names it by.
 inline std::string file_uri(const std::filesystem::path& p) {
     const auto g = p.generic_string();

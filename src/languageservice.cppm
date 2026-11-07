@@ -224,7 +224,11 @@ Candidate candidate_of(const std::filesystem::path& named, std::string source) {
 
 std::vector<Candidate> candidates(const std::vector<std::string>& fromEditor) {
     std::vector<Candidate> out;
-    for (const auto& p : fromEditor) if (!p.empty()) out.push_back(candidate_of(p, "editor"));
+    // An editor names a payload in the host's spelling (`C:\Users\x\payload`); its generic one is the
+    // name every path built from it extends (mcpplibs.os).
+    for (const auto& p : fromEditor)
+        if (!p.empty())
+            out.push_back(candidate_of(mcpplibs::os::fs::from_utf8(mcpplibs::os::fs::generic(mcpplibs::os::fs::from_utf8(p))), "editor"));
     if (auto found = mcpplibs::os::env::find_executable("mcppls")) out.push_back({{*found}, "PATH"});
     const auto exe = std::string("mcppls") + std::string(mcpplibs::os::conventions().exe_suffix);
     if (auto xh = mcpplibs::os::env::get("XLINGS_HOME"))

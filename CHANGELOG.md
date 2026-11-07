@@ -41,6 +41,11 @@ mcpp-nvim are 1.2.0 (from 0.2.1, 1.1.1, 0.2.1 and 0.2.1).
   Neovim statusline), as for a Build. With mcpp 2026.11.7.2 an unchanged program's launch is
   described on mcpp's fast path, 0.01 s where it was 0.1 to 0.3 s, so the program starts at once.
   CLion records how long the build and the program's start took in `idea.log`.
+- **Windows names reach the backend in one spelling.** The backend runs as an ok image, whose names
+  are `/`-separated on every system; a project root, a working directory, a parent directory or a
+  payload an editor names as `C:\Users\x\…` is read through mcpplibs.os into its generic spelling
+  before anything is built from it, so it is absolute and its parts are components. Found by the
+  backend's tests running as images on Windows.
 - **The mcpp tool window beside Project.** CLion's mcpp tool window is on the left, where VS Code
   shows mcpp, and the first mcpp project opened puts its button on the stripe.
 - **Tested as it is run.** The backend is distributed only as an ok image, and CI tests it as one on
