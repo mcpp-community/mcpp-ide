@@ -28,6 +28,73 @@ env:
   NODE_VERSION: 22
 
 jobs:
+  # WHAT THE CHANGE REACHES (README "Versions"; .github/components.tsv). A pull request runs the jobs of the
+  # components it changes: the backend's change runs everything, a plugin's runs that plugin's jobs over the
+  # backend main built from the same inputs (`lend`, a run whose `backend-digest-<digest>` marker is kept), the
+  # documentation's its checks. A push, a dispatch, a release and a pull request from or into a release branch
+  # run everything. When no main run lends the backend, it is built as well.
+  changes:
+    name: what the change reaches
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      backend: ${{ steps.classify.outputs.backend }}
+      vscode: ${{ steps.classify.outputs.vscode }}
+      clion: ${{ steps.classify.outputs.clion }}
+      nvim: ${{ steps.classify.outputs.nvim }}
+      digest: ${{ steps.classify.outputs.digest }}
+      lend: ${{ steps.classify.outputs.lend }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - name: The classification's own cases
+        run: bash .github/scripts/test_changes.sh
+      - id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          changed="$RUNNER_TEMP/changed.txt"
+          if [ "$EVENT" = pull_request ]; then git diff --name-only HEAD^1 HEAD > "$changed"; else : > "$changed"; fi
+          bash .github/scripts/changes.sh "$changed" > "$RUNNER_TEMP/reached.txt"
+          cat "$RUNNER_TEMP/reached.txt"
+          get() { sed -n "s/^$1=//p" "$RUNNER_TEMP/reached.txt"; }
+          lend=""
+          if [ "$(get backend)" = false ] && { [ "$(get vscode)" = true ] || [ "$(get clion)" = true ] || [ "$(get nvim)" = true ]; }; then
+            lend=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=backend-digest-$(get digest)&per_page=20" \
+                     --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")][0].workflow_run.id // ""')
+            if [ -z "$lend" ]; then
+              echo "no main run lends the backend of these inputs: it is built as well"
+              sed -i 's/^\(backend\|vscode\|clion\|nvim\)=.*/\1=true/' "$RUNNER_TEMP/reached.txt"
+            else
+              echo "the backend of run $lend, built from the same inputs"
+            fi
+          fi
+          cat "$RUNNER_TEMP/reached.txt" >> "$GITHUB_OUTPUT"
+          echo "lend=$lend" >> "$GITHUB_OUTPUT"
+
+  # The repository's source and translation checks when the backend is not built (the backend job runs them).
+  checks:
+    name: sources and translations
+    needs: changes
+    if: needs.changes.outputs.backend != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+      - run: |
+          set -euo pipefail
+          mcpp run mcpp-ide-dev -- check-i18n
+          mcpp run mcpp-ide-dev -- check-sources
+
   # Every component one series (design 2026-11-07, D15): the backend's two statements agree, and the
   # VS Code, CLion and Neovim plugins share the backend's X.Y.
   versions:
@@ -48,6 +115,8 @@ jobs:
   # platform, and the other systems only in a run with `native` -- the backend is distributed as the ok
   # image, which `backend-openkal` tests on every system (design 2026-11-07, D18).
   matrix:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-24.04
     outputs:
       backend: ${{ steps.pick.outputs.backend }}
@@ -125,6 +194,8 @@ jobs:
   # tool they start are test tools, built natively first.
   backend-openkal:
     name: backend (${{ matrix.platform }}, openkal)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     strategy:
@@ -156,6 +227,8 @@ jobs:
   # install that resolves the language service; the graph page in Chromium.
   vscode-gates:
     name: VS Code gates (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.vscode == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -178,6 +251,8 @@ jobs:
 
   vscode-drift:
     name: VS Code manifest and settings documentation
+    needs: changes
+    if: needs.changes.outputs.vscode == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -205,7 +280,11 @@ jobs:
 
   vscode:
     name: VS Code extension
-    needs: backend
+    needs: [changes, backend]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.vscode == 'true' }}
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
@@ -223,6 +302,8 @@ jobs:
         with:
           name: backend
           path: backend
+          run-id: ${{ needs.changes.outputs.lend || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Build the backend and its test programs
         run: |
           chmod +x backend/okrun/*/okrun*
@@ -316,7 +397,11 @@ jobs:
   # exactly what differs between them.
   vscode-e2e:
     name: VS Code Extension Host (${{ matrix.os }})
-    needs: backend
+    needs: [changes, backend]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.vscode == 'true' }}
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -338,6 +423,8 @@ jobs:
         with:
           name: backend
           path: backend
+          run-id: ${{ needs.changes.outputs.lend || github.run_id }}
+          github-token: ${{ github.token }}
       - run: npm ci
       - run: npm run compile
       - name: The backend the package carries
@@ -425,6 +512,8 @@ jobs:
 
   vscode-graph-browser:
     name: VS Code graph page in Chromium
+    needs: changes
+    if: needs.changes.outputs.vscode == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -455,7 +544,11 @@ jobs:
   # CLion it claims (2026.1) and the one it is built on.
   clion:
     name: CLion plugin
-    needs: backend
+    needs: [changes, backend]
+    if: ${{ !cancelled() && !failure() && needs.changes.outputs.clion == 'true' }}
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     defaults:
@@ -482,6 +575,8 @@ jobs:
         with:
           name: backend
           path: backend
+          run-id: ${{ needs.changes.outputs.lend || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Build the backend and its test programs
         run: |
           chmod +x backend/okrun/*/okrun*
@@ -560,6 +655,8 @@ jobs:
   # installed and selected with `xlings use`, as mcppls's CI provisions it.
   nvim:
     name: Neovim plugin
+    needs: changes
+    if: needs.changes.outputs.nvim == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -607,7 +704,11 @@ jobs:
   # universal package started by its launcher.
   packages:
     name: packages on ${{ matrix.os }}
-    needs: [vscode, clion]
+    needs: [changes, vscode, clion]
+    if: ${{ !cancelled() && !failure() && (needs.changes.outputs.vscode == 'true' || needs.changes.outputs.clion == 'true') }}
+    permissions:
+      contents: read
+      actions: read
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -628,9 +729,13 @@ jobs:
         with:
           name: backend
           path: backend
+          run-id: ${{ needs.changes.outputs.lend || github.run_id }}
+          github-token: ${{ github.token }}
       - name: The VS Code extension
+        if: needs.changes.outputs.vscode == 'true'
         run: .github/scripts/check-package.sh packages/mcpp-vscode-*.vsix extension
       - name: The CLion plugin
+        if: needs.changes.outputs.clion == 'true'
         run: .github/scripts/check-package.sh packages/mcpp-clion-*.zip mcpp-clion
       - name: The backend's universal package
         run: |
@@ -640,3 +745,38 @@ jobs:
           root="$(echo "$dir"/mcpp-ide-*-openkal*)"
           "$root/bin/mcpp-ide" --version | tee said.txt
           grep -q '^mcpp-ide ' said.txt
+
+  # Main lends what it built: a marker named after the backend's inputs, which a pull request that changes
+  # only a plugin finds (`changes`), and whose run's backend it then tests over.
+  backend-digest:
+    name: lend the backend of these inputs
+    needs: [changes, backend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo '${{ needs.changes.outputs.digest }}' > "$RUNNER_TEMP/digest.txt"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: backend-digest-${{ needs.changes.outputs.digest }}
+          path: ${{ runner.temp }}/digest.txt
+          retention-days: 90
+
+  # THE ONE CHECK A BRANCH REQUIRES. The jobs a change does not reach are skipped, so none of them can be
+  # required; this one is, and it fails when any job that ran failed or was cancelled.
+  ci:
+    name: ci
+    if: always()
+    needs: [changes, checks, versions, matrix, backend, backend-openkal, vscode-gates, vscode-drift, vscode, vscode-e2e,
+            vscode-isolated-install, vscode-graph-browser, clion, clion-stable, nvim, packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          set -euo pipefail
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -Eq '"(failure|cancelled)"'; then
+            echo "::error::a job this change reaches failed or was cancelled"; exit 1
+          fi

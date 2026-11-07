@@ -78,7 +78,11 @@ VS Code and CLion check for the local build tool only when a user starts an acti
 plugin works with any backend of its series and refuses another, naming both versions and the
 install that matches. `Z` is each component's own patch, so VS Code 1.2.3 and CLion 1.2.1 both work
 with backend 1.2.0. A series release is tagged `vX.Y.0`; a component's patch is tagged
-`backend-`, `vscode-`, `clion-` or `nvim-vX.Y.Z` and publishes that component alone.
+`backend-`, `vscode-`, `clion-` or `nvim-vX.Y.Z` and publishes that component alone. A pull request runs the jobs of
+the components it changes ([`.github/components.tsv`](.github/components.tsv)): a change of the backend runs
+everything, a change of one plugin runs that plugin's jobs over the backend main built from the same inputs,
+a change of the documentation its checks; `.github/` and any path the table does not name run everything.
+The one required check is `ci`.
 If `mcpp` is absent, they show one notification linking to the
 [mcpp repository](https://github.com/mcpp-community/mcpp).
 
