@@ -147,6 +147,16 @@ class GraphInteractionTest {
                     val explanation = ui.x("//div[contains(@accessiblename,'This IDE runs without JCEF')]")
                     val explained = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
                     while (!explanation.present() && System.nanoTime() < explained) Thread.sleep(100)
+                    if (!explanation.present()) {
+                        // What the window shows instead, for the report.
+                        val window = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("mcpp")
+                        val state = withContext(OnDispatcher.EDT) {
+                            if (window == null) "no mcpp tool window"
+                            else "visible=" + window.isVisible() + " selected=" +
+                                window.getContentManager().getSelectedContent()?.getDisplayName()
+                        }
+                        Files.writeString(output.resolve("no-jcef-window.txt"), state + "\n")
+                    }
                     assertTrue(explanation.present(), "the graph explains why drawing is unavailable")
                     record("no-jcef-explanation-visible")
                 } else {
