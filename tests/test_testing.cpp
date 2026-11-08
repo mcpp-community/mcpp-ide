@@ -7,6 +7,7 @@ import std;
 import mcppide.testsupport;
 import nlohmann.json;
 import mcppide.scan;
+import mcpplibs.mtest.manifest;
 import mcppide.testing;
 import mcppide.rpc;
 import mcppide.server;
@@ -189,6 +190,19 @@ int main() { "top"_test = [] {}; return report(); }
               && outcomes[1].outcome.message.contains("expected 2, actual 1"));
         check(outcomes.size() == 4 && outcomes[2].outcome.status == "skipped" && outcomes[2].outcome.message == "later");
         check(outcomes.size() == 4 && outcomes[3].outcome.status == "passed");
+    }
+
+    // A suite type the project's tests declare in a module beside them is a suite type in every
+    // file that uses it: the server reads the types across tests/ before it scans a file.
+    {
+        const std::vector<std::string> sources{
+            "export module cts;\nimport mcpplibs.mtest;\nexport class Fixture : public mcpplibs::mtest::CTS {\n"
+            "public:\n    using CTS::CTS;\n};\n"};
+        const auto types = mcpplibs::mtest::manifest::types_of(sources);
+        const std::string_view cases = "import cts;\nFixture one{\"one\"};\nFixture two{\"two@warm\"};\n";
+        const auto r = scan::scan(cases, {}, types);
+        check(r.cases.size() == 2 && r.cases[0].id == "one" && r.cases[1].id == "two@warm" && r.cases[1].line == 2);
+        check(scan::scan(cases, {}).cases.empty());
     }
 
     // source/entries and test/cases over a project on disk (no mcpp: the plan's packages are not

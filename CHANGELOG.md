@@ -7,10 +7,12 @@ The changelog is kept by series (`X.Y`); each section lists its components' rele
 ### backend 1.2.1
 
 - **mtest's cases as mtest reads them.** The cases of a file of mtest are read with mtest's own
-  static manifest (`mcpplibs.mtest.manifest` 0.3.0) instead of a reader of the backend's: an object
-  (`UTest parse{"parse", [] { ... }}`, and `Suite`, `CTS`, `E2E`, `Bench` or a suite type the file
-  derives from one) is a case, and so is each `"name"_test` it declares, under its name. A file
-  written for mtest 0.3.0 shows its cases before it is built, as one written for 0.2 did.
+  static manifest (`mcpplibs.mtest.manifest` 0.4.1) instead of a reader of the backend's: an object
+  (`UTest parse{"parse", [] { ... }}`, and `Suite`, `CTS`, `E2E`, `Bench` or a suite type derived from
+  one) is a case, and so is each `"name"_test` it declares, under its name. A suite type the project's
+  tests declare in a module beside them (`class Fixture : public CTS` in `tests/cts/cts.cppm`) is read
+  from `tests/` and holds in every file that uses it. A file written for mtest 0.3 or 0.4 shows its
+  cases before it is built, as one written for 0.2 did.
 
 ### 1.2.0
 

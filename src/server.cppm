@@ -26,6 +26,7 @@ import mcppide.documents;
 import mcppide.spec;
 import mcppide.languageservice;
 import mcppide.scan;
+import mcpplibs.mtest.manifest;
 import mcppide.testing;
 import mcpplibs.os;
 
@@ -1470,6 +1471,18 @@ std::optional<std::string> test_name_of(const std::filesystem::path& root, const
     return below.generic_string();
 }
 
+// The suite types the project's tests declare (`class Fixture : public CTS` in a module beside them),
+// read across the files of tests/ as mtest's static manifest reads them.
+mcpplibs::mtest::manifest::suite_types test_suite_types(const std::filesystem::path& root) {
+    static const std::set<std::string> cxx{".cpp", ".cc", ".cxx", ".cppm", ".ixx", ".mpp"};
+    std::vector<std::string> sources;
+    std::error_code ec;
+    for (std::filesystem::recursive_directory_iterator it(root / "tests", ec), end; !ec && it != end; it.increment(ec))
+        if (it->is_regular_file(ec) && cxx.contains(it->path().extension().string()))
+            sources.push_back(read_text(it->path()));
+    return mcpplibs::mtest::manifest::types_of(sources);
+}
+
 // The source of a test by its name: tests/<name>.cpp (or .cc, .cxx).
 std::filesystem::path test_source(const std::filesystem::path& root, std::string_view name) {
     for (const auto* ext : {".cpp", ".cc", ".cxx"}) {
@@ -1492,7 +1505,7 @@ std::expected<Json, rpc::Error> Session::source_entries(const Json& p) {
     if (!proj) return Json{{"file", file.generic_string()}, {"kind", "none"}};
     const auto text = p.contains("text") && p["text"].is_string() ? p["text"].get<std::string>() : read_text(file);
     const auto extra = test_macros();
-    const auto found = scan::scan(text, testing::macros(extra));
+    const auto found = scan::scan(text, testing::macros(extra), test_suite_types(proj->root));
     Json out{{"file", file.generic_string()}, {"root", proj->root.generic_string()}, {"kind", "none"}};
     if (auto name = test_name_of(proj->root, file)) {
         out["kind"] = "test";
@@ -1520,7 +1533,7 @@ std::expected<Json, rpc::Error> Session::test_cases(const Json& p) {
     Json out{{"root", root.generic_string()}, {"test", test}, {"file", file.generic_string()}, {"framework", nullptr}, {"cases", Json::array()}};
     if (file.empty()) return out;
     const auto extra = test_macros();
-    const auto found = scan::scan(read_text(file), testing::macros(extra));
+    const auto found = scan::scan(read_text(file), testing::macros(extra), test_suite_types(root));
     if (found.mainLine) out["main"] = Json{{"line", *found.mainLine}, {"approximate", true}};
     bool trusted;
     {

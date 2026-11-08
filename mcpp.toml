@@ -81,7 +81,7 @@ main = "src/bin/dev.cpp"
 mcpplibs.os   = "0.4.0"
 nlohmann.json = "3.12.0"
 # mtest's static case manifest: the cases a test file declares, read as mtest reads them.
-mcpplibs.mtest.manifest = "0.3.0"
+mcpplibs.mtest.manifest = "0.4.1"
 
 # What every backend test shares (testsupport/): a module, as the backend's units are.
 [dev-dependencies]

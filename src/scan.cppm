@@ -42,8 +42,10 @@ struct Result {
     std::vector<Literal> cases;    // mtest's cases, by mcpplibs.mtest.manifest
 };
 
-// Scans `text` for `main` and for calls of the macros named in `macros`.
-Result scan(std::string_view text, const std::vector<std::string>& macros);
+// Scans `text` for `main` and for calls of the macros named in `macros`. `types` are the suite types
+// the project's tests declare elsewhere (`class Fixture : public CTS` in a module beside them).
+Result scan(std::string_view text, const std::vector<std::string>& macros,
+            const mcpplibs::mtest::manifest::suite_types& types = {});
 
 // A string literal's contents, as the program sees them for the plain escapes (\" \\ \n \t); the
 // argument itself when it is not one literal. Adjacent literals are joined.
@@ -160,7 +162,8 @@ std::vector<std::string> arguments(Cursor& c) {
 
 }  // namespace
 
-Result scan(std::string_view text, const std::vector<std::string>& macros) {
+Result scan(std::string_view text, const std::vector<std::string>& macros,
+            const mcpplibs::mtest::manifest::suite_types& types) {
     Result r;
     Cursor c{text};
     int depth = 0;                  // braces
@@ -224,7 +227,7 @@ Result scan(std::string_view text, const std::vector<std::string>& macros) {
         c.step();
     }
     // mtest's cases as mtest reads them: its manifest is the one reader of its declarations.
-    for (const auto& found : mcpplibs::mtest::manifest::scan(text))
+    for (const auto& found : mcpplibs::mtest::manifest::scan(text, types))
         r.cases.push_back(Literal{found.id, found.line - 1, found.column - 1});
     return r;
 }
