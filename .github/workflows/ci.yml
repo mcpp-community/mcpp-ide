@@ -616,7 +616,8 @@ jobs:
       - name: The Marketplace submission would name this verified plugin
         run: |
           set -euo pipefail
-          version="$(sed -n 's/^version *= *"\(.*\)"/\1/p' mcpp.toml | head -1)"
+          # The plugin's own version: a component's patch moves it apart from the backend's (mcpp.toml).
+          version="$(sed -n 's/^pluginVersion *= *//p' mide-plugins/clion/gradle.properties | head -1)"
           archive="mide-plugins/clion/build/distributions/mcpp-clion-$version.zip"
           test -f "$archive"
           digest="$(sha256sum "$archive" | cut -d ' ' -f1)"
