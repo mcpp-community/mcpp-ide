@@ -9,7 +9,7 @@
 # M2/M3), where the system it runs upon is answered when the image is loaded.
 [package]
 name        = "mcpp-ide"
-version     = "1.2.0"
+version     = "1.2.1"
 description = "The IDE backend for mcpp: sessions, jobs, records and view models over mcpp's control contract"
 license     = "Apache-2.0"
 authors     = ["mcpp-community"]
@@ -80,6 +80,8 @@ main = "src/bin/dev.cpp"
 # runtime and loader remain the platform's.
 mcpplibs.os   = "0.4.0"
 nlohmann.json = "3.12.0"
+# mtest's static case manifest: the cases a test file declares, read as mtest reads them.
+mcpplibs.mtest.manifest = "0.3.0"
 
 # What every backend test shares (testsupport/): a module, as the backend's units are.
 [dev-dependencies]
