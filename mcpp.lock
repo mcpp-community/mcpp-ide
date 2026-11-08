@@ -81,6 +81,12 @@ source  = "index+mcpplibs@0.4.0"
 hash    = "fnv1a:c06e4aa4f73f1f27"
 targets = ["aarch64-openkal", "x86_64-linux-gnu", "x86_64-openkal"]
 
+[package."mcpplibs.mtest.manifest"]
+namespace = "mcpplibs.mtest"
+version = "0.4.1"
+source  = "index+mcpplibs.mtest@0.4.1"
+hash    = "fnv1a:0339d37dd3c40581"
+
 [package."nlohmann.json"]
 namespace = "nlohmann"
 version = "3.12.0"

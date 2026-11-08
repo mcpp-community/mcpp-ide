@@ -7,6 +7,7 @@ import std;
 import mcppide.testsupport;
 import nlohmann.json;
 import mcppide.scan;
+import mcpplibs.mtest.manifest;
 import mcppide.testing;
 import mcppide.rpc;
 import mcppide.server;
@@ -149,31 +150,30 @@ TEST(Math,
         check(testing::case_outputs(fw("catch2"), "[ RUN      ] x\n").empty());
     }
 
-    // mtest's cases: `"name"_test` literals, prefixed by the suites they are declared in; never a
-    // literal in a comment or one not followed by `_test`. The framework is claimed by its package
-    // and its cases, and a record of `mcpp test` lists and reports them (the test protocol).
+    // mtest's cases as mtest's static manifest reads them: each object (`UTest`, `Suite`, ...) is a
+    // case, and so is each `"name"_test` declared in one, under its name; never a literal in a
+    // comment or one not followed by `_test`. The framework is claimed by its package and its
+    // cases, and a record of `mcpp test` lists and reports them (the test protocol).
     {
         const auto r = scan::scan(R"(import mcpplibs.mtest;
 using namespace mcpplibs::mtest;
 // "commented"_test
-suite parsing{"parsing", [] {
-    "an empty line"_test = [] { expect(true); };
-    suite fields{"fields", [] {
-        "one field"_test[tag{"x"}] = [] {};
-    }};
+UTest empty{"an empty line", [] { expect(true); }};
+Suite parsing{"parsing", tag{"p"}, [] {
+    "one field"_test[tag{"x"}] = [] {};
     const char* s = "not a case";
 }};
-mcpplibs::mtest::suite other{"other", [] { "after"_test = [] {}; }};
+mcpplibs::mtest::E2E other{"other", [] { "after"_test = [] {}; }};
 int main() { "top"_test = [] {}; return report(); }
 )", {});
-        check(r.cases.size() == 4);
-        check(r.cases.size() == 4 && r.cases[0].id == "parsing/an empty line" && r.cases[0].line == 4);
-        check(r.cases.size() == 4 && r.cases[1].id == "parsing/fields/one field");
-        check(r.cases.size() == 4 && r.cases[2].id == "other/after" && r.cases[3].id == "top");
+        std::vector<std::string> ids;
+        for (const auto& c : r.cases) ids.push_back(c.id);
+        check(ids == std::vector<std::string>{"an empty line", "parsing", "parsing/one field", "other", "other/after", "top"});
+        check(r.cases.size() == 6 && r.cases[0].line == 3 && r.cases[2].line == 5);
         check(testing::framework_of({"app", "mcpplibs.mtest"}, r, Json::object()) == &fw("mtest"));
         check(testing::framework_of({"app"}, r, Json::object()) == nullptr);
         const auto cases = testing::static_cases(fw("mtest"), r, Json::object());
-        check(cases.size() == 4 && cases[0].name == "parsing/an empty line" && cases[0].line == 4);
+        check(cases.size() == 6 && cases[0].name == "an empty line" && cases[0].line == 3);
 
         const auto record = Json::parse(R"({"test":"parse","protocol":1,
             "listed":[{"id":"parsing/an empty line","file":"tests/parse.cpp","line":5}],
@@ -190,6 +190,19 @@ int main() { "top"_test = [] {}; return report(); }
               && outcomes[1].outcome.message.contains("expected 2, actual 1"));
         check(outcomes.size() == 4 && outcomes[2].outcome.status == "skipped" && outcomes[2].outcome.message == "later");
         check(outcomes.size() == 4 && outcomes[3].outcome.status == "passed");
+    }
+
+    // A suite type the project's tests declare in a module beside them is a suite type in every
+    // file that uses it: the server reads the types across tests/ before it scans a file.
+    {
+        const std::vector<std::string> sources{
+            "export module cts;\nimport mcpplibs.mtest;\nexport class Fixture : public mcpplibs::mtest::CTS {\n"
+            "public:\n    using CTS::CTS;\n};\n"};
+        const auto types = mcpplibs::mtest::manifest::types_of(sources);
+        const std::string_view cases = "import cts;\nFixture one{\"one\"};\nFixture two{\"two@warm\"};\n";
+        const auto r = scan::scan(cases, {}, types);
+        check(r.cases.size() == 2 && r.cases[0].id == "one" && r.cases[1].id == "two@warm" && r.cases[1].line == 2);
+        check(scan::scan(cases, {}).cases.empty());
     }
 
     // source/entries and test/cases over a project on disk (no mcpp: the plan's packages are not
