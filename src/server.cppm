@@ -33,7 +33,7 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "1.2.0";
+inline constexpr std::string_view kVersion = "1.2.1";
 // THE SERIES (mcpp design 2026-11-07, D15): `X.Y` of `X.Y.Z`, shared by the backend and every editor
 // plugin; components of one series work together, and `Z` is each component's own patch. A plugin
 // refuses a backend of another series, naming both versions.
