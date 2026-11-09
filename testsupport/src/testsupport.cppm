@@ -22,9 +22,14 @@ inline std::filesystem::path generic(std::string text) {
     for (auto& c : text) if (c == '\\') c = '/';
     return std::filesystem::path(text);
 }
-// The repository, from this file's own path (testsupport/src/testsupport.cppm).
+// The repository, from this file's own path (testsupport/src/testsupport.cppm). A build that names a
+// source from its package's root (the ok images') gives a relative name; the tests run in the
+// repository, so it is taken from there. Either way the answer is absolute: a test starts programs in
+// directories of its own.
 inline std::filesystem::path repo() {
-    return generic(std::source_location::current().file_name()).parent_path().parent_path().parent_path();
+    const auto named = generic(std::source_location::current().file_name());
+    if (named.is_absolute()) return named.parent_path().parent_path().parent_path();
+    return generic(std::filesystem::current_path().string());
 }
 // The temporary directory, in the generic spelling.
 inline std::filesystem::path temp() { return generic(std::filesystem::temp_directory_path().string()); }
