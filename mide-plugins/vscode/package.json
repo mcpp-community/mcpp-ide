@@ -350,6 +350,12 @@
         "category": "%category%"
       },
       {
+        "command": "mcpp.test.insights",
+        "title": "%command.mcpp.test.insights.title%",
+        "category": "%category%",
+        "icon": "$(graph-line)"
+      },
+      {
         "command": "mcpp.languageServer.refreshState",
         "title": "%command.mcpp.languageServer.refreshState.title%",
         "category": "%category%"

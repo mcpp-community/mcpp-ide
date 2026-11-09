@@ -211,6 +211,7 @@
   "viewsWelcome.library": "本机没有找到 mcpp 包索引。\n\n先运行一次 `mcpp index update`，或用 `mcpp.library.indexPath` 指向一个索引检出。\n[运行 mcpp index update](command:mcpp.library.updateIndex)",
   "command.mcpp.project.showDependencyGraph.title": "显示项目依赖图",
   "command.mcpp.project.showModuleDependencyGraph.title": "显示 C++ Modules 依赖图",
+  "command.mcpp.test.insights.title": "显示测试洞察",
   "command.mcpp.debug.title": "调试",
   "command.mcpp.pack.title": "打包",
   "command.mcpp.cancelJob.title": "取消正在运行的任务",

@@ -98,6 +98,9 @@
       "action": { "kind": "panel", "panel": "graph", "graph": "packages" }, "quickMenu": true },
     { "id": "mcpp.project.showModuleDependencyGraph", "group": "project",
       "action": { "kind": "panel", "panel": "graph", "graph": "modules" }, "quickMenu": true },
+    { "id": "mcpp.test.insights", "group": "project", "icon": { "vscode": "$(graph-line)", "jetbrains": "AllIcons.RunConfigurations.TestState.Run" },
+      "when": "mcpp.inProject",
+      "action": { "kind": "panel", "panel": "tests" }, "quickMenu": true },
 
     { "id": "mcpp.languageServer.refreshState", "group": "languageService", "action": { "kind": "languageService" } },
     { "id": "mcpp.openMcpplsSettings", "group": "languageService", "palette": false, "editors": [ "vscode" ],

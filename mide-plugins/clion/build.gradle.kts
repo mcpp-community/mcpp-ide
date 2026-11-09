@@ -79,7 +79,7 @@ val generateDeclarations = tasks.register<Exec>("generateDeclarations") {
     if (dev != null) commandLine(dev, "gen", "jetbrains", "--out", out.absolutePath)
     else commandLine("mcpp", "run", "mcpp-ide-dev", "--", "gen", "jetbrains", "--out", out.absolutePath)
 }
-// The graph page JCEF loads (../../webui, mcpp design 2026-10-30 part 2 §9): webui/src/graph.ts and
+// The pages JCEF loads (../../webui, mcpp design 2026-10-30 part 2 §9): webui/src/graph.ts, tests.ts and
 // mermaid, bundled by the extension's tools/bundle-webui.mjs (Node; `npm ci` in ../vscode first),
 // with webui/files.txt naming its files.
 val webuiOut = layout.buildDirectory.dir("generated/webui/webui")
@@ -87,6 +87,7 @@ val bundleWebui = tasks.register<Exec>("bundleWebui") {
     val extension = repositoryRoot.resolve("mide-plugins/vscode")
     inputs.dir(repositoryRoot.resolve("webui/src"))
     inputs.file(repositoryRoot.resolve("webui/graph.html"))
+    inputs.file(repositoryRoot.resolve("webui/tests.html"))
     inputs.file(extension.resolve("tools/bundle-webui.mjs"))
     outputs.dir(webuiOut)
     workingDir = extension

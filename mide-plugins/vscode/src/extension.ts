@@ -39,6 +39,7 @@ import { Jobs } from "./ide/jobs";
 import type { IdeProjects } from "./ide/projects";
 import { Session } from "./ide/session";
 import { Testing } from "./ide/testing";
+import { registerTestInsights } from "./ide/insights";
 import { McppCodeLens } from "./ide/codeLens";
 import { changedSettings, onDidChange as onConfigurationChanged, read } from "./config/access";
 import { applyRenames, pendingRenames, renamePrompt } from "./config/migrate";
@@ -348,6 +349,7 @@ export async function activate(extensionContext: vscode.ExtensionContext): Promi
     jobs,
     new Debugging(session, ideProjects, ensureMcppForAction, jobs),
     testing,
+    registerTestInsights(extensionContext, session, ideProjects),
     new McppCodeLens(session, testing, (root) => projectMcpp.get(root)),
     jobs.onDidChangeRunning.event((n) => void vscode.commands.executeCommand("setContext", "mcpp.jobRunning", n > 0)),
     vscode.tasks.onDidStartTask(() => void updateJobRunning()),
