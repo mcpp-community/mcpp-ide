@@ -771,6 +771,7 @@
   "mcpp: Pack (2/3): what the machine that runs it provides": "mcpp：打包（2/3）：运行它的机器提供什么",
   "mcpp: Pack (3/3): the libraries inside the program or beside it": "mcpp：打包（3/3）：库在程序里还是在程序旁边",
   "the project's mcpp {0} does not state {1}; mcpp {2} does": "项目的 mcpp {0} 未声明 {1}；mcpp {2} 声明了它",
+  "the project's mcpp {0} does not state {1}, which {2} proposes": "项目的 mcpp {0} 未声明 {1}（由 {2} 提出）",
   "the workspace is not trusted: the project's mcpp is not asked": "工作区不受信任：未询问项目的 mcpp",
   "The mcpp-ide backend ended four times in three minutes; build, run, test and the project pages go on without it.": "mcpp-ide 后端在三分钟内结束了四次；构建、运行、测试与项目页面在没有它的情况下继续工作。",
   "Restart the backend": "重新启动后端",

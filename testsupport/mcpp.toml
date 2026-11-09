@@ -1,7 +1,7 @@
 [package]
 name        = "mcpp-ide-testsupport"
 version     = "0.1.0"
-description = "What every backend test of mcpp-ide shares: a check that says where it failed, and the paths of the fixtures and the built programs"
+description = "What every backend test of mcpp-ide shares: a check that ends its case where it failed (mtest), and the paths of the fixtures and the built programs"
 license     = "Apache-2.0"
 
 [language]
@@ -11,3 +11,6 @@ import_std = true
 
 [targets.mcpp-ide-testsupport]
 kind = "lib"
+
+[dependencies]
+mcpplibs.mtest = "0.5.2"

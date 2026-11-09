@@ -28,6 +28,7 @@ import mcppide.languageservice;
 import mcppide.scan;
 import mcpplibs.mtest.manifest;
 import mcppide.testing;
+import mcppide.teststore;
 import mcpplibs.os;
 
 export namespace mcppide::server {
@@ -48,7 +49,7 @@ inline constexpr int kProtocol = 2;
 // here and not in protocol/protocol.schema.json (or the other way) fails it. The session is an LSP
 // server (protocol 2, design 2026-10-30 part 2 §8): LSP's own methods, and mcpp-ide's under
 // `mcpp-ide/`.
-inline constexpr std::array<std::string_view, 53> kMethods = {
+inline constexpr std::array<std::string_view, 55> kMethods = {
     "initialize", "shutdown", "exit", "textDocument/completion", "textDocument/hover", "textDocument/definition",
     "textDocument/documentSymbol", "mcpp-ide/settings/update", "mcpp-ide/settings/registry",
     "mcpp-ide/settings/preset", "mcpp-ide/i18n/bundle", "mcpp-ide/selfCheck", "mcpp-ide/commands/list",
@@ -62,19 +63,20 @@ inline constexpr std::array<std::string_view, 53> kMethods = {
     "mcpp-ide/pack/start", "mcpp-ide/manifest/check", "mcpp-ide/mcpp/exec", "mcpp-ide/mcpp/availability", "mcpp-ide/project/files",
     "mcpp-ide/languageService/exec", "mcpp-ide/project/mcpp", "mcpp-ide/project/refresh",
     "mcpp-ide/capabilities/explain", "mcpp-ide/report/collect", "mcpp-ide/source/entries", "mcpp-ide/test/cases",
-    "mcpp-ide/test/runCases"};
+    "mcpp-ide/test/runCases", "mcpp-ide/test/history", "mcpp-ide/test/insights"};
 
 // The notifications the backend reads.
 inline constexpr std::array<std::string_view, 5> kReceived = {
     "initialized", "textDocument/didOpen", "textDocument/didChange", "textDocument/didClose", "$/cancelRequest"};
 
 // The notifications the backend sends.
-inline constexpr std::array<std::string_view, 18> kNotifications = {
+inline constexpr std::array<std::string_view, 19> kNotifications = {
     "textDocument/publishDiagnostics", "window/showMessage", "mcpp-ide/job/started", "mcpp-ide/job/output",
     "mcpp-ide/job/plan", "mcpp-ide/job/progress", "mcpp-ide/job/diagnostic", "mcpp-ide/job/artifact",
     "mcpp-ide/job/record", "mcpp-ide/job/finished", "mcpp-ide/test/result", "mcpp-ide/test/summary",
     "mcpp-ide/result/changed", "mcpp-ide/manifest/changed", "mcpp-ide/manifest/diagnostics",
-    "mcpp-ide/project/mcppChanged", "mcpp-ide/languageService/changed", "mcpp-ide/test/caseResult"};
+    "mcpp-ide/project/mcppChanged", "mcpp-ide/languageService/changed", "mcpp-ide/test/caseResult",
+    "mcpp-ide/test/caseEvent"};
 
 class Session {
 public:
@@ -112,6 +114,23 @@ private:
     Result source_entries(const Json& p);
     Result test_cases(const Json& p);
     Result test_run_cases(const Json& p);
+    Result test_history(const Json& p);
+    Result test_insights(const Json& p);
+    // The programs of `mcpp test --list` (kept per project), and lookups among them.
+    std::vector<testing::Program> list_programs(const std::filesystem::path& root, const Json& p);
+    std::vector<testing::Program> programs_of(const std::filesystem::path& root);
+    std::optional<testing::Program> program_named(const std::filesystem::path& root, std::string_view name);
+    std::optional<testing::Program> program_of_file(const std::filesystem::path& root, const std::filesystem::path& file);
+    std::optional<std::vector<testing::Case>> listed_cases(const std::filesystem::path& root, const std::string& test, const Json& p,
+                                                           const std::vector<testing::Case>& statics);
+    std::optional<std::vector<std::string>> framework_listing(const std::filesystem::path& root, const std::string& test,
+                                                              const Json& p, const testing::Framework& f);
+    // A record of a test job, with the program and part it belongs to, and its cases as the editors
+    // receive them (design 2026-11-10).
+    Json test_result_of(const std::filesystem::path& root, const Json& record, Json n);
+    void protocol_case_results(std::string_view jobId, const std::filesystem::path& root, const std::string& test, const Json& record);
+    // The store's last runs (kept per project; a run is read once).
+    std::vector<teststore::Run> store_runs(const std::filesystem::path& root, std::size_t count);
     // `mcpp.test.macros` as testing reads it: {"gtest": ["MY_TEST"]}.
     Json test_macros() const;
     // The packages of a project's plan, from its build database when one was read.
@@ -192,9 +211,13 @@ private:
     // The whole output of the last test record of each running test job, for a case run to divide
     // among its cases when the job ends (test/runCases).
     std::map<std::string, std::string, std::less<>> programOutput_;
-    // The last test record of each running test job, whole: a program that implements the test
-    // protocol reports its cases in it (test/runCases).
-    std::map<std::string, Json, std::less<>> testRecord_;
+    // The test records of each running test job, whole: a program that implements the test protocol
+    // reports its cases in them, one record per part of a program of several files (test/runCases).
+    std::map<std::string, std::vector<Json>, std::less<>> testRecords_;
+    // The programs of each project as `mcpp test --list` last named them.
+    std::map<std::filesystem::path, std::vector<testing::Program>> programs_;
+    // The runs of each project's store already read, by id.
+    std::map<std::filesystem::path, std::map<std::string, teststore::Run>> storeRuns_;
     // The configuration (and platforms) the last plan of each project named.
     std::map<std::filesystem::path, Json> plans_;
     // What `mcpp pack` accepts, read from its help once per mcpp (SPEC-014: `--pkg-format` names the
@@ -270,7 +293,7 @@ Session::Session(rpc::Server& server) : rpc_(server) {
                     jobOf_.erase(it);
                 }
                 if (auto it = programOutput_.find(id); it != programOutput_.end()) programOutput_.erase(it);
-                if (auto it = testRecord_.find(id); it != testRecord_.end()) testRecord_.erase(it);
+                if (auto it = testRecords_.find(id); it != testRecords_.end()) testRecords_.erase(it);
             }
             rpc_.notify("mcpp-ide/job/finished", s);
             // Every envelope names the mcpp that wrote it: another version than the one probed (a
@@ -391,6 +414,7 @@ void Session::on_changed(const std::filesystem::path& root, std::string_view wha
         std::lock_guard lock(mutex_);
         buildDatabases_.erase(root);
         if (what != "result") probes_.erase(root);   // a manifest may state another mcpp floor or pin
+        if (what != "result") programs_.erase(root); // and other tests
     }
     if (what == "result") {
         rpc_.notify("mcpp-ide/result/changed", Json{{"root", root.generic_string()}, {"result", detail}});
@@ -430,10 +454,28 @@ void Session::on_record(std::string_view jobId, const Json& record) {
     } else if (type == "test") {
         {
             std::lock_guard lock(mutex_);
-            programOutput_[std::string(jobId)] = record.value("compile_output", "") + record.value("run_output", "");
-            testRecord_[std::string(jobId)] = record;
+            programOutput_[std::string(jobId)] += record.value("compile_output", "") + record.value("run_output", "");
+            testRecords_[std::string(jobId)].push_back(record);
         }
-        rpc_.notify("mcpp-ide/test/result", n);
+        rpc_.notify("mcpp-ide/test/result", test_result_of(std::filesystem::path(root), record, std::move(n)));
+    } else if (type == "case") {
+        // A case as it begins or ends while its program runs (mcpp#917, `test-case-stream`).
+        const auto& c = n["case"];
+        Json event = c.value("event", "") == "end" ? testing::protocol_case(c) : Json{{"case", c.value("id", "")}};
+        const auto part = c.value("test", "");
+        std::vector<testing::Program> programs;
+        {
+            std::lock_guard lock(mutex_);
+            if (auto it = programs_.find(std::filesystem::path(root)); it != programs_.end()) programs = it->second;
+        }
+        event["jobId"] = jobId;
+        event["root"] = root;
+        event["member"] = c.value("member", "");
+        event["program"] = testing::owner_of(part, c.value("part_of", ""), programs);
+        event["part"] = part;
+        event["event"] = c.value("event", "");
+        if (c.contains("t_ms") && c["t_ms"].is_number()) event["tMs"] = c["t_ms"];
+        rpc_.notify("mcpp-ide/test/caseEvent", event);
     } else if (type == "summary") {
         rpc_.notify("mcpp-ide/test/summary", n);
     } else if (!(record.is_object() && record.contains("schemaVersion") && record.value("kind", "") != "mcpp.event")) {
@@ -1229,25 +1271,30 @@ std::expected<Json, rpc::Error> Session::project_refresh(const Json& p) {
 std::expected<Json, rpc::Error> Session::capabilities_explain(const Json& p) {
     const auto root = any_root(p).lexically_normal();
     const auto probe = probe_of(root);
-    struct Gate { const char* id; const char* feature; const char* since; };
+    // `since` is the first mcpp that states the feature; a feature no release states yet names the
+    // issue that proposes it instead (`issue`), and its message says so.
+    struct Gate { const char* id; const char* feature; const char* since; const char* issue; };
     static constexpr Gate kGates[] = {
-        {"targets.sets", "target-sets", "2026.10.30.1"},
-        {"pack.formatList", "pkg-format-list", "2026.10.30.1"},
-        {"tests.debug", "test-launch", "2026.10.31.2"},
+        {"targets.sets", "target-sets", "2026.10.30.1", nullptr},
+        {"pack.formatList", "pkg-format-list", "2026.10.30.1", nullptr},
+        {"tests.debug", "test-launch", "2026.10.31.2", nullptr},
+        {"tests.cases", "test-protocol", "2026.11.8.1", nullptr},
+        {"tests.parts", "test-parts", "", "mcpp#917"},
+        {"tests.live", "test-case-stream", "", "mcpp#917"},
+        {"tests.metrics", "test-metrics", "", "mcpp#917"},
     };
     Json features = Json::array();
     for (const auto& g : kGates) {
         const bool on = std::ranges::find(probe.features, g.feature) != probe.features.end();
         Json f{{"id", g.id}, {"available", on}};
-        if (!on)
-            f["reason"] = Json{{"source", "mcpp"},
-                               {"capability", g.feature},
-                               {"need", g.since},
-                               {"have", probe.version},
-                               {"message", probe.state == "ok" || probe.state == "not-probed"
-                                               ? t("the project's mcpp {0} does not state {1}; mcpp {2} does",
-                                                   {probe.version, g.feature, g.since})
-                                               : probe.message}};
+        if (!on) {
+            const bool known = probe.state == "ok" || probe.state == "not-probed";
+            const auto message = !known ? probe.message
+                                 : g.issue ? t("the project's mcpp {0} does not state {1}, which {2} proposes", {probe.version, g.feature, g.issue})
+                                           : t("the project's mcpp {0} does not state {1}; mcpp {2} does", {probe.version, g.feature, g.since});
+            f["reason"] = Json{{"source", "mcpp"}, {"capability", g.feature}, {"need", g.issue ? g.issue : g.since},
+                               {"have", probe.version}, {"message", message}};
+        }
         features.push_back(std::move(f));
     }
     return Json{{"root", root.generic_string()}, {"mcpp", probe_json(root, probe)}, {"features", features}};
@@ -1383,32 +1430,19 @@ std::expected<Json, rpc::Error> Session::quick_menu(const Json& p) {
 }
 
 // The tests of a project, without building them: `mcpp test --list --message-format json` (one
-// record per test, with the file that holds its `main`), else the test targets of the build database.
+// record per program), each with its files and parts (design 2026-11-10), else the test targets of
+// the build database. The programs are kept per project: a run's record is attributed to its
+// program by them.
 std::expected<Json, rpc::Error> Session::test_list(const Json& p) {
     const auto root = root_of(p);
     if (root.empty()) return std::unexpected(invalid("test/list names its project's root"));
-    mcpp::Client client;
-    {
-        std::lock_guard lock(mutex_);
-        client = client_;
-    }
     Json tests = Json::array();
-    if (client.ready()) {
-        mcpp::RunOptions o;
-        o.cwd = root;
-        o.args = {"test", "--list", "--message-format", "json"};
-        for (const auto& a : target_args(p)) o.args.push_back(a);
-        o.deny = deny();
-        o.client = client_label();
-        if (auto r = client.records(o); r && r->exitCode == 0)
-            for (const auto& rec : r->records)
-                if (rec.is_object() && rec.contains("test") && rec["test"].is_string())
-                    tests.push_back(Json{{"test", rec["test"]}, {"member", rec.value("member", "")}, {"main", rec.value("main", "")}});
-    }
+    for (const auto& program : list_programs(root, p)) tests.push_back(testing::program_json(program));
     if (tests.empty()) {
         auto db = build_database(root);
         if (db) for (const auto& row : views::project_summary(*db, Json(nullptr))["tests"])
-            tests.push_back(Json{{"test", row.value("name", "")}, {"member", ""}, {"main", ""}});
+            tests.push_back(Json{{"test", row.value("name", "")}, {"member", ""}, {"main", ""}, {"files", Json::array()},
+                                 {"parts", Json::array()}, {"layout", "file"}});
     }
     return Json{{"root", root.generic_string()}, {"tests", tests}};
 }
@@ -1474,15 +1508,38 @@ std::optional<std::string> test_name_of(const std::filesystem::path& root, const
 }
 
 // The suite types the project's tests declare (`class Fixture : public CTS` in a module beside them),
-// read across the files of tests/ as mtest's static manifest reads them.
+// read across the files of tests/ as mtest's static manifest reads them. They are read again only
+// when the files changed: a walk that only stats them (their count, latest change and total size)
+// decides, so a source/entries or test/cases call does not read every file of tests/.
 mcpplibs::mtest::manifest::suite_types test_suite_types(const std::filesystem::path& root) {
     static const std::set<std::string> cxx{".cpp", ".cc", ".cxx", ".cppm", ".ixx", ".mpp"};
-    std::vector<std::string> sources;
+    struct Kept {
+        std::tuple<std::size_t, std::filesystem::file_time_type, std::uintmax_t> signature;
+        mcpplibs::mtest::manifest::suite_types types;
+    };
+    static std::mutex mutex;
+    static std::map<std::filesystem::path, Kept> kept;
+    std::vector<std::filesystem::path> files;
+    std::tuple<std::size_t, std::filesystem::file_time_type, std::uintmax_t> signature{};
     std::error_code ec;
-    for (std::filesystem::recursive_directory_iterator it(root / "tests", ec), end; !ec && it != end; it.increment(ec))
-        if (it->is_regular_file(ec) && cxx.contains(it->path().extension().string()))
-            sources.push_back(read_text(it->path()));
-    return mcpplibs::mtest::manifest::types_of(sources);
+    for (std::filesystem::recursive_directory_iterator it(root / "tests", ec), end; !ec && it != end; it.increment(ec)) {
+        if (!it->is_regular_file(ec) || !cxx.contains(it->path().extension().string())) continue;
+        files.push_back(it->path());
+        auto& [count, latest, size] = signature;
+        ++count;
+        latest = std::max(latest, it->last_write_time(ec));
+        size += it->file_size(ec);
+    }
+    {
+        std::lock_guard lock(mutex);
+        if (auto it = kept.find(root); it != kept.end() && it->second.signature == signature) return it->second.types;
+    }
+    std::vector<std::string> sources;
+    for (const auto& f : files) sources.push_back(read_text(f));
+    auto types = mcpplibs::mtest::manifest::types_of(sources);
+    std::lock_guard lock(mutex);
+    kept[root] = Kept{signature, types};
+    return types;
 }
 
 // The source of a test by its name: tests/<name>.cpp (or .cc, .cxx).
@@ -1496,6 +1553,53 @@ std::filesystem::path test_source(const std::filesystem::path& root, std::string
 }
 
 }  // namespace
+
+std::vector<testing::Program> Session::list_programs(const std::filesystem::path& root, const Json& p) {
+    mcpp::Client client;
+    {
+        std::lock_guard lock(mutex_);
+        client = client_;
+    }
+    std::vector<testing::Program> programs;
+    if (!client.ready()) return programs;
+    mcpp::RunOptions o;
+    o.cwd = root;
+    o.args = {"test", "--list", "--message-format", "json"};
+    for (const auto& a : target_args(p)) o.args.push_back(a);
+    o.deny = deny();
+    o.client = client_label();
+    const auto types = test_suite_types(root);
+    const auto definesMain = [&](const std::filesystem::path& f) { return scan::scan(read_text(f), {}, types).mainLine.has_value(); };
+    if (auto r = client.records(o); r && r->exitCode == 0)
+        for (const auto& rec : r->records)
+            if (rec.is_object() && rec.contains("test") && rec["test"].is_string())
+                programs.push_back(testing::program_of(rec, definesMain));
+    std::lock_guard lock(mutex_);
+    programs_[root] = programs;
+    return programs;
+}
+
+// The project's programs as last listed, listed now when they were not.
+std::vector<testing::Program> Session::programs_of(const std::filesystem::path& root) {
+    {
+        std::lock_guard lock(mutex_);
+        if (auto it = programs_.find(root); it != programs_.end()) return it->second;
+    }
+    return list_programs(root, Json::object());
+}
+
+std::optional<testing::Program> Session::program_named(const std::filesystem::path& root, std::string_view name) {
+    for (auto& program : programs_of(root))
+        if (program.name == name) return program;
+    return std::nullopt;
+}
+
+// The program of several files a file belongs to (a file program is found by its name).
+std::optional<testing::Program> Session::program_of_file(const std::filesystem::path& root, const std::filesystem::path& file) {
+    for (auto& program : programs_of(root))
+        if (program.layout == "directory" && !testing::part_of_file(program, file).empty()) return program;
+    return std::nullopt;
+}
 
 // What a C++ file is to its project (§6.3): a test's or a program's `main`, or neither, with the
 // line of `main` read from the text (approximate: an editor takes its language service's position
@@ -1512,6 +1616,11 @@ std::expected<Json, rpc::Error> Session::source_entries(const Json& p) {
     if (auto name = test_name_of(proj->root, file)) {
         out["kind"] = "test";
         out["test"] = *name;
+        // A file of a program of several files: the program, and the part of it the file is.
+        if (auto program = program_of_file(proj->root, file)) {
+            out["test"] = program->name;
+            out["part"] = testing::part_of_file(*program, file);
+        }
         if (const auto* f = testing::framework_of(plan_packages(proj->root, false), found, extra)) out["framework"] = f->id;
     } else if (found.mainLine) {
         out["kind"] = "program";
@@ -1520,107 +1629,137 @@ std::expected<Json, rpc::Error> Session::source_entries(const Json& p) {
     return out;
 }
 
-// A test program's cases (§7.3): as its source names them, and -- when `list` is asked for, the
-// workspace is trusted and the source calls its framework's macros -- as the program lists them.
+// A test program's cases (§7.3): as its sources name them -- every file of a program of several
+// (design 2026-11-10), each case with its file -- and, when `list` is asked for and the workspace is
+// trusted, as the program lists them.
 std::expected<Json, rpc::Error> Session::test_cases(const Json& p) {
     std::filesystem::path root = root_of(p);
     std::string test = p.value("test", "");
     std::filesystem::path file(p.value("file", ""));
-    if (!file.empty()) {
-        if (root.empty()) if (auto proj = projects::project_for(file.generic_string(), "")) root = proj->root;
-        if (test.empty()) if (auto name = test_name_of(root, file)) test = *name;
+    if (!file.empty() && root.empty())
+        if (auto proj = projects::project_for(file.generic_string(), "")) root = proj->root;
+    std::optional<testing::Program> program;
+    if (!root.empty() && !file.empty() && test.empty()) {
+        program = program_of_file(root, file);
+        if (program) test = program->name;
+        else if (auto name = test_name_of(root, file)) test = *name;
     }
     if (root.empty() || test.empty()) return std::unexpected(invalid("test/cases names a project's test, or a test's file"));
-    if (file.empty()) file = test_source(root, test);
-    Json out{{"root", root.generic_string()}, {"test", test}, {"file", file.generic_string()}, {"framework", nullptr}, {"cases", Json::array()}};
-    if (file.empty()) return out;
-    const auto extra = test_macros();
-    const auto found = scan::scan(read_text(file), testing::macros(extra), test_suite_types(root));
-    if (found.mainLine) out["main"] = Json{{"line", *found.mainLine}, {"approximate", true}};
+    if (!program) program = program_named(root, test);
+    std::vector<std::filesystem::path> files;
+    if (program && !program->files.empty()) for (const auto& f : program->files) files.emplace_back(f);
+    else if (!file.empty()) files.push_back(file);
+    else if (auto source = test_source(root, test); !source.empty()) files.push_back(source);
+    const auto shown = program && !program->main.empty() ? std::filesystem::path(program->main) : files.empty() ? file : files.front();
+    Json out{{"root", root.generic_string()}, {"test", test}, {"file", shown.generic_string()}, {"framework", nullptr}, {"cases", Json::array()}};
+    if (files.empty()) return out;
+    if (program && program->layout == "directory") out["files"] = program->files;
     bool trusted;
     {
         std::lock_guard lock(mutex_);
         trusted = trusted_;
     }
-    const auto* f = testing::framework_of(plan_packages(root, trusted), found, extra);
+    const auto extra = test_macros();
+    const auto types = test_suite_types(root);
+    const auto packages = plan_packages(root, trusted);
+    const testing::Framework* f = nullptr;
     std::vector<testing::Case> cases;
-    if (f) {
-        out["framework"] = f->id;
-        cases = testing::static_cases(*f, found, extra);
+    for (const auto& one : files) {
+        const auto found = scan::scan(read_text(one), testing::macros(extra), types);
+        if (found.mainLine && one == shown) out["main"] = Json{{"line", *found.mainLine}, {"approximate", true}};
+        const auto* framework = testing::framework_of(packages, found, extra);
+        if (!framework || (f && framework != f)) continue;
+        f = framework;
+        for (auto c : testing::static_cases(*f, found, extra)) {
+            c.file = one.generic_string();
+            if (c.kind.empty() && f->protocol) c.kind = testing::kind_of_path(c.file);
+            cases.push_back(std::move(c));
+        }
     }
+    if (f) out["framework"] = f->id;
     // A PROGRAM THAT IMPLEMENTS THE TEST PROTOCOL LISTS ITS OWN CASES (mcpp's `test-protocol`):
     // `mcpp test <test> --cases`, whatever framework wrote it; its cases then run by `--case`.
-    if (p.value("list", false) && trusted && has_feature(root, "test-protocol")) {
-        mcpp::Client client;
-        {
-            std::lock_guard lock(mutex_);
-            client = client_;
+    if (p.value("list", false) && trusted && has_feature(root, "test-protocol"))
+        if (auto listed = listed_cases(root, test, p, cases)) {
+            cases = std::move(*listed);
+            out["framework"] = "mtest";
+            out["listed"] = true;
+            f = testing::framework("mtest");
         }
-        if (client.ready()) {
-            mcpp::RunOptions o;
-            o.cwd = root;
-            o.args = {"test", "--message-format", "json"};
-            for (const auto& a : target_args(p)) o.args.push_back(a);
-            o.args.push_back(test);
-            o.args.push_back("--cases");
-            o.deny = deny();
-            o.client = client_label();
-            if (auto r = client.records(o))
-                for (const auto& rec : r->records) {
-                    if (!rec.is_object() || rec.value("test", "") != test || !rec.contains("listed")) continue;
-                    const auto* protocol = testing::framework("mtest");
-                    if (!protocol || !rec["protocol"].is_number()) continue;
-                    std::vector<testing::Case> listed;
-                    for (const auto& c : testing::protocol_listing(rec)) {
-                        auto known = std::ranges::find_if(cases, [&](const testing::Case& s) { return s.name == c.id; });
-                        listed.push_back(testing::Case{c.id, known != cases.end() && known->line >= 0 ? known->line : c.line, "listed"});
-                    }
-                    cases = std::move(listed);
-                    out["framework"] = protocol->id;
-                    out["listed"] = true;
-                    f = protocol;
-                }
-        }
-    }
     if (!f) return out;
-    if (out.value("listed", false)) {
-        for (const auto& c : cases) {
-            Json row{{"name", c.name}, {"source", c.source}};
-            if (c.line >= 0) row["line"] = c.line;
-            out["cases"].push_back(row);
+    if (!out.value("listed", false) && p.value("list", false) && trusted && !f->protocol && files.size() == 1)
+        if (auto names = framework_listing(root, test, p, *f)) {
+            cases = testing::merge(cases, *names, *f);
+            out["listed"] = true;
         }
-        return out;
-    }
-    if (p.value("list", false) && trusted && !f->protocol) {
-        mcpp::Client client;
-        {
-            std::lock_guard lock(mutex_);
-            client = client_;
-        }
-        if (client.ready()) {
-            mcpp::RunOptions o;
-            o.cwd = root;
-            o.args = {"test", "--message-format", "json"};
-            for (const auto& a : target_args(p)) o.args.push_back(a);
-            o.args.push_back(test);
-            o.args.push_back("--");
-            for (const auto& a : f->list) o.args.push_back(a);
-            o.deny = deny();
-            o.client = client_label();
-            if (auto r = client.records(o))
-                for (const auto& rec : r->records)
-                    if (rec.is_object() && rec.value("test", "") == test && rec.contains("run_output")) {
-                        cases = testing::merge(cases, testing::listed(*f, rec.value("run_output", "")), *f);
-                        out["listed"] = true;
-                    }
-        }
-    }
-    for (const auto& c : cases) {
-        Json row{{"name", c.name}, {"source", c.source}};
-        if (c.line >= 0) row["line"] = c.line;
-        out["cases"].push_back(row);
-    }
+    for (const auto& c : cases) out["cases"].push_back(testing::case_json(c));
     return out;
+}
+
+// A protocol program's own listing (`mcpp test <test> --cases`), each case placed where its source
+// places it when the source was read, with what either states of its kind, tags and bounds.
+std::optional<std::vector<testing::Case>> Session::listed_cases(const std::filesystem::path& root, const std::string& test,
+                                                                const Json& p, const std::vector<testing::Case>& statics) {
+    mcpp::Client client;
+    {
+        std::lock_guard lock(mutex_);
+        client = client_;
+    }
+    if (!client.ready()) return std::nullopt;
+    mcpp::RunOptions o;
+    o.cwd = root;
+    o.args = {"test", "--message-format", "json"};
+    for (const auto& a : target_args(p)) o.args.push_back(a);
+    o.args.push_back(test);
+    o.args.push_back("--cases");
+    o.deny = deny();
+    o.client = client_label();
+    auto r = client.records(o);
+    if (!r) return std::nullopt;
+    for (const auto& rec : r->records) {
+        if (!rec.is_object() || rec.value("test", "") != test || !rec.contains("listed") || !rec["protocol"].is_number()) continue;
+        std::vector<testing::Case> listed;
+        for (const auto& c : testing::protocol_listing(rec)) {
+            const auto known = std::ranges::find_if(statics, [&](const testing::Case& s) { return s.name == c.id; });
+            const bool placed = known != statics.end() && known->line >= 0;
+            testing::Case one{c.id, placed ? known->line : c.line, "listed"};
+            one.file = !c.file.empty() ? c.file : placed ? known->file : std::string{};
+            one.kind = !c.kind.empty() ? c.kind : known != statics.end() ? known->kind : std::string{};
+            one.tags = !c.tags.empty() || known == statics.end() ? c.tags : known->tags;
+            one.expect = c.expect;
+            one.bounds = !c.bounds.empty() || known == statics.end() ? c.bounds : known->bounds;
+            listed.push_back(std::move(one));
+        }
+        return listed;
+    }
+    return std::nullopt;
+}
+
+// The names a framework's own list command prints (`mcpp test <test> -- <list>`), for a program that
+// does not implement the protocol.
+std::optional<std::vector<std::string>> Session::framework_listing(const std::filesystem::path& root, const std::string& test,
+                                                                  const Json& p, const testing::Framework& f) {
+    mcpp::Client client;
+    {
+        std::lock_guard lock(mutex_);
+        client = client_;
+    }
+    if (!client.ready()) return std::nullopt;
+    mcpp::RunOptions o;
+    o.cwd = root;
+    o.args = {"test", "--message-format", "json"};
+    for (const auto& a : target_args(p)) o.args.push_back(a);
+    o.args.push_back(test);
+    o.args.push_back("--");
+    for (const auto& a : f.list) o.args.push_back(a);
+    o.deny = deny();
+    o.client = client_label();
+    auto r = client.records(o);
+    if (!r) return std::nullopt;
+    for (const auto& rec : r->records)
+        if (rec.is_object() && rec.value("test", "") == test && rec.contains("run_output"))
+            return testing::listed(f, rec.value("run_output", ""));
+    return std::nullopt;
 }
 
 // Runs some of a test program's cases (§7.3): `mcpp test <test> -- <filter> <report>`, the report
@@ -1660,19 +1799,13 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
             if (auto it = programOutput_.find(jobId); it != programOutput_.end()) programOutput = it->second;
         }
         if (fw && fw->protocol) {
-            Json record;
+            // Every record of the job: a program of several files reports one per part.
+            std::vector<Json> records;
             {
                 std::lock_guard lock(mutex_);
-                if (auto it = testRecord_.find(jobId); it != testRecord_.end()) record = it->second;
+                if (auto it = testRecords_.find(jobId); it != testRecords_.end()) records = it->second;
             }
-            bool truncated = false;
-            for (const auto& o : testing::protocol_outcomes(record)) {
-                auto output = views::bounded_output(o.outcome.status == "failed" ? std::string_view(o.outcome.message) : std::string_view{}, truncated);
-                rpc_.notify("mcpp-ide/test/caseResult", Json{{"jobId", jobId}, {"root", root.generic_string()}, {"test", test},
-                                                    {"case", o.outcome.name}, {"status", o.outcome.status}, {"durationMs", o.outcome.durationMs},
-                                                    {"message", o.outcome.message}, {"output", std::move(output)},
-                                                    {"outputTruncated", truncated}, {"location", o.location}});
-            }
+            for (const auto& record : records) protocol_case_results(jobId, root, test, record);
         } else if (fw) {
             const auto outputs = testing::case_outputs(*fw, programOutput);
             for (const auto& o : testing::read_report(*fw, text)) {
@@ -1690,6 +1823,92 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
         std::error_code ignored;
         std::filesystem::remove_all(dir, ignored);
     });
+}
+
+Json Session::test_result_of(const std::filesystem::path& root, const Json& record, Json n) {
+    std::vector<testing::Program> programs;
+    {
+        std::lock_guard lock(mutex_);
+        if (auto it = programs_.find(root); it != programs_.end()) programs = it->second;
+    }
+    const auto name = record.value("test", "");
+    const auto program = testing::owner_of(name, n.value("partOf", ""), programs);
+    n["program"] = program;
+    if (program != name) n["part"] = name;
+    if (record.contains("protocol") && record["protocol"].is_number()) n["protocol"] = record["protocol"];
+    if (record.contains("cases") && record["cases"].is_array()) {
+        Json cases = Json::array();
+        for (const auto& o : testing::protocol_outcomes(record)) cases.push_back(o.detail);
+        n["cases"] = std::move(cases);
+    }
+    if (record.contains("usage") && record["usage"].is_object()) n["usage"] = record["usage"];
+    return n;
+}
+
+// The cases of one record of a test/runCases job, each sent as `test/caseResult` with its program
+// and part, a failure's message as its output.
+void Session::protocol_case_results(std::string_view jobId, const std::filesystem::path& root, const std::string& test,
+                                    const Json& record) {
+    const auto part = record.value("test", "");
+    for (const auto& o : testing::protocol_outcomes(record)) {
+        bool truncated = false;
+        auto output = views::bounded_output(o.outcome.status == "failed" ? std::string_view(o.outcome.message) : std::string_view{}, truncated);
+        Json n = o.detail;
+        n["jobId"] = jobId;
+        n["root"] = root.generic_string();
+        n["test"] = test;
+        n["program"] = test;
+        if (part != test) n["part"] = part;
+        n["output"] = std::move(output);
+        n["outputTruncated"] = truncated;
+        rpc_.notify("mcpp-ide/test/caseResult", n);
+    }
+}
+
+std::vector<teststore::Run> Session::store_runs(const std::filesystem::path& root, std::size_t count) {
+    const auto dir = teststore::store_dir(root);
+    std::map<std::string, teststore::Run> cache;
+    {
+        std::lock_guard lock(mutex_);
+        cache = storeRuns_[root];
+    }
+    auto runs = teststore::last_runs(dir, count, cache);
+    {
+        std::lock_guard lock(mutex_);
+        storeRuns_[root] = std::move(cache);
+    }
+    const auto programs = programs_of(root);
+    teststore::attribute(runs, [&](std::string_view name) { return testing::owner_of(name, "", programs); });
+    return runs;
+}
+
+// The window of runs a request asks for: `runs` (20 by default, 50 at most).
+static std::size_t window_of(const Json& p) {
+    const auto asked = p.contains("runs") && p["runs"].is_number_integer() ? p["runs"].get<long long>() : 20;
+    return static_cast<std::size_t>(std::clamp<long long>(asked, 1, 50));
+}
+
+// A project's test runs as mcpp kept them (design 2026-11-10): each case's results across the last runs.
+std::expected<Json, rpc::Error> Session::test_history(const Json& p) {
+    const auto root = root_of(p);
+    if (root.empty()) return std::unexpected(invalid("test/history names its project's root"));
+    auto out = teststore::history(store_runs(root, window_of(p)), p.value("program", ""), p.value("case", ""));
+    out["root"] = root.generic_string();
+    out["store"] = teststore::store_dir(root).generic_string();
+    return out;
+}
+
+// What the last runs say: the run, its failures, the slowest and the flaky cases, the metrics against
+// their bounds, the schedule. A store mcpp has not written yet answers no run.
+std::expected<Json, rpc::Error> Session::test_insights(const Json& p) {
+    const auto root = root_of(p);
+    if (root.empty()) return std::unexpected(invalid("test/insights names its project's root"));
+    auto out = teststore::insights(store_runs(root, window_of(p)));
+    out["root"] = root.generic_string();
+    out["store"] = teststore::store_dir(root).generic_string();
+    out["features"] = Json{{"parts", has_feature(root, "test-parts")}, {"live", has_feature(root, "test-case-stream")},
+                           {"metrics", has_feature(root, "test-metrics")}};
+    return out;
 }
 
 Session::PackOptions Session::pack_options(const std::filesystem::path& cwd) {
@@ -1876,6 +2095,8 @@ void Session::install() {
     s.on("mcpp-ide/test/list", [this](const Json& p, const rpc::Context&) { return test_list(p); });
     s.on("mcpp-ide/source/entries", [this](const Json& p, const rpc::Context&) { return source_entries(p); });
     s.on("mcpp-ide/test/cases", [this](const Json& p, const rpc::Context&) { return test_cases(p); });
+    s.on("mcpp-ide/test/history", [this](const Json& p, const rpc::Context&) { return test_history(p); });
+    s.on("mcpp-ide/test/insights", [this](const Json& p, const rpc::Context&) { return test_insights(p); });
     s.on("mcpp-ide/test/runCases", [this](const Json& p, const rpc::Context&) { return test_run_cases(p); });
     s.on("mcpp-ide/project/mcpp", [this](const Json& p, const rpc::Context&) { return project_mcpp(p); });
     s.on("mcpp-ide/project/refresh", [this](const Json& p, const rpc::Context&) { return project_refresh(p); });

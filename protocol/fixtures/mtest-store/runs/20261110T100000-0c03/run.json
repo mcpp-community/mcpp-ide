@@ -1,0 +1,21 @@
+{
+  "schema": "mtest.run/1",
+  "id": "20261110T100000-0c03",
+  "started": "2026-11-10T10:00:00Z",
+  "finished": "2026-11-10T10:00:01Z",
+  "status": "fail",
+  "system": "linux",
+  "arch": "x86_64",
+  "machine": "",
+  "commit": "",
+  "set": "mcpp test",
+  "selection": "",
+  "group": "",
+  "monitor": "off",
+  "ms": 12,
+  "jobs": 2,
+  "counts": {
+    "pass": 2,
+    "fail": 1
+  }
+}

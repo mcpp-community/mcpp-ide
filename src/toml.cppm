@@ -10,7 +10,7 @@
 // the line (mcppide.text turns it into the editor's UTF-16 column).
 //
 // A port of mcpp-vscode 0.9's src/toml/parser.ts (design 2026-10-30 part 2 §8); the goldens in
-// tests/rules are that implementation's answers.
+// tests/cts/rules are that implementation's answers.
 export module mcppide.toml;
 
 import std;

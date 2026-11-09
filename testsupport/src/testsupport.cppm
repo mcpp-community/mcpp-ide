@@ -1,17 +1,18 @@
-// mcppide.testsupport: what every backend test shares -- a check that says where it failed, and the
-// paths of the fixtures and the built programs. A module, as the backend's own units are: no test
-// includes a header (mcpp-ide-dev check-sources).
+// mcppide.testsupport: what every backend test shares -- a check that ends its case where it failed,
+// and the paths of the fixtures and the built programs. A module, as the backend's own units are: no
+// test includes a header (mcpp-ide-dev check-sources). The tests are mtest's (tests/unit, tests/e2e,
+// tests/cts, tests/bench; mtest docs/layout.md).
 export module mcppide.testsupport;
 
 import std;
+import mcpplibs.mtest;
 
 export namespace testsupport {
 
-// A failed check names its place and ends the test.
+// A check is mtest's fatal expectation: a failure is reported at the check's own place, and the
+// case ends there (the checks after it read what it checked).
 inline void check(bool cond, std::source_location at = std::source_location::current()) {
-    if (cond) return;
-    std::println(std::cerr, "{}:{}: check failed in {}", at.file_name(), at.line(), at.function_name());
-    std::exit(1);
+    mcpplibs::mtest::expect(mcpplibs::mtest::fatal(cond), at);
 }
 
 // A name in the generic spelling: `/` between components. The tests run as ok images too, whose

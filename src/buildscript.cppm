@@ -14,7 +14,7 @@
 // one cross-line heuristic is the action block, from `mcpp::action` to `.submit(`, up to 40 lines.
 // Every rule errs towards silence. Diagnostic positions are 1-based (`line:column`); a column counts
 // UTF-16 units. A port of mcpp-vscode 0.9's src/buildscript/{analysis,api,modules,snippets,providers}.ts
-// (design 2026-10-30 part 2 §8); tests/rules holds that implementation's answers.
+// (design 2026-10-30 part 2 §8); tests/cts/rules holds that implementation's answers.
 export module mcppide.buildscript;
 
 import std;

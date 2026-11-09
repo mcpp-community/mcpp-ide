@@ -90,8 +90,8 @@ The rules read two snapshots of mcpp: `spec/toml-schema.json` (every table and k
 release that added it) and `spec/buildscript-api.json` (the directives, roles and protocol), each
 naming the mcpp release and commit it was taken from.
 
-The layer is a port of mcpp-vscode 0.9's TypeScript implementation. `tests/rules/golden` holds that
-implementation's answers over `tests/rules/corpus` -- the scanner's structure and the cursor's context
+The layer is a port of mcpp-vscode 0.9's TypeScript implementation. `tests/cts/rules/golden` holds that
+implementation's answers over `tests/cts/rules/corpus` -- the scanner's structure and the cursor's context
 at every position of every line, completion, hover, the jumps, the version contexts and the
 diagnostics under two sets of severities -- and over the documents of its parser tests
-(`golden/snippets.json`); `test_rules` compares the backend's answers with them.
+(`golden/snippets.json`); the conformance case `rules` (tests/cts/rules.cpp) compares the backend's answers with them.

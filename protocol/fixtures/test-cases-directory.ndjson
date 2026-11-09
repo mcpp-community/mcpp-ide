@@ -1,0 +1,2 @@
+{"member":"","test":"unit","status":"built","exit_code":0,"signal":null,"duration_ms":0,"timed_out":false,"compile_output":"","run_output":"","reason":"","build_ms":40,"protocol":1,"listed":[{"id":"alpha","name":"alpha","file":"@ROOT@/tests/unit/a.cpp","kind":"bench","line":4,"bounds":[{"metric":"ready","max":15}]},{"id":"beta","name":"beta","file":"@ROOT@/tests/unit/b.cpp","kind":"unit","line":4,"tags":["slow"]}]}
+{"summary":{"member":"","passed":0,"failed":0,"not_run":0,"not_run_reason":"","built":1,"elapsed_ms":60,"build_ms":40,"run_ms":0}}

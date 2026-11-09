@@ -14,7 +14,7 @@ description = "The IDE backend for mcpp: sessions, jobs, records and view models
 license     = "Apache-2.0"
 authors     = ["mcpp-community"]
 repo        = "https://github.com/mcpp-community/mcpp-ide"
-mcpp        = ">=2026.11.7.1"
+mcpp        = ">=2026.11.9.1"
 
 [language]
 standard   = "c++23"
@@ -78,11 +78,17 @@ main = "src/bin/dev.cpp"
 [dependencies]
 # 0.3.1 reads a name in Windows' long spelling as the name it spells. The image C library, C++
 # runtime and loader remain the platform's.
-mcpplibs.os   = "0.4.0"
+mcpplibs.os   = "0.4.2"
 nlohmann.json = "3.12.0"
 # mtest's static case manifest: the cases a test file declares, read as mtest reads them.
-mcpplibs.mtest.manifest = "0.4.1"
+mcpplibs.mtest.manifest = "0.5.2"
 
-# What every backend test shares (testsupport/): a module, as the backend's units are.
+# The tests are mtest's (mtest docs/layout.md): tests/unit, tests/e2e, tests/cts and tests/bench, each
+# directory one program whose files declare their cases; what every test shares is testsupport/, a
+# module, as the backend's units are.
 [dev-dependencies]
+mcpplibs.mtest = "0.5.2"
 mcpp-ide-testsupport = { path = "testsupport" }
+
+[test]
+programs = "directory"

@@ -5,12 +5,14 @@
 // version, after which the project is asked again. The mock mcpp plays the shim per directory.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.rpc;
 import mcppide.server;
 import mcppide.mcpp;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -59,7 +61,7 @@ std::filesystem::path project(const std::filesystem::path& base, std::string_vie
 
 }  // namespace
 
-int main() {
+E2E probe{"probe", [] {
     const auto mock = testsupport::built("mcpp-ide-mock-mcpp");
     check(!mock.empty());
     const auto base = testsupport::temp() / std::format("mcppide-probe-{}", std::chrono::steady_clock::now().time_since_epoch().count());
@@ -115,11 +117,11 @@ int main() {
     // editor started from another project's terminal inherits (mcpp docs/50). The removal is the
     // spawn's own instruction; a variable set in this process now would reach no child, since a
     // program's environment is the one it was started with.
-    {
+    "no run carries another project's pin"_test = [&] {
         mcpp::Client client(mock, mcpp::Protocol{});
         const auto o = client.spawn_options(mcpp::RunOptions{});
         check(std::ranges::any_of(o.env, [](const auto& kv) { return kv.first == "XLINGS_PROJECT_DIR" && !kv.second; }));
-    }
+    };
 
     // A job's envelope names another version: the project is asked again, and the editor told.
     std::ofstream(old / ".mock-mcpp-version") << "2026.10.31.1\n";
@@ -147,6 +149,4 @@ int main() {
 
     std::error_code ignored;
     std::filesystem::remove_all(base, ignored);
-    std::println("test_probe: ok");
-    return 0;
-}
+}};

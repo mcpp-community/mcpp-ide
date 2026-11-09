@@ -161,13 +161,46 @@
       "properties": {
         "member": { "type": "string" },
         "test": { "type": "string" },
-        "status": { "enum": ["pass", "fail", "skip", "not_run", "error"] },
+        "status": { "enum": ["pass", "compile_fail", "run_fail", "not_run", "built"] },
         "exit_code": { "type": ["integer", "null"] },
         "duration_ms": { "type": "integer" },
         "timed_out": { "type": "boolean" },
         "compile_output": { "type": "string" },
         "run_output": { "type": "string" },
-        "reason": { "type": "string" }
+        "reason": { "type": "string" },
+        "protocol": { "type": ["integer", "null"] },
+        "part_of": { "type": "string", "description": "mcpp#917 (test-parts): the program a part's record belongs to" },
+        "cases": { "type": "array", "items": { "$ref": "#/$defs/testCase" } },
+        "listed": { "type": "array", "items": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" }, "file": { "type": "string" }, "line": { "type": "integer" }, "kind": { "type": "string" }, "tags": { "type": "array", "items": { "type": "string" } }, "bounds": { "$ref": "#/$defs/testBounds" } } } }
+      }
+    },
+    "testBounds": { "type": "array", "items": { "type": "object", "required": ["metric"], "properties": { "metric": { "type": "string" }, "max": { "type": "number" }, "min": { "type": "number" } } } },
+    "testCase": {
+      "description": "A case of a protocol program's record (docs/50 §8); metrics, bounds, kind and tags from test-metrics (mcpp#917).",
+      "type": "object",
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "enum": ["pass", "fail", "skip", "xfail", "xpass", "invalid"] },
+        "duration_ms": { "type": "number" },
+        "reason": { "type": "string" },
+        "failures": { "type": "array", "items": { "type": "object", "required": ["file", "line", "message"], "properties": { "file": { "type": "string" }, "line": { "type": "integer" }, "message": { "type": "string" }, "expected": { "type": "string" }, "actual": { "type": "string" } } } },
+        "metrics": { "type": "array", "items": { "type": "object", "required": ["name", "value"], "properties": { "name": { "type": "string" }, "value": { "type": "number" }, "unit": { "type": "string" } } } },
+        "bounds": { "$ref": "#/$defs/testBounds" },
+        "kind": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "testCaseRecord": {
+      "description": "mcpp#917 (test-case-stream): a case as it begins or ends, written while its program runs.",
+      "type": "object",
+      "required": ["case"],
+      "properties": {
+        "case": {
+          "type": "object",
+          "required": ["test", "id", "event"],
+          "properties": { "member": { "type": "string" }, "test": { "type": "string" }, "id": { "type": "string" }, "event": { "enum": ["begin", "end"] }, "t_ms": { "type": "number" }, "status": { "enum": ["pass", "fail", "skip", "xfail", "xpass", "invalid"] } }
+        }
       }
     },
     "testSummary": {
@@ -186,10 +219,12 @@
         }
       }
     },
-    "testStreamLine": { "anyOf": [ { "$ref": "#/$defs/testRecord" }, { "$ref": "#/$defs/testSummary" } ] },
+    "testStreamLine": { "anyOf": [ { "$ref": "#/$defs/testRecord" }, { "$ref": "#/$defs/testCaseRecord" }, { "$ref": "#/$defs/testSummary" } ] },
     "testListLine": {
       "anyOf": [
-        { "type": "object", "required": ["test"], "properties": { "test": { "type": "string" }, "member": { "type": "string" }, "main": { "type": "string" } } },
+        { "type": "object", "required": ["test"], "properties": { "test": { "type": "string" }, "member": { "type": "string" }, "main": { "type": ["string", "null"] },
+          "files": { "type": "array", "items": { "type": "string" } },
+          "parts": { "type": "array", "items": { "type": "object", "required": ["name", "file"], "properties": { "name": { "type": "string" }, "file": { "type": "string" } } } } } },
         { "$ref": "#/$defs/testSummary" }
       ]
     },
