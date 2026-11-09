@@ -752,6 +752,8 @@ std::expected<Json, rpc::Error> Session::job_start(const Json& p, std::function<
             r.mode = jobs::Mode::ndjson;
             break;
         case jobs::Kind::test:
+            // The programs, so that each part's record is attributed to its program (design 2026-11-10).
+            (void)programs_of(root);
             r.args = {"test", "--message-format", "json"};
             if (release) r.args.push_back("--release");
             append(target);

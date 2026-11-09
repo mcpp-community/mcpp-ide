@@ -118,93 +118,30 @@ class McppJobState(private val c: McppRunConfiguration, env: ExecutionEnvironmen
 }
 
 /**
- * A test job whose results fill the IDE's test tree: each `test/result` becomes the TeamCity
- * service messages the test runner reads, located at the file that holds the test's `main`.
+ * A test job whose results fill the IDE's test tree (design 2026-11-10), as TeamCity service messages
+ * of an ID-based tree, so that the parts of a program that run at once report into their own nodes: a
+ * program is a suite, a file of a program of several files (`unit/a` of `unit`) a suite inside it, and
+ * each case a test, located at its line. A case starts and finishes as the program writes it when the
+ * project's mcpp states it (`test/caseEvent`), else with its part's record (`test/result`); a program
+ * without cases is one test. A failure that states both sides is a comparison failure, whose "Click to
+ * see difference" opens the IDE's diff; a case's metrics are said in its output beside their bounds.
  *
  * EVERY TEST AND CASE HAS ITS OWN OUTPUT (design 2026-11-07, D16): `testStdOut` carries a program's
  * whole output and a case's own (GoogleTest's console between `[ RUN ]` and its result), passed or
  * not; a failure's `details` start with the place its output names (`file:line`, which the console
  * filter links), then the output.
  */
-class TestJobProcessHandler(session: McppSession, params: JsonObject, private val mains: Map<String, String>, method: String = "job/start") :
+class TestJobProcessHandler(session: McppSession, params: JsonObject, places: Map<String, String>, method: String = "job/start") :
     JobProcessHandler(session, params, method) {
-    private fun escape(s: String) = s.replace("|", "||").replace("'", "|'").replace("\n", "|n").replace("\r", "|r").replace("[", "|[").replace("]", "|]")
-
-    /** `path:line` of a result's `location` (its line 0-based), or "". */
-    private fun place(p: JsonObject): String = runCatching {
-        val l = p.getAsJsonObject("location")
-        "${l["path"].asString}:${l["line"].asInt + 1}"
-    }.getOrDefault("")
-
-    /** The output a result carries, as its test's standard output, with a note when it was cut short. */
-    private fun stdout(out: StringBuilder, name: String, p: JsonObject) {
-        val output = p["output"]?.takeIf { it.isJsonPrimitive }?.asString ?: ""
-        if (output.isEmpty()) return
-        val note = if (p["outputTruncated"]?.asBoolean == true) "\n(the output was longer; its head and tail are shown)\n" else ""
-        out.append("##teamcity[testStdOut name='$name' out='${escape(output + note)}']\n")
-    }
-
-    /** `testFailed` with the failure's place first in its details, then what the result says. */
-    private fun failed(out: StringBuilder, name: String, message: String, p: JsonObject, details: String) {
-        val at = place(p)
-        val text = listOf(at, details).filter { it.isNotBlank() }.joinToString("\n")
-        out.append("##teamcity[testFailed name='$name' message='${escape(message)}' details='${escape(text)}']\n")
-    }
-    /** The program whose cases are reported, once its first case is (test/runCases). */
-    private var suite: String? = null
+    private val tree = TestTree(places, { session.t(it) }) { root, program, case, file -> caseUrl(session, root, program, case, file) }
 
     override fun handle(method: String, p: JsonObject) {
         when (method) {
-            // A case of a framework (§7.4): the program is a suite, each case a test in it.
-            "test/caseResult" -> {
-                val program = p["test"].asString
-                val out = StringBuilder()
-                if (suite == null) {
-                    suite = program
-                    val hint = mains[program]?.let { " locationHint='file://${escape(it)}'" } ?: ""
-                    out.append("##teamcity[testSuiteStarted name='${escape(program)}'$hint]\n")
-                }
-                val name = escape(p["case"].asString)
-                // The case's place in its source, for the editor's ▶ to show the last outcome (TestStateStorage).
-                val hint = caseUrl(session, p["root"]?.asString ?: "", program, p["case"].asString, mains[program])
-                    ?.let { " locationHint='${escape(it)}'" } ?: ""
-                out.append("##teamcity[testStarted name='$name'$hint]\n")
-                stdout(out, name, p)
-                when (p["status"]?.asString) {
-                    "passed" -> {}
-                    "skipped" -> out.append("##teamcity[testIgnored name='$name']\n")
-                    else -> {
-                        val message = p["message"]?.asString ?: ""
-                        failed(out, name, message.lineSequence().firstOrNull() ?: "", p, message)
-                    }
-                }
-                out.append("##teamcity[testFinished name='$name' duration='${p["durationMs"]?.asLong ?: 0}']\n")
-                notifyTextAvailable(out.toString(), ProcessOutputTypes.STDOUT)
-            }
+            "test/caseEvent", "test/caseResult", "test/result" -> tree.messages(method, p).takeIf { it.isNotEmpty() }
+                ?.let { notifyTextAvailable(it, ProcessOutputTypes.STDOUT) }
             "job/finished" -> {
-                suite?.let { notifyTextAvailable("##teamcity[testSuiteFinished name='${escape(it)}']\n", ProcessOutputTypes.STDOUT) }
+                tree.close().takeIf { it.isNotEmpty() }?.let { notifyTextAvailable(it, ProcessOutputTypes.STDOUT) }
                 super.handle(method, p)
-            }
-            "test/result" -> {
-                val name = escape(p["test"].asString)
-                val hint = mains[p["test"].asString]?.let { " locationHint='file://${escape(it)}'" } ?: ""
-                val out = StringBuilder("##teamcity[testStarted name='$name'$hint]\n")
-                stdout(out, name, p)
-                val reason = p["reason"]?.asString?.ifBlank { null }
-                when (p["status"]?.asString) {
-                    "passed" -> {}
-                    "skipped" -> out.append("##teamcity[testIgnored name='$name'${reason?.let { " message='${escape(it)}'" } ?: ""}]\n")
-                    else -> {
-                        val message = when {
-                            p["timedOut"]?.asBoolean == true -> "The test timed out"
-                            p["compileFailed"]?.asBoolean == true -> "The test did not compile"
-                            else -> reason ?: "The test failed (${p["status"].asString})"
-                        }
-                        failed(out, name, message, p, "")
-                    }
-                }
-                out.append("##teamcity[testFinished name='$name' duration='${p["durationMs"]?.asLong ?: 0}']\n")
-                notifyTextAvailable(out.toString(), ProcessOutputTypes.STDOUT)
             }
             else -> super.handle(method, p)
         }
@@ -214,9 +151,17 @@ class TestJobProcessHandler(session: McppSession, params: JsonObject, private va
 class McppTestState(private val c: McppRunConfiguration, env: ExecutionEnvironment) : CommandLineState(env) {
     override fun startProcess(): ProcessHandler {
         val session = McppSession.get(c.project)
-        val mains = runCatching {
-            session.request("test/list", JsonObject().apply { addProperty("root", c.root) }).get()
-                .asJsonObject.getAsJsonArray("tests").associate { it.asJsonObject["test"].asString to it.asJsonObject["main"].asString }
+        // Where each program and each part of one is: its `main` (else its first file), and each part's file.
+        val places = runCatching {
+            val out = mutableMapOf<String, String>()
+            for (t in session.request("test/list", JsonObject().apply { addProperty("root", c.root) }).get().asJsonObject.getAsJsonArray("tests")) {
+                val o = t.asJsonObject
+                val name = o["test"].asString
+                out[name] = o["main"]?.takeIf { it.isJsonPrimitive }?.asString?.ifEmpty { null }
+                    ?: o.getAsJsonArray("files")?.firstOrNull()?.asString ?: ""
+                o.getAsJsonArray("parts")?.forEach { part -> out[part.asJsonObject["name"].asString] = part.asJsonObject["file"].asString }
+            }
+            out.toMap()
         }.getOrDefault(emptyMap())
         // A framework's cases (test/runCases): the program receives the framework's filter.
         if (c.options.framework.isNotBlank() && c.options.filter.isNotBlank())
@@ -225,16 +170,16 @@ class McppTestState(private val c: McppRunConfiguration, env: ExecutionEnvironme
                 addProperty("test", c.options.filter)
                 addProperty("framework", c.options.framework)
                 add("cases", JsonArray().apply { c.options.cases.lines().filter { it.isNotBlank() }.forEach { add(it) } })
-            }, mains, "test/runCases")
+            }, places, "test/runCases")
         return TestJobProcessHandler(session, jobParams(c, "test").apply {
             if (c.options.filter.isNotBlank()) addProperty("filter", c.options.filter)
             if (c.programArgs.isNotEmpty()) add("args", JsonArray().apply { add("--"); c.programArgs.forEach { add(it) } })
-        }, mains)
+        }, places)
     }
 
     override fun execute(executor: Executor, runner: ProgramRunner<*>): ExecutionResult {
         val handler = startProcess()
-        val properties = SMTRunnerConsoleProperties(c, "mcpp", executor)
+        val properties = SMTRunnerConsoleProperties(c, "mcpp", executor).apply { isIdBasedTestTree = true }
         val console = SMTestRunnerConnectionUtil.createAndAttachConsole("mcpp", handler, properties)
         return DefaultExecutionResult(console, handler)
     }
@@ -404,12 +349,12 @@ class McppProgramState(private val c: McppRunConfiguration, env: ExecutionEnviro
     override fun startProcess(): ProcessHandler = LaunchingProcessHandler(c)
 }
 
-/** The URL of a case: its program's source and the line of its macro (`file://<path>:<line>`, 1-based). */
+/** The URL of a case: the file that declares it (else its program's) and its line (`file://<path>:<line>`, 1-based). */
 internal fun caseUrl(session: McppSession, root: String, test: String, case: String, main: String?): String? {
-    val file = main?.takeIf { it.isNotEmpty() } ?: return null
     val cases = session.casesFor(root, test) ?: return null
-    val line = cases.getAsJsonArray("cases")?.firstOrNull { it.asJsonObject["name"]?.asString == case }
-        ?.asJsonObject?.get("line")?.asInt ?: return null
+    val row = cases.getAsJsonArray("cases")?.firstOrNull { it.asJsonObject["name"]?.asString == case }?.asJsonObject ?: return null
+    val file = row["file"]?.asString?.takeIf { it.isNotEmpty() } ?: main?.takeIf { it.isNotEmpty() } ?: return null
+    val line = row["line"]?.asInt ?: return null
     return "file://$file:${line + 1}"
 }
 
