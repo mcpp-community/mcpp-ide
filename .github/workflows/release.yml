@@ -6,11 +6,12 @@ name: Release
 # independently after that release exists.
 #
 # WHAT A TAG PUBLISHES (design 2026-11-07, D15; .github/scripts/release-plan.sh): a version is X.Y.Z,
-# X.Y the series every component shares and Z each component's own patch.
+# X.Y the series every component shares and Z an editor plugin's own patch. The backend is always
+# X.Y.0: the VS Code and CLion packages carry it, so a change of it is a series release.
 #
-#   vX.Y.0              a series release: the backend, the VS Code extension, the CLion plugin and
-#                       the Neovim plugin (a source tree, which xim takes from the tag's archive)
-#   backend-vX.Y.Z      the backend's ok-image bundle and package (xim's mcpp-ide)
+#   vX.Y.0              a series release: the backend's ok-image bundle and package (xim's mcpp-ide),
+#                       the VS Code extension, the CLion plugin and the Neovim plugin (a source tree,
+#                       which xim takes from the tag's archive)
 #   vscode-vX.Y.Z       the VSIX (Open VSX)
 #   clion-vX.Y.Z        the CLion ZIP (JetBrains Marketplace)
 #   nvim-vX.Y.Z         the Neovim plugin: the tag's source archive (xim's mcpp-ide-nvim)
@@ -20,7 +21,7 @@ name: Release
 on:
   workflow_dispatch:
   push:
-    tags: ['v*', 'backend-v*', 'vscode-v*', 'clion-v*', 'nvim-v*']
+    tags: ['v*', 'vscode-v*', 'clion-v*', 'nvim-v*']
 
 permissions:
   contents: read
@@ -34,6 +35,8 @@ jobs:
       title: ${{ steps.plan.outputs.title }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # a plugin's patch is checked against its series' tag
       - id: plan
         shell: bash   # -eo pipefail: a refused tag fails the step through tee
         run: bash .github/scripts/release-plan.sh "$GITHUB_REF_NAME" | tee -a "$GITHUB_OUTPUT"

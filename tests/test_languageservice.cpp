@@ -19,6 +19,9 @@ int main() {
     check(ls::classify("/x/mcppls", "PATH", "0.0.16\n").state == ls::State::outdated);
     check(ls::classify("/x/mcppls", "PATH", "mcppls 0.0.18\n").state == ls::State::ok);
     check(ls::classify("/x/mcppls", "PATH", "0.1.0").state == ls::State::ok);
+    // mcppls 0.21 numbers a series and a patch (0.0.21 is released as 0.21.0): a version like any other.
+    check(ls::version_in("mcppls 0.21.0\n") == "0.21.0");
+    check(ls::classify("/x/mcppls", "PATH", "mcppls 0.21.0\n").state == ls::State::ok);
     check(ls::classify("/x/mcppls", "PATH", "usage: mcppls").state == ls::State::unreadable);
     // A candidate that does not exist is passed over; with nothing found the state is `missing` or
     // whatever the machine's own mcppls answers -- never an error.

@@ -76,9 +76,12 @@ VS Code and CLion check for the local build tool only when a user starts an acti
 
 **Versions.** A version is `X.Y.Z`. `X.Y`, the series, is shared by the backend and every plugin: a
 plugin works with any backend of its series and refuses another, naming both versions and the
-install that matches. `Z` is each component's own patch, so VS Code 1.2.3 and CLion 1.2.1 both work
-with backend 1.2.0. A series release is tagged `vX.Y.0`; a component's patch is tagged
-`backend-`, `vscode-`, `clion-` or `nvim-vX.Y.Z` and publishes that component alone. A pull request runs the jobs of
+install that matches. The VS Code and CLion packages carry the backend, so a change of the backend is a
+change of every package: it begins a series, every component at `X.Y.0`, tagged `vX.Y.0`, and the backend
+is always its series' `X.Y.0`. `Z` is an editor plugin's own patch, tagged `vscode-`, `clion-` or
+`nvim-vX.Y.Z`, which publishes that plugin alone over its series' backend: VS Code 1.3.2 and CLion 1.3.1
+both carry backend 1.3.0. A plugin's patch is refused when a path of the backend has changed since its
+series' tag. A pull request runs the jobs of
 the components it changes ([`.github/components.tsv`](.github/components.tsv)): a change of the backend runs
 everything, a change of one plugin runs that plugin's jobs over the backend main built from the same inputs,
 a change of the documentation its checks; `.github/` and any path the table does not name run everything.

@@ -2,6 +2,26 @@
 
 The changelog is kept by series (`X.Y`); each section lists its components' releases.
 
+## 1.3
+
+### 1.3.0
+
+Every component is 1.3.0: the backend, mcpp-vscode, mcpp-clion and mcpp-nvim (from 1.2.1, 1.2.0, 1.2.0
+and 1.2.0).
+
+- **A change of the backend begins a series.** The VS Code and CLion packages carry the backend, so a
+  change of it is a change of every package: it is released as `vX.Y.0`, every component at `X.Y.0`,
+  and the backend is always its series' `X.Y.0`. `Z` is an editor plugin's own patch (`vscode-`,
+  `clion-`, `nvim-vX.Y.Z`), which carries its series' backend. The release refuses a `backend-v` tag,
+  a backend that is not `X.Y.0`, and a plugin's patch when a path of the backend has changed since its
+  series' tag. Backend 1.2.1 reached `xlings install mcpp-ide` alone; its change, mtest's cases read
+  with mtest's own static manifest, is in every package of 1.3.0.
+- **mcppls 0.21.** mcpp-clion is built and tested against the mcppls CLion plugin 0.21.0, whose one
+  package serves every system (`mcppls-clion-<version>.zip`, since mcppls 0.0.20); the build fetched
+  0.0.19's package of this machine. mcppls 0.21 numbers its versions as a series and a patch (0.0.21
+  is released as 0.21.0); the backend reads that version, its payloads (version 5) and `mcppls status`
+  as before.
+
 ## 1.2
 
 ### backend 1.2.1
