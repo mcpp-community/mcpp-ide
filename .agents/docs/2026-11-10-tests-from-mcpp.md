@@ -1,6 +1,6 @@
 # Tests as mcpp states them: programs, parts, cases, live results, metrics and history
 
-Status, 2026-11-10: the design of mcpp-ide 1.3.0's tests. The client side of mcpp#917 is part of it.
+Status, 2026-11-10: implemented in mcpp-ide 1.3.0 (mcpp-ide#8), with the client side of mcpp#917; the backend's own tests are mtest's.
 
 ## Scope and principle
 

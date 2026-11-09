@@ -73,6 +73,41 @@ mcppls what a compiler answers better.
 5. mcpp writes the result record; the backend's watcher sends `result/changed`; mcppls reads the
    same record and refreshes.
 
+## A test run, end to end
+
+The editors show tests as `mcpp test` states them (design 2026-11-10). mcpp builds and runs the
+programs; mtest's protocol is how a program's cases report to mcpp; mtest's store (spec P12) is the form
+in which mcpp keeps a run (`target/mtest`, or `[test] store`). The backend reads those three; it runs no
+other test runner.
+
+1. `test/list` runs `mcpp test --list` and answers each program with its files, its `main` and its parts.
+   A protocol program of several files (`[test] programs = "directory"`) runs as one process per file,
+   `<program>/<stem>`. mcpp states the parts with `test-parts` (mcpp#917); before it, the backend derives
+   them as mcpp 2026.11.9.1 forms them. The programs are kept per project.
+2. `test/cases` reads the cases of every file of a program with mtest's static manifest (their kinds,
+   tags and the bounds on their metrics), and with `list` the program's own listing (`--cases`).
+3. A test job runs `mcpp test --message-format json`. Each record becomes `test/result`, with the
+   program it belongs to, the part it is and its cases, each status mapped (`xfail` passes, `xpass`
+   fails, `invalid` is errored). With `test-case-stream` (mcpp#917) each case is sent as it begins and
+   ends (`test/caseEvent`).
+4. VS Code marks the Testing view's items, a failure with both sides as a diff, and ends a case's line
+   with its duration and metrics. CLion fills an ID-based test tree: a suite per program and per file, a
+   comparison failure when both sides are stated. Neovim writes `mcpp://tests`, the quickfix list and
+   the signs.
+5. `test/insights` reads the store's last runs (20 by default) and answers the last run, its failures
+   and since when, the slowest and the flaky cases, each metric against its bound, and the schedule
+   with its critical path. VS Code and CLion draw it with one page (`webui/tests.html`); Neovim prints
+   it.
+
+Every step reads what the project's mcpp states and nothing more: an older mcpp gives programs and
+their results, and a view that needs a later feature is left out (`capabilities/explain`).
+
+The backend's own tests are mtest's (mtest docs/layout.md): `tests/unit`, `tests/e2e` (the wire and a
+session over the mock mcpp), `tests/cts` (the contracts against their schemas, the rules layer against
+its goldens) and `tests/bench` (the latency of a keystroke in a large manifest, of reading a large test
+file, of the insights over a full window), each directory one program. CI reports each run with
+`mtest report` in the job's summary.
+
 ## Distribution
 
 The backend is one program for every editor, and one file for every system: an ok image per

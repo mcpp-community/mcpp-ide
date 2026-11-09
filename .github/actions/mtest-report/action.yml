@@ -1,0 +1,19 @@
+name: The tests' report
+description: mtest's Markdown report of the last run `mcpp test` kept (target/mtest, mtest spec P12) -- its failures, its slowest cases, its metrics and its critical path -- in the job's summary.
+runs:
+  using: composite
+  steps:
+    - name: The run, as mtest reports it
+      shell: bash
+      run: |
+        set -uo pipefail
+        [ -f target/mtest/index.ndjson ] || { echo "mcpp test kept no run"; exit 0; }
+        xlings install "mtest@$MTEST_VERSION" -y -g > /dev/null 2>&1 || { echo "::warning::mtest@$MTEST_VERSION could not be installed: no report"; exit 0; }
+        exe=""; [ "$RUNNER_OS" = Windows ] && exe=.exe
+        # The package's launcher, not the shim: on Windows the shim runs its alias through cmd.
+        mtest="$HOME/.xlings/data/xpkgs/xim-x-mtest/$MTEST_VERSION/bin/mtest$exe"
+        [ -x "$mtest" ] || { echo "::warning::no mtest at $mtest: no report"; exit 0; }
+        store="$RUNNER_TEMP/mtest-report"
+        mkdir -p "$store" && cd "$store"
+        "$mtest" store import --from "$GITHUB_WORKSPACE/target/mtest" > /dev/null
+        "$mtest" report --format md --run last --title "$GITHUB_JOB" >> "$GITHUB_STEP_SUMMARY" || true

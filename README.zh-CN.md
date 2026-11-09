@@ -23,7 +23,9 @@ quickfix 列表。各编辑器插件位于本仓库的 `mide-plugins/`。C++ 文
 | | VS Code（mcpp-vscode） | CLion（mcpp-clion） | Neovim（mcpp-nvim） |
 |---|---|---|---|
 | 构建、运行、测试 | 伪终端中的任务，显示 mcpp 自身的输出 | "mcpp" 运行配置、PTY 控制台、`main` 旁的 ▶ | `:Mcpp build`、`test`：任务输出流入缓冲区；`:Mcpp run` 在终端缓冲区中运行 |
-| 测试树、单个测试重跑 | 测试视图 | IDE 测试运行器 | `:Mcpp test <filter>` |
+| 测试树、单个测试重跑 | 测试视图：程序、文件、用例；`@kind:bench` 与用例的标签可筛选 | IDE 测试运行器：每个程序、每个文件一个套件 | `:Mcpp test <filter>`：`mcpp://tests`、标记、quickfix 列表 |
+| 测试结果 | 逐用例实时显示；陈述两侧的失败可打开 VS Code 的差异视图；用例所在行末显示耗时与指标 | 逐用例实时显示；比较型失败可打开 IDE 的差异视图；指标在用例输出中 | 逐用例实时显示；两侧写入缓冲区与 quickfix 列表；耗时与指标以虚拟文本显示 |
+| 测试洞察（mcpp 保留的运行） | "mcpp: Show Test Insights"，一个 webview | mcpp 工具窗口的 Test Insights 页（JCEF） | `:Mcpp test.insights`，浮动窗口 |
 | 调试 | CodeLLDB、C/C++（gdb、lldb）、lldb-dap | CLion 的 GDB 或 LLDB | nvim-dap（codelldb、lldb-dap、cppdbg、gdb） |
 | 诊断 | 问题面板，来自 mcpp 带位置的诊断 | 控制台链接到报告的位置 | `vim.diagnostic`，`:Mcpp problems` 填入 quickfix 列表 |
 | mcpp.toml、build.mcpp | 补全、悬停、跳转与规则诊断来自后端（语言客户端）；问题来自 mcpp | 同上，经 CLion 的补全、文档、标注与跳转 | 同上，经 `vim.lsp`；mcpp 的问题在 `vim.diagnostic` |
@@ -35,6 +37,21 @@ CLion 的 **Settings | Tools | mcpp** 在保存表单前检查数值是否有限
 无效输入会显示错误，并保持所有已存储的值不变。输入某项设置的默认值会移除其存储覆盖。
 
 图查询失败时显示构建数据库错误。修正所报告的问题后，重新打开图即可重试。
+
+**测试。** 编辑器按 `mcpp test` 的陈述显示测试（[docs/architecture.md](docs/architecture.md)，
+"A test run, end to end"）。多文件程序（`[test] programs = "directory"`）以其文件为子项，每个文件是一次运行中
+单独成进程的那一部分。mtest 测试协议的用例带有其类别、标签与指标上下限。测试洞察读取 mcpp 保存在
+`target/mtest` 的运行：最近一次运行、其失败及起始时间、各指标与上下限、最慢与不稳定的用例、调度与关键路径。
+编辑器所显示的内容取决于工程的 mcpp：
+
+| 工程的 mcpp | 增加 |
+|---|---|
+| 任意版本 | 程序及其结果 |
+| 2026.11.8.1（`test-protocol`） | 用例、其位置与结果、失败的两侧 |
+| 2026.11.9.1 | 多文件程序的文件；基于已保留运行的测试洞察 |
+| `test-parts`、`test-case-stream`、`test-metrics`（[mcpp#917](https://github.com/mcpp-community/mcpp/issues/917)） | 由 mcpp 陈述的部分、逐用例结束时的结果、指标及其趋势 |
+
+工程的 mcpp 未声明某视图所需的能力时，该视图不显示；自检（`capabilities/explain`）说明哪个版本的 mcpp 声明了它。
 
 - **处处同一答案**——构建运行什么、测试如何报告、清理的代价：都由后端决定
 - **只读 mcpp 的契约**——不自行解析清单，不自行解析依赖
@@ -80,9 +97,9 @@ VS Code 和 CLion 仅在用户主动执行依赖本地构建工具的操作时�
 
 ```bash
 mcpp build                                     # 后端、mock mcpp、mcpp-ide-dev
-mcpp test                                      # 后端测试
+mcpp test                                      # 后端测试（mtest：tests/unit、e2e、cts、bench）
 cd mide-plugins/vscode && npm ci && npm test   # 扩展的测试，含对 0.9.0 的一致性门
-npm run test:webui                             # CLion 的图页面在 Chromium 中、经后端运行
+npm run test:webui                             # 图页面与测试页面在 Chromium 中、经后端运行
 npm run package                                # dist/mcpp-vscode-<version>.vsix
 cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
 cd ../.. && nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua   # Neovim 插件的测试
