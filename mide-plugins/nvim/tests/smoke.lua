@@ -113,7 +113,14 @@ check('another series is refused, naming both versions and what installs this on
   older ~= nil and older:find('0.2.1', 1, true) ~= nil and older:find('series 0.2', 1, true) ~= nil
     and older:find('mcpp-ide@1.2.0', 1, true) ~= nil, older)
 check('another protocol is refused', session.incompatibility({ protocol = 1, series = '1.2' }, '1.2.0') ~= nil)
-check('the plugin is of the backend series this repository builds', session.series_of(session.version) == '1.2')
+-- The backend's version is the package's (mcpp.toml), always its series' X.Y.0.
+local built = vim.fn.readfile(repo .. '/mcpp.toml')
+local package_version
+for _, line in ipairs(built) do
+  package_version = package_version or line:match('^version%s*=%s*"([^"]+)"')
+end
+check('the plugin is of the backend series this repository builds',
+  package_version ~= nil and session.series_of(session.version) == session.series_of(package_version), package_version)
 local diagnostics = require('mcpp.diagnostics')
 local views = require('mcpp.views')
 
