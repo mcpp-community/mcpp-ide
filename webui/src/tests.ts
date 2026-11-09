@@ -78,6 +78,7 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: v
 .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .muted { color: var(--muted); }
 .chip { display: inline-block; border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; margin: 4px 6px 0 0; font-size: 12px; }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); align-items: center; }
+.row > :nth-child(2) { white-space: nowrap; }
 .row:first-of-type { border-top: 0; }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .name small { color: var(--muted); }
@@ -87,6 +88,7 @@ a[data-open]:hover .case { text-decoration: underline; }
 .badge { font-size: 11px; border-radius: 3px; padding: 0 5px; border: 1px solid currentColor; }
 .bar { height: 4px; background: var(--accent); border-radius: 2px; opacity: .7; }
 svg text { fill: var(--muted); font-size: 10px; }
+.spark { vertical-align: middle; margin-right: 6px; }
 .spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; }
 .spark line { stroke: var(--bad); stroke-dasharray: 3 2; stroke-width: 1; }
 .lane rect { fill: var(--accent); opacity: .55; }
@@ -109,6 +111,14 @@ export function duration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)} ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
   return `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`;
+}
+
+/** A run's time as a person reads it: `2026-11-08 10:00` from an ISO time or a run's identifier (P12.2). */
+export function when(text: string): string {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(text);
+  const id = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/.exec(text);
+  const m = iso ?? id;
+  return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}` : text;
 }
 
 /** A metric's value with its unit: three significant digits. */
@@ -160,7 +170,7 @@ function summary(page: TestsPage): string {
     const failing = (v.fail ?? 0) + (v.xpass ?? 0) + (v.invalid ?? 0);
     return `<span class="chip">${escapeHtml(k)} ${total}${failing ? ` <span class="bad">✗ ${failing}</span>` : ""}</span>`;
   }).join("");
-  return `<h1>${escapeHtml(l.title)}</h1><div class="sub">${escapeHtml(fill(l.window, x.runs, run.started ?? run.id))}</div>
+  return `<h1>${escapeHtml(l.title)}</h1><div class="sub">${escapeHtml(fill(l.window, x.runs, when(run.started || run.id)))}</div>
 <div class="counts">${counts.join("")}</div>${kinds ? `<div>${kinds}</div>` : ""}`;
 }
 
@@ -169,7 +179,7 @@ function failures(page: TestsPage): string {
   if (x.failures.length === 0) return "";
   const rows = x.failures.map((f) => {
     const open = f.path ? ` data-open="${escapeHtml(JSON.stringify({ path: f.path, line: f.line ?? 0 }))}"` : "";
-    const badge = f.new ? `<span class="badge bad">${escapeHtml(l.fresh)}</span>` : `<span class="badge warn">${escapeHtml(fill(l.since, f.since))}</span>`;
+    const badge = f.new ? `<span class="badge bad">${escapeHtml(l.fresh)}</span>` : `<span class="badge warn">${escapeHtml(fill(l.since, when(f.since)))}</span>`;
     const sides = f.expected !== undefined ? `\n${l.expected}: ${f.expected}\n${l.actual}:   ${f.actual ?? ""}` : "";
     const detail = (f.message ?? "") + sides;
     return `<div class="row"><a class="name"${open}><span class="bad">✗</span> ${where(f)}</a>${badge}${detail ? `<div class="detail">${escapeHtml(detail)}</div>` : ""}</div>`;

@@ -1484,7 +1484,7 @@
     "test:parity": "npm run compile && node --test \"dist/test/parity/*.test.js\"",
     "bundle:webui": "node tools/bundle-webui.mjs",
     "check:webui": "tsc -p ../../webui/tsconfig.json",
-    "test:webui": "node tools/bundle-webui.mjs --out .webui-test && node --test ../../webui/tests/graph.test.mjs"
+    "test:webui": "node tools/bundle-webui.mjs --out .webui-test && node --test ../../webui/tests/graph.test.mjs ../../webui/tests/tests.test.mjs"
   },
   "devDependencies": {
     "@mermaid-js/tiny": "12.2.0",
