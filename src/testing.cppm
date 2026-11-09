@@ -742,6 +742,10 @@ std::string part_of_file(const Program& program, const std::filesystem::path& fi
     const auto wanted = file.lexically_normal().generic_string();
     for (const auto& [name, f] : program.parts)
         if (std::filesystem::path(f).lexically_normal().generic_string() == wanted) return name;
+    // Another spelling of the same file (Windows' short names, a link): the file system decides.
+    std::error_code ec;
+    for (const auto& [name, f] : program.parts)
+        if (std::filesystem::equivalent(f, file, ec)) return name;
     return {};
 }
 

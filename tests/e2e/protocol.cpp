@@ -373,25 +373,32 @@ E2E protocol{"protocol", [] {
             << "import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\n\nBench alpha{\"alpha\", at_most{\"ready\", 15}, [] {}};\n";
         std::ofstream(dir / "tests" / "unit" / "b.cpp") << "import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\n\nUTest beta{\"beta\", [] {}};\n";
         const auto a = (dir / "tests" / "unit" / "a.cpp").generic_string(), b = (dir / "tests" / "unit" / "b.cpp").generic_string();
+        // mcpp names a file as the file system spells the project (Windows' long names), the test as
+        // its temporary directory does (it may be a short name): one file, either spelling.
+        const auto same = [](const Json& named, const std::string& file) {
+            std::error_code ec;
+            return named.is_string() && std::filesystem::equivalent(named.get<std::string>(), file, ec);
+        };
         const auto listed = result_of("mcpp-ide/test/list", Json{{"root", dir.generic_string()}});
         const auto unit = std::ranges::find_if(listed["tests"], [](const Json& t) { return t["test"] == "unit"; });
         check(unit != listed["tests"].end());
         if (unit != listed["tests"].end()) {
-            check((*unit)["layout"] == "directory" && (*unit)["main"] == "" && (*unit)["files"] == Json::array({a, b}));
-            check((*unit)["parts"].size() == 2 && (*unit)["parts"][1]["name"] == "unit/b" && (*unit)["parts"][1]["file"] == b);
+            check((*unit)["layout"] == "directory" && (*unit)["main"] == "" && (*unit)["files"].size() == 2
+                  && same((*unit)["files"][0], a) && same((*unit)["files"][1], b));
+            check((*unit)["parts"].size() == 2 && (*unit)["parts"][1]["name"] == "unit/b" && same((*unit)["parts"][1]["file"], b));
         }
         const auto entries = result_of("mcpp-ide/source/entries", Json{{"file", b}});
         check(entries["kind"] == "test" && entries["test"] == "unit" && entries["part"] == "unit/b");
         // Before a listing, the program's files (its cases are read from them where its plan holds
         // mtest; the mock's plan does not); the listing places each case in its file.
         const auto statics = result_of("mcpp-ide/test/cases", Json{{"root", dir.generic_string()}, {"test", "unit"}});
-        check(statics["test"] == "unit" && statics["files"] == Json::array({a, b}));
+        check(statics["test"] == "unit" && statics["files"].size() == 2 && same(statics["files"][0], a) && same(statics["files"][1], b));
         const auto listedCases = result_of("mcpp-ide/test/cases", Json{{"root", dir.generic_string()}, {"test", "unit"}, {"list", true}});
         check(listedCases.value("listed", false) && listedCases["framework"] == "mtest" && listedCases["cases"].size() == 2);
         if (listedCases["cases"].size() == 2) {
             const auto& alpha = listedCases["cases"][0];
-            check(alpha["name"] == "alpha" && alpha["file"] == a && alpha["line"] == 3 && alpha["kind"] == "bench" && alpha["bounds"][0]["max"] == 15);
-            check(listedCases["cases"][1]["tags"] == Json::array({"slow"}) && listedCases["cases"][1]["file"] == b);
+            check(alpha["name"] == "alpha" && same(alpha["file"], a) && alpha["line"] == 3 && alpha["kind"] == "bench" && alpha["bounds"][0]["max"] == 15);
+            check(listedCases["cases"][1]["tags"] == Json::array({"slow"}) && same(listedCases["cases"][1]["file"], b));
         }
         const auto resultsBefore = wire.notifications("mcpp-ide/test/result").size();
         const auto eventsBefore = wire.notifications("mcpp-ide/test/caseEvent").size();
