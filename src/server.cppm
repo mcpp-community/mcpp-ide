@@ -35,13 +35,13 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "1.3.0";
+inline constexpr std::string_view kVersion = "1.4.0";
 // THE SERIES (mcpp design 2026-11-07, D15): `X.Y` of `X.Y.Z`, shared by the backend and every editor
 // plugin; components of one series work together. A plugin refuses a backend of another series,
 // naming both versions. The backend is always `X.Y.0`: the VS Code and CLion packages carry it, so a
 // change of the backend is a change of every package, and it begins a series (1.3.0). `Z` is an
 // editor plugin's own patch.
-inline constexpr std::string_view kSeries = "1.3";
+inline constexpr std::string_view kSeries = "1.4";
 static_assert(kVersion.starts_with(kSeries) && kVersion.size() == kSeries.size() + 2 && kVersion.ends_with(".0"));
 inline constexpr int kProtocol = 2;
 
@@ -1848,10 +1848,17 @@ Json Session::test_result_of(const std::filesystem::path& root, const Json& reco
 }
 
 // The cases of one record of a test/runCases job, each sent as `test/caseResult` with its program
-// and part, a failure's message as its output.
+// and part, a failure's message as its output. The record names them, as a test/result's does: the
+// job's filter may be a part, and mcpp names a run that selects cases after the program.
 void Session::protocol_case_results(std::string_view jobId, const std::filesystem::path& root, const std::string& test,
                                     const Json& record) {
+    std::vector<testing::Program> programs;
+    {
+        std::lock_guard lock(mutex_);
+        if (auto it = programs_.find(root); it != programs_.end()) programs = it->second;
+    }
     const auto part = record.value("test", "");
+    const auto program = testing::owner_of(part, record.value("part_of", ""), programs);
     for (const auto& o : testing::protocol_outcomes(record)) {
         bool truncated = false;
         auto output = views::bounded_output(o.outcome.status == "failed" ? std::string_view(o.outcome.message) : std::string_view{}, truncated);
@@ -1859,8 +1866,8 @@ void Session::protocol_case_results(std::string_view jobId, const std::filesyste
         n["jobId"] = jobId;
         n["root"] = root.generic_string();
         n["test"] = test;
-        n["program"] = test;
-        if (part != test) n["part"] = part;
+        n["program"] = program;
+        if (part != program) n["part"] = part;
         n["output"] = std::move(output);
         n["outputTruncated"] = truncated;
         rpc_.notify("mcpp-ide/test/caseResult", n);

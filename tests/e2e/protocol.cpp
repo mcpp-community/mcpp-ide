@@ -425,7 +425,23 @@ E2E protocol{"protocol", [] {
                   && events[eventsBefore + 1]["metrics"][0]["name"] == "ready");
             check(events[eventsBefore + 3]["status"] == "failed" && events[eventsBefore + 3]["part"] == "unit/b");
         }
-        for (const auto* name : {"mcpp-ide/test/result", "mcpp-ide/test/caseEvent"})
+        // Cases asked for through a part: each result names its program and its own part, as the
+        // record states them, not the job's filter.
+        const auto caseResultsBefore = wire.notifications("mcpp-ide/test/caseResult").size();
+        const auto finishedCases = wire.notifications("mcpp-ide/job/finished").size();
+        result_of("mcpp-ide/test/runCases", Json{{"root", dir.generic_string()}, {"test", "unit/a"}, {"framework", "mtest"},
+                                                 {"cases", Json::array({"alpha"})}});
+        for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/job/finished").size() <= finishedCases; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        const auto caseResults = wire.notifications("mcpp-ide/test/caseResult");
+        check(caseResults.size() == caseResultsBefore + 2);
+        if (caseResults.size() == caseResultsBefore + 2) {
+            const auto& alpha = caseResults[caseResultsBefore];
+            const auto& beta = caseResults[caseResultsBefore + 1];
+            check(alpha["test"] == "unit/a" && alpha["program"] == "unit" && alpha["part"] == "unit/a" && alpha["case"] == "alpha");
+            check(beta["program"] == "unit" && beta["part"] == "unit/b" && beta["status"] == "failed");
+        }
+        for (const auto* name : {"mcpp-ide/test/result", "mcpp-ide/test/caseEvent", "mcpp-ide/test/caseResult"})
             for (const auto& n : wire.notifications(name)) check(conforms(n, protocol["notifications"][name]["params"], protocol, name));
         // The store mcpp keeps (target/mtest): three runs, the last with mcpp#917's fields.
         const auto noRuns = result_of("mcpp-ide/test/insights", Json{{"root", dir.generic_string()}});

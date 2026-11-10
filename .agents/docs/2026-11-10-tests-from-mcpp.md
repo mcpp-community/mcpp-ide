@@ -92,7 +92,9 @@ A result names the program it belongs to:
 
   A whole-program run therefore marks every case.
 - `test/caseResult`: gains the fields of a case above. It is sent for every record of the job, not
-  only the last one; a run of a directory program writes one record per part.
+  only the last one; a run of a directory program writes one record per part. It names the program
+  and the part as the record does, by the rule of a result above, whatever the job's filter; mcpp
+  2026.11.9.1 names a run that selects cases (`--case`) after the program, and its result has no part.
 - `test/caseEvent` (new): `{jobId, root, program, part, case, event: "begin" | "end", tMs, ...}` with
   the fields of a case on `end`. It is sent as mcpp writes a `case` record (`test-case-stream`).
 - `test/history {root, program?, case?, runs?}` (new): the store's last runs (20 by default) and each
@@ -151,7 +153,7 @@ insights are empty and say so.
 - A failure's `expected` and `actual` appear as two lines under it, and in its quickfix text.
 - A case's line carries its sign (✓, ✗) and, as virtual text, its duration and its metrics against
   their bounds.
-- `:Mcpp testInsights` opens the insights as text in a floating window. A metric's trend is drawn with
+- `:Mcpp test.insights` opens the insights as text in a floating window. A metric's trend is drawn with
   block characters (▁▂▃▅▇), and the schedule as bars.
 
 ## Performance
@@ -178,6 +180,6 @@ insights are empty and say so.
   directory's `.mock-mcpp-tests` selects them, as `.mock-mcpp-features` selects the features.
 - VS Code: the tree of a directory program; part results attributed to it; the diff message; the
   decorations' text.
-- Neovim: the smoke test covers live results, the virtual text and `:Mcpp testInsights`.
+- Neovim: the smoke test covers live results, the virtual text and `:Mcpp test.insights`.
 - CLion: the comparison failure and the nested suites, in the plugin's unit tests.
 - The insights page is rendered by a Chromium test, as the graph page is.
