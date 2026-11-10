@@ -1,0 +1,2 @@
+{"failures":[],"id":"alpha","ms":0.5,"program":"unit/a","reason":"","status":"pass"}
+{"failures":[{"file":"tests/unit/b.cpp","line":4,"message":"sum == 4","expected":"4","actual":"5"}],"id":"beta","ms":1.5,"program":"unit/b","reason":"","status":"fail"}

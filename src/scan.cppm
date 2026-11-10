@@ -29,11 +29,15 @@ struct Call {
 // A case of the mtest library -- an object (`UTest parse{"parse", ...}`, any suite type) or a
 // `"name"_test` declared in one -- as mtest's own static manifest reads it
 // (mcpplibs.mtest.manifest): its identifier, the names of what declares it and its own joined by
-// `/`, and where its name is (0-based).
+// `/`, and where its name is (0-based); the kind, tags and bounds on its metrics it states (empty
+// kind: its program's).
 struct Literal {
     std::string id;
     int line = 0;
     int column = 0;
+    std::string kind;
+    std::vector<std::string> tags;
+    std::vector<mcpplibs::mtest::manifest::static_bound> bounds;
 };
 
 struct Result {
@@ -228,7 +232,7 @@ Result scan(std::string_view text, const std::vector<std::string>& macros,
     }
     // mtest's cases as mtest reads them: its manifest is the one reader of its declarations.
     for (const auto& found : mcpplibs::mtest::manifest::scan(text, types))
-        r.cases.push_back(Literal{found.id, found.line - 1, found.column - 1});
+        r.cases.push_back(Literal{found.id, found.line - 1, found.column - 1, found.kind, found.tags, found.bounds});
     return r;
 }
 

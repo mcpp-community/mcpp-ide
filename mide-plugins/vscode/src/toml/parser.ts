@@ -2,7 +2,7 @@
 // its targets): the structure an edit in progress already has, with exact 0-based ranges, never an
 // exception for a half-typed `[`, string, array or inline table. The rules layer -- completion,
 // hover, the jumps, the diagnostics -- is the mcpp-ide backend's (design 2026-10-30 part 2 §8), whose
-// scanner answers the same structure (its tests/rules goldens were written by this one).
+// scanner answers the same structure (its tests/cts/rules goldens were written by this one).
 //
 // The subset read: table headers (`[[...]]` arrays of tables, quoted segments), bare, quoted and
 // dotted keys, strings (`"""` and `'''` multi-line ones too), integers, booleans, arrays and inline

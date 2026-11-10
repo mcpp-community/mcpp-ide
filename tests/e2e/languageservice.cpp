@@ -4,14 +4,16 @@
 // (mcppls 0.0.18 and later), or a program.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import mcppide.languageservice;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 namespace ls = mcppide::languageservice;
 
-int main() {
+E2E languageservice{"languageservice", [] {
     check(ls::version_in("0.0.16\n") == "0.0.16");
     check(ls::version_in("mcppls 0.0.18\n") == "0.0.18");
     check(ls::version_in("mcppls 0.0.19,\n") == "0.0.19");
@@ -19,6 +21,9 @@ int main() {
     check(ls::classify("/x/mcppls", "PATH", "0.0.16\n").state == ls::State::outdated);
     check(ls::classify("/x/mcppls", "PATH", "mcppls 0.0.18\n").state == ls::State::ok);
     check(ls::classify("/x/mcppls", "PATH", "0.1.0").state == ls::State::ok);
+    // mcppls 0.21 numbers a series and a patch (0.0.21 is released as 0.21.0): a version like any other.
+    check(ls::version_in("mcppls 0.21.0\n") == "0.21.0");
+    check(ls::classify("/x/mcppls", "PATH", "mcppls 0.21.0\n").state == ls::State::ok);
     check(ls::classify("/x/mcppls", "PATH", "usage: mcppls").state == ls::State::unreadable);
     // A candidate that does not exist is passed over; with nothing found the state is `missing` or
     // whatever the machine's own mcppls answers -- never an error.
@@ -76,11 +81,11 @@ int main() {
     check(ls::payload_command(payload) == imaged);
     write(payload / "payload.json", R"({"payload-version": 6, "server": {"path": "bin/mcppls.okb"}})");
     check(ls::payload_server(payload).problem.contains("payload-version 6"));
-    // The manifests of the published payloads (tests/payloads: mcppls 0.0.19's for linux-x64, version 4,
+    // The manifests of the published payloads (tests/e2e/payloads: mcppls 0.0.19's for linux-x64, version 4,
     // and 0.0.20's, version 5, as mcppls's S6 examples hold them, their file lists cut short).
-    {
+    "the published payloads"_test = [&] {
         const auto published = [&](std::string_view name) {
-            std::ifstream in(testsupport::repo() / "tests" / "payloads" / std::string(name), std::ios::binary);
+            std::ifstream in(testsupport::repo() / "tests" / "e2e" / "payloads" / std::string(name), std::ios::binary);
             return std::string(std::istreambuf_iterator<char>(in), {});
         };
         const auto served = testsupport::temp() / std::format("mcppide-published-{}", std::random_device{}());
@@ -104,7 +109,7 @@ int main() {
         check(ls::payload_server(served, "linux-x64").command == std::vector<std::filesystem::path>({served / "bin" / "okrun", served / "bin" / "mcppls.okb"}));
         check(ls::payload_server(served, "darwin-arm64").problem.contains("serves linux-x64"));
         std::filesystem::remove_all(served);
-    }
+    };
     // A refused payload named by the adapter is said, when nothing else is found.
     write(payload / "payload.json", R"({"payload-version": 5, "server": {"path": "bin/mcppls.okb"}, "platforms": {"plan9-x64": {"runner": "bin/okrun"}}})");
     const auto refused = ls::candidates({payload.string()});
@@ -114,5 +119,4 @@ int main() {
     const auto found = ls::candidates({payload.string()});
     check(!found.empty() && found.front().source == "editor" && found.front().command.back() == payload / "bin" / "mcppls");
     std::filesystem::remove_all(payload);
-    std::println("test_languageservice: ok");
-}
+}};

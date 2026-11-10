@@ -1,17 +1,18 @@
-// mcppide.testsupport: what every backend test shares -- a check that says where it failed, and the
-// paths of the fixtures and the built programs. A module, as the backend's own units are: no test
-// includes a header (mcpp-ide-dev check-sources).
+// mcppide.testsupport: what every backend test shares -- a check that ends its case where it failed,
+// and the paths of the fixtures and the built programs. A module, as the backend's own units are: no
+// test includes a header (mcpp-ide-dev check-sources). The tests are mtest's (tests/unit, tests/e2e,
+// tests/cts, tests/bench; mtest docs/layout.md).
 export module mcppide.testsupport;
 
 import std;
+import mcpplibs.mtest;
 
 export namespace testsupport {
 
-// A failed check names its place and ends the test.
+// A check is mtest's fatal expectation: a failure is reported at the check's own place, and the
+// case ends there (the checks after it read what it checked).
 inline void check(bool cond, std::source_location at = std::source_location::current()) {
-    if (cond) return;
-    std::println(std::cerr, "{}:{}: check failed in {}", at.file_name(), at.line(), at.function_name());
-    std::exit(1);
+    mcpplibs::mtest::expect(mcpplibs::mtest::fatal(cond), at);
 }
 
 // A name in the generic spelling: `/` between components. The tests run as ok images too, whose
@@ -21,9 +22,14 @@ inline std::filesystem::path generic(std::string text) {
     for (auto& c : text) if (c == '\\') c = '/';
     return std::filesystem::path(text);
 }
-// The repository, from this file's own path (testsupport/src/testsupport.cppm).
+// The repository, from this file's own path (testsupport/src/testsupport.cppm). A build that names a
+// source from its package's root (the ok images') gives a relative name; the tests run in the
+// repository, so it is taken from there. Either way the answer is absolute: a test starts programs in
+// directories of its own.
 inline std::filesystem::path repo() {
-    return generic(std::source_location::current().file_name()).parent_path().parent_path().parent_path();
+    const auto named = generic(std::source_location::current().file_name());
+    if (named.is_absolute()) return named.parent_path().parent_path().parent_path();
+    return generic(std::filesystem::current_path().string());
 }
 // The temporary directory, in the generic spelling.
 inline std::filesystem::path temp() { return generic(std::filesystem::temp_directory_path().string()); }

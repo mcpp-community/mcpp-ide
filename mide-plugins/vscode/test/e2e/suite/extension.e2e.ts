@@ -168,6 +168,10 @@ suite(`mcpp extension smoke (mcppls stub: ${STUB})`, () => {
     await vscode.commands.executeCommand("mcpp.openSettings");
   });
 
+  test("Test Insights opens for the project, with or without a kept run", async () => {
+    await vscode.commands.executeCommand("mcpp.test.insights");
+  });
+
   test("build.mcpp opens as cpp, and C++ Modules is left the names it answers", async () => {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(workspaceFolder, "the fixture workspace should be open");

@@ -1,0 +1,3 @@
+{"member":"","test":"smoke","main":"@ROOT@/tests/smoke.cpp"}
+{"member":"","test":"unit","main":"@ROOT@/tests/unit/a.cpp"}
+{"summary":{"total":2}}

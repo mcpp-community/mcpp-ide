@@ -13,7 +13,7 @@ local uv = vim.uv or vim.loop
 local is_windows = vim.fn.has('win32') == 1
 
 -- mcpp-nvim's version: mcpp-ide's, whose release carries it.
-M.version = '1.2.0'
+M.version = '1.3.0'
 
 -- Neovim's version, as its release names it.
 function M.nvim_version()
@@ -210,7 +210,7 @@ local function deliver(owner, method, params)
     on.output(params.text or '')
   elseif method == 'job/started' and on.started then
     on.started(params)
-  elseif (method == 'test/result' or method == 'test/caseResult') and on.test then
+  elseif (method == 'test/result' or method == 'test/caseResult' or method == 'test/caseEvent') and on.test then
     on.test(method, params)
   elseif method == 'job/finished' then
     state.claimed[params.jobId] = nil
@@ -261,12 +261,12 @@ end
 local JOB_EVENTS = {
   ['job/started'] = true, ['job/output'] = true, ['job/plan'] = true, ['job/progress'] = true,
   ['job/diagnostic'] = true, ['job/artifact'] = true, ['job/record'] = true, ['job/finished'] = true,
-  ['test/result'] = true, ['test/summary'] = true, ['test/caseResult'] = true,
+  ['test/result'] = true, ['test/summary'] = true, ['test/caseResult'] = true, ['test/caseEvent'] = true,
 }
 
 -- Inside a flow: asks for a job (`job/start`, or another method that answers a job id) and follows
--- it. `events`: output(text), started(params), test(method, result) for each `test/result` and
--- `test/caseResult`; the handle's wait() answers its end. Returns the
+-- it. `events`: output(text), started(params), test(method, result) for each `test/result`,
+-- `test/caseResult` and `test/caseEvent`; the handle's wait() answers its end. Returns the
 -- handle, or nil and the error.
 function M.job(method, params, events)
   local result, err = M.call(method, params)

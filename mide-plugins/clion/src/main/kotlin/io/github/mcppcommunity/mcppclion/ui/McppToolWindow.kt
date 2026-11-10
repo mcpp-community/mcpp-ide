@@ -52,6 +52,7 @@ object McppPanels {
         window.activate {
             when (panel) {
                 "graph" -> openGraph(project, window, params["graph"]?.asString ?: "packages")
+                "tests" -> openTests(project, window)
                 "project" -> select(window, "project", params)
                 "cache" -> select(window, "cache", params)
                 "libraries", "library" -> select(window, "libraries", params)
@@ -81,6 +82,21 @@ object McppPanels {
         val page = GraphPage(project, kind)
         val title = if (kind == "modules") session.t("Module Graph") else session.t("Dependency Graph")
         val content = ContentFactory.getInstance().createContent(page.component, title, false)
+        content.isCloseable = true
+        content.putUserData(VIEW, page)
+        Disposer.register(content, page)
+        window.contentManager.addContent(content)
+        select(window, content, JsonObject())
+    }
+
+    /** The test insights are a tab of their own, closeable, drawn again when asked again. */
+    private fun openTests(project: Project, window: ToolWindow) {
+        window.contentManager.contents.firstOrNull { it.getUserData(VIEW)?.id == "tests" }?.let {
+            select(window, it, JsonObject())
+            return
+        }
+        val page = TestsPage(project)
+        val content = ContentFactory.getInstance().createContent(page.component, McppSession.get(project).t("Test Insights"), false)
         content.isCloseable = true
         content.putUserData(VIEW, page)
         Disposer.register(content, page)

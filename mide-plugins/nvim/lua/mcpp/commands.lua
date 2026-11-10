@@ -160,6 +160,12 @@ function panels.graph(row, _, root)
   views.show(row.title, row.action.graph == 'modules' and 'graph/modules' or 'graph/packages', { root = root }, views.graph_text)
 end
 
+-- What the last runs of the tests say (design 2026-11-10), as text: the store mcpp keeps, read by
+-- the backend.
+function panels.tests(row, _, root)
+  views.show(row.title, 'test/insights', { root = root }, tests.insights_text)
+end
+
 -- The pack panel's choices one after another: the format, the closure, the linkage where mcpp takes
 -- one; then the pack, and what it wrote.
 function panels.pack(row, _, root)

@@ -178,19 +178,98 @@ export interface SourceEntries {
   root?: string;
   kind: "program" | "test" | "none";
   test?: string;
+  /** A file of a program of several files: the part of the program it is (`unit/a`); `test` is the program. */
+  part?: string;
   framework?: string;
   main?: { line: number; approximate?: boolean };
 }
 
-/** `test/cases` (§7.3): a test program's cases, from its source and, once listed, from the program. */
+/** The bounds a case states on its metrics (mtest protocol P6.5). */
+export interface MetricBound {
+  metric: string;
+  max?: number;
+  min?: number;
+}
+
+/** What a case measured (mtest protocol P6), when mcpp states it (test-metrics, mcpp#917). */
+export interface Metric {
+  name: string;
+  value: number;
+  unit?: string;
+  better?: "lower" | "higher";
+}
+
+/** A case of `test/cases`: its place, and what the test protocol states of it (design 2026-11-10). */
+export interface TestCase {
+  name: string;
+  line?: number;
+  source: "static" | "listed";
+  /** The file that declares it, in a program of several files. */
+  file?: string;
+  kind?: string;
+  tags?: string[];
+  expect?: string;
+  bounds?: MetricBound[];
+}
+
+/** `test/cases` (§7.3): a test program's cases, from its sources and, once listed, from the program. */
 export interface TestCases {
   root: string;
   test: string;
   file: string;
+  /** The files of a program of several files. */
+  files?: string[];
   framework: string | null;
   listed?: boolean;
   main?: { line: number; approximate?: boolean };
-  cases: { name: string; line?: number; source: "static" | "listed" }[];
+  cases: TestCase[];
+}
+
+/** A program of `test/list`: its files and the parts a run divides it into (design 2026-11-10). */
+export interface TestProgram {
+  test: string;
+  member: string;
+  main: string;
+  files?: string[];
+  parts?: { name: string; file: string }[];
+  layout?: "file" | "directory";
+}
+
+/** A failure of a case: its place (0-based line) and, when stated, both sides. */
+export interface CaseFailure {
+  path: string;
+  line: number;
+  message: string;
+  expected?: string;
+  actual?: string;
+}
+
+/** A case as it ended, as the backend maps the test protocol's statuses. */
+export interface CaseOutcome {
+  case: string;
+  status: "passed" | "failed" | "skipped" | "errored";
+  durationMs?: number;
+  reason?: string;
+  message?: string;
+  location?: FailureLocation | null;
+  failures?: CaseFailure[];
+  metrics?: Metric[];
+  bounds?: MetricBound[];
+  kind?: string;
+  tags?: string[];
+  expectedFailure?: boolean;
+  unexpectedPass?: boolean;
+}
+
+/** `test/caseEvent`: a case began or ended while its program runs (test-case-stream, mcpp#917). */
+export interface CaseEvent extends Partial<CaseOutcome> {
+  jobId: string;
+  root: string;
+  program: string;
+  part: string;
+  case: string;
+  event: "begin" | "end";
+  tMs?: number;
 }
 
 /** `test/caseResult`: one case's outcome, read from the framework's report. */
@@ -200,12 +279,14 @@ export interface FailureLocation {
   line: number;
 }
 
-export interface CaseResult {
+export interface CaseResult extends CaseOutcome {
   jobId: string;
   root: string;
   test: string;
+  program?: string;
+  part?: string;
   case: string;
-  status: "passed" | "failed" | "skipped";
+  status: "passed" | "failed" | "skipped" | "errored";
   durationMs: number;
   message: string;
   /** The case's own output (GoogleTest's console between `[ RUN ]` and its result); empty without boundaries. */
@@ -230,4 +311,9 @@ export interface TestResult {
   outputTruncated?: boolean;
   location?: FailureLocation | null;
   reason: string;
+  /** The program the record belongs to, and the part of it the record is (design 2026-11-10). */
+  program?: string;
+  part?: string;
+  /** A protocol program's cases, each as it ended. */
+  cases?: CaseOutcome[];
 }

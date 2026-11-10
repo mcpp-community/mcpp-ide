@@ -155,6 +155,9 @@ jobs:
         run: mcpp build
       - name: Test
         run: mcpp test
+      - name: The tests' report
+        if: always()
+        uses: ./.github/actions/mtest-report
       - name: Every string has its translation
         run: mcpp run mcpp-ide-dev -- check-i18n
       - name: No header, no preprocessor branch, no compile-time platform question
@@ -218,6 +221,9 @@ jobs:
         run: mcpp build
       - name: The tests, as ok images, through the runner
         run: mcpp test --profile release --target ${{ matrix.arch }}-openkal
+      - name: The tests' report
+        if: always()
+        uses: ./.github/actions/mtest-report
 
   # The VS Code extension (mide-plugins/vscode), mcpp-vscode 0.9.0 over the backend. Its gates
   # (the registry, the translations, the unit suite) on the three desktop systems; the manifest

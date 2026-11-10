@@ -27,7 +27,9 @@ those of mcpp.toml and build.mcpp come from the backend ([docs/rules.md](docs/ru
 | | VS Code (mcpp-vscode) | CLion (mcpp-clion) | Neovim (mcpp-nvim) |
 |---|---|---|---|
 | Build, run, test | Tasks in a pseudoterminal showing mcpp's output | "mcpp" run configurations, PTY console, ▶ beside `main` | `:Mcpp build`, `test`: jobs streamed into a buffer; `:Mcpp run` in a terminal buffer |
-| Test tree, re-run one test | Testing view | IDE test runner | `:Mcpp test <filter>` |
+| Test tree, re-run one test | Testing view: program, file, case; `@kind:bench` and a case's tags filter it | IDE test runner: a suite per program and per file | `:Mcpp test <filter>`: `mcpp://tests`, signs, the quickfix list |
+| Test results | Live per case; a failure with both sides opens VS Code's diff; a case's line ends with its duration and metrics | Live per case; a comparison failure opens the IDE's diff; metrics in the case's output | Live per case; both sides in the buffer and the quickfix list; duration and metrics as virtual text |
+| Test insights (the runs mcpp keeps) | "mcpp: Show Test Insights", a webview | The mcpp tool window's Test Insights tab (JCEF) | `:Mcpp test.insights`, a floating window |
 | Debug | CodeLLDB, C/C++ (gdb, lldb), lldb-dap | CLion's GDB or LLDB | nvim-dap (codelldb, lldb-dap, cppdbg, gdb) |
 | Diagnostics | Problems, from mcpp's located diagnostics | Console links to the reported location | `vim.diagnostic`, `:Mcpp problems` in the quickfix list |
 | mcpp.toml, build.mcpp | Completion, hover, jumps and the rules' diagnostics from the backend (language client); Problems from mcpp | The same, through CLion's completion, documentation, annotations and go-to | The same, through `vim.lsp`; mcpp's problems in `vim.diagnostic` |
@@ -41,6 +43,23 @@ Entering a setting's default removes its stored override.
 
 Graph queries report build-database errors instead of showing an empty graph. After correcting
 the reported problem, reopen the graph to retry.
+
+**Tests.** The editors show tests as `mcpp test` states them ([docs/architecture.md](docs/architecture.md),
+"A test run, end to end"). A program of several files (`[test] programs = "directory"`) has its files as
+children, each the part of the program a run gives a process. A case of the mtest test protocol carries its
+kind, tags and the bounds on its metrics. Test Insights reads the runs mcpp keeps in `target/mtest`: the last
+run, its failures and since when, each metric against its bound, the slowest and the flaky cases, and the
+schedule with its critical path. What an editor shows follows the project's mcpp:
+
+| The project's mcpp | Adds |
+|---|---|
+| any | programs and their results |
+| 2026.11.8.1 (`test-protocol`) | cases, their places and results, both sides of a failure |
+| 2026.11.9.1 | the files of a program of several files; Test Insights over the kept runs |
+| `test-parts`, `test-case-stream`, `test-metrics` ([mcpp#917](https://github.com/mcpp-community/mcpp/issues/917)) | the parts as mcpp states them, results as each case ends, metrics and their trends |
+
+A view that needs a feature the project's mcpp does not state is left out. The self-check
+(`capabilities/explain`) says which mcpp states it.
 
 - **One answer everywhere** -- what a build runs, how a test is reported, what a cleanup costs: the backend's
 - **Only mcpp's contract** -- no manifest parsing, no dependency resolution of its own
@@ -76,9 +95,12 @@ VS Code and CLion check for the local build tool only when a user starts an acti
 
 **Versions.** A version is `X.Y.Z`. `X.Y`, the series, is shared by the backend and every plugin: a
 plugin works with any backend of its series and refuses another, naming both versions and the
-install that matches. `Z` is each component's own patch, so VS Code 1.2.3 and CLion 1.2.1 both work
-with backend 1.2.0. A series release is tagged `vX.Y.0`; a component's patch is tagged
-`backend-`, `vscode-`, `clion-` or `nvim-vX.Y.Z` and publishes that component alone. A pull request runs the jobs of
+install that matches. The VS Code and CLion packages carry the backend, so a change of the backend is a
+change of every package: it begins a series, every component at `X.Y.0`, tagged `vX.Y.0`, and the backend
+is always its series' `X.Y.0`. `Z` is an editor plugin's own patch, tagged `vscode-`, `clion-` or
+`nvim-vX.Y.Z`, which publishes that plugin alone over its series' backend: VS Code 1.3.2 and CLion 1.3.1
+both carry backend 1.3.0. A plugin's patch is refused when a path of the backend has changed since its
+series' tag. A pull request runs the jobs of
 the components it changes ([`.github/components.tsv`](.github/components.tsv)): a change of the backend runs
 everything, a change of one plugin runs that plugin's jobs over the backend main built from the same inputs,
 a change of the documentation its checks; `.github/` and any path the table does not name run everything.
@@ -90,9 +112,9 @@ If `mcpp` is absent, they show one notification linking to the
 
 ```bash
 mcpp build                                     # the backend, the mock mcpp, mcpp-ide-dev
-mcpp test                                      # the backend's tests
+mcpp test                                      # the backend's tests (mtest: tests/unit, e2e, cts, bench)
 cd mide-plugins/vscode && npm ci && npm test   # the extension's tests, the parity gates against 0.9.0 among them
-npm run test:webui                             # CLion's graph page in Chromium, over the backend
+npm run test:webui                             # the graph and tests pages in Chromium, over the backend
 npm run package                                # dist/mcpp-vscode-<version>.vsix
 cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
 cd ../.. && nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua   # the Neovim plugin's tests

@@ -1,18 +1,16 @@
-// The two contracts, held to their schemas:
-//   - every golden fixture (mcpp's real output) against the definition of
-//     protocol/mcpp-contract.schema.json that protocol/fixtures.json names for it;
-//   - the methods the backend registers and the notifications it sends against
-//     protocol/protocol.schema.json, both ways;
-//   - a session over the mock mcpp: each answer against its method's `result`, and
-//     every notification a build and a test send against its `params`.
+// A session over the mock mcpp, held to the backend's protocol (protocol/protocol.schema.json): each
+// answer against its method's `result`, and every notification a build and a test send against its
+// `params`. (The schemas themselves are held to mcpp's output and to the backend in cts/contracts.cpp.)
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.rpc;
 import mcppide.server;
 import mcppide.schema;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -62,41 +60,8 @@ struct Wire {
 
 }  // namespace
 
-int main() {
-    const auto contract = load(testsupport::repo() / "protocol" / "mcpp-contract.schema.json");
-    const auto index = load(testsupport::repo() / "protocol" / "fixtures.json");
-    for (const auto& f : index["fixtures"]) {
-        const auto path = testsupport::fixtures() / f["file"].get<std::string>();
-        if (!std::filesystem::exists(path)) {
-            check(f.value("optional", false));
-            continue;
-        }
-        const auto text = testsupport::read(path);
-        if (f.contains("each")) {
-            const Json def{{"$ref", "#/$defs/" + f["each"].get<std::string>()}};
-            std::istringstream lines(text);
-            int n = 0;
-            for (std::string line; std::getline(lines, line);) {
-                if (line.empty()) continue;
-                check(conforms(Json::parse(line), def, contract, std::format("{}:{}", f["file"].get<std::string>(), ++n)));
-            }
-            check(n > 0);
-        } else {
-            const Json def{{"$ref", "#/$defs/" + f["schema"].get<std::string>()}};
-            check(conforms(Json::parse(text), def, contract, f["file"].get<std::string>()));
-        }
-    }
-
+E2E protocol{"protocol", [] {
     const auto protocol = load(testsupport::repo() / "protocol" / "protocol.schema.json");
-    std::set<std::string> methods, notifications;
-    for (auto it = protocol["methods"].begin(); it != protocol["methods"].end(); ++it) methods.insert(it.key());
-    for (auto it = protocol["notifications"].begin(); it != protocol["notifications"].end(); ++it) notifications.insert(it.key());
-    std::set<std::string> registered(server::kMethods.begin(), server::kMethods.end());
-    std::set<std::string> sent(server::kNotifications.begin(), server::kNotifications.end());
-    for (const auto& m : methods) if (!registered.contains(m)) std::println(std::cerr, "schema method not registered: {}", m);
-    for (const auto& m : registered) if (!methods.contains(m)) std::println(std::cerr, "registered method not in the schema: {}", m);
-    check(methods == registered);
-    check(notifications == sent);
 
     // A session over the mock mcpp.
     const auto mock = testsupport::built("mcpp-ide-mock-mcpp");
@@ -393,8 +358,95 @@ int main() {
         for (const auto& n : caseResults)
             check(conforms(n, protocol["notifications"]["mcpp-ide/test/caseResult"]["params"], protocol, "mcpp-ide/test/caseResult"));
     }
+    // A program of several files (design 2026-11-10): as mcpp 2026.11.9.1 states it (its parts
+    // derived), and as mcpp#917 states it (parts, case records, metrics). A run's part records are
+    // attributed to their program, each part's cases reported, and the store's runs read back.
+    for (const std::string set : {"directory", "directory-917"}) {
+        const bool rich = set == "directory-917";
+        const auto dir = root.parent_path() / (root.filename().string() + "-" + set);
+        std::filesystem::create_directories(dir / "tests" / "unit");
+        std::ofstream(dir / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[test]\nprograms = \"directory\"\n";
+        std::ofstream(dir / ".mock-mcpp-tests") << set;
+        std::ofstream(dir / ".mock-mcpp-features") << (rich ? "test-protocol,test-parts,test-case-stream,test-metrics" : "test-protocol");
+        std::ofstream(dir / "tests" / "smoke.cpp") << "int main() { return 0; }\n";
+        std::ofstream(dir / "tests" / "unit" / "a.cpp")
+            << "import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\n\nBench alpha{\"alpha\", at_most{\"ready\", 15}, [] {}};\n";
+        std::ofstream(dir / "tests" / "unit" / "b.cpp") << "import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\n\nUTest beta{\"beta\", [] {}};\n";
+        const auto a = (dir / "tests" / "unit" / "a.cpp").generic_string(), b = (dir / "tests" / "unit" / "b.cpp").generic_string();
+        // mcpp names a file as the file system spells the project (Windows' long names), the test as
+        // its temporary directory does (it may be a short name): one file, either spelling.
+        const auto same = [](const Json& named, const std::string& file) {
+            std::error_code ec;
+            return named.is_string() && std::filesystem::equivalent(named.get<std::string>(), file, ec);
+        };
+        const auto listed = result_of("mcpp-ide/test/list", Json{{"root", dir.generic_string()}});
+        const auto unit = std::ranges::find_if(listed["tests"], [](const Json& t) { return t["test"] == "unit"; });
+        check(unit != listed["tests"].end());
+        if (unit != listed["tests"].end()) {
+            check((*unit)["layout"] == "directory" && (*unit)["main"] == "" && (*unit)["files"].size() == 2
+                  && same((*unit)["files"][0], a) && same((*unit)["files"][1], b));
+            check((*unit)["parts"].size() == 2 && (*unit)["parts"][1]["name"] == "unit/b" && same((*unit)["parts"][1]["file"], b));
+        }
+        const auto entries = result_of("mcpp-ide/source/entries", Json{{"file", b}});
+        check(entries["kind"] == "test" && entries["test"] == "unit" && entries["part"] == "unit/b");
+        // Before a listing, the program's files (its cases are read from them where its plan holds
+        // mtest; the mock's plan does not); the listing places each case in its file.
+        const auto statics = result_of("mcpp-ide/test/cases", Json{{"root", dir.generic_string()}, {"test", "unit"}});
+        check(statics["test"] == "unit" && statics["files"].size() == 2 && same(statics["files"][0], a) && same(statics["files"][1], b));
+        const auto listedCases = result_of("mcpp-ide/test/cases", Json{{"root", dir.generic_string()}, {"test", "unit"}, {"list", true}});
+        check(listedCases.value("listed", false) && listedCases["framework"] == "mtest" && listedCases["cases"].size() == 2);
+        if (listedCases["cases"].size() == 2) {
+            const auto& alpha = listedCases["cases"][0];
+            check(alpha["name"] == "alpha" && same(alpha["file"], a) && alpha["line"] == 3 && alpha["kind"] == "bench" && alpha["bounds"][0]["max"] == 15);
+            check(listedCases["cases"][1]["tags"] == Json::array({"slow"}) && same(listedCases["cases"][1]["file"], b));
+        }
+        const auto resultsBefore = wire.notifications("mcpp-ide/test/result").size();
+        const auto eventsBefore = wire.notifications("mcpp-ide/test/caseEvent").size();
+        const auto finishedBefore = wire.notifications("mcpp-ide/job/finished").size();
+        result_of("mcpp-ide/job/start", Json{{"kind", "test"}, {"root", dir.generic_string()}});
+        for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/job/finished").size() <= finishedBefore; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        const auto results = wire.notifications("mcpp-ide/test/result");
+        check(results.size() == resultsBefore + 3);
+        if (results.size() == resultsBefore + 3) {
+            const auto& partB = results[resultsBefore + 1];
+            check(results[resultsBefore]["program"] == "unit" && results[resultsBefore]["part"] == "unit/a");
+            check(partB["program"] == "unit" && partB["part"] == "unit/b" && partB["cases"].size() == 1);
+            check(partB["cases"][0]["status"] == "failed" && partB["cases"][0]["failures"][0]["expected"] == "4"
+                  && partB["cases"][0]["failures"][0]["actual"] == "5" && partB["cases"][0]["location"]["line"] == 3);
+            check(results[resultsBefore + 2]["program"] == "smoke" && !results[resultsBefore + 2].contains("part"));
+            if (rich) check(results[resultsBefore]["cases"][0]["metrics"][0]["value"] == 4.2);
+        }
+        const auto events = wire.notifications("mcpp-ide/test/caseEvent");
+        check(events.size() == eventsBefore + (rich ? 4 : 0));
+        if (rich && events.size() == eventsBefore + 4) {
+            check(events[eventsBefore]["event"] == "begin" && events[eventsBefore]["program"] == "unit" && events[eventsBefore]["case"] == "alpha");
+            check(events[eventsBefore + 1]["event"] == "end" && events[eventsBefore + 1]["status"] == "passed"
+                  && events[eventsBefore + 1]["metrics"][0]["name"] == "ready");
+            check(events[eventsBefore + 3]["status"] == "failed" && events[eventsBefore + 3]["part"] == "unit/b");
+        }
+        for (const auto* name : {"mcpp-ide/test/result", "mcpp-ide/test/caseEvent"})
+            for (const auto& n : wire.notifications(name)) check(conforms(n, protocol["notifications"][name]["params"], protocol, name));
+        // The store mcpp keeps (target/mtest): three runs, the last with mcpp#917's fields.
+        const auto noRuns = result_of("mcpp-ide/test/insights", Json{{"root", dir.generic_string()}});
+        check(noRuns["run"].is_null() && noRuns["runs"] == 0 && noRuns["features"]["live"] == rich);
+        std::filesystem::create_directories(dir / "target" / "mtest");
+        std::filesystem::copy(testsupport::repo() / "protocol" / "fixtures" / "mtest-store", dir / "target" / "mtest",
+                              std::filesystem::copy_options::recursive);
+        const auto insights = result_of("mcpp-ide/test/insights", Json{{"root", dir.generic_string()}});
+        check(insights["runs"] == 3 && insights["run"]["id"] == "20261110T100000-0c03");
+        check(insights["failures"].size() == 1 && insights["failures"][0]["case"] == "beta" && insights["failures"][0]["program"] == "unit"
+              && insights["failures"][0]["part"] == "unit/b" && insights["failures"][0]["new"] == true && insights["failures"][0]["expected"] == "4");
+        check(insights["flaky"].size() == 1 && insights["flaky"][0]["flips"] == 2);
+        check(insights["metrics"].size() == 1 && insights["metrics"][0]["last"] == 4.2 && insights["metrics"][0]["bound"]["max"] == 15);
+        check(insights["schedule"]["lanes"].size() == 2 && insights["schedule"]["criticalPath"] == Json::array({"unit", "smoke"}));
+        check(insights["available"]["metrics"] == true && insights["available"]["kinds"] == true);
+        const auto history = result_of("mcpp-ide/test/history", Json{{"root", dir.generic_string()}, {"program", "unit"}, {"case", "beta"}});
+        check(history["runs"].size() == 3 && history["cases"].size() == 1 && history["cases"][0]["results"].size() == 3);
+        if (history["cases"].size() == 1) check(history["cases"][0]["results"][1]["status"] == "pass");
+        std::filesystem::remove_all(dir);
+    }
     std::filesystem::remove_all(protocolRoot);
     std::filesystem::remove_all(streamed);
     std::filesystem::remove_all(root);
-    std::println("test_protocol: ok");
-}
+}};

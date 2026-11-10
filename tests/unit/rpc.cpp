@@ -3,16 +3,18 @@
 // METHOD_NOT_FOUND, a cancelled request answers REQUEST_CANCELLED.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.rpc;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 using Json = nlohmann::json;
 
-int main() {
-    {
+UTest rpc{"rpc", [] {
+    "frames reassemble"_test = [&] {
         rpc::FrameReader r;
         const auto a = rpc::encode(Json{{"jsonrpc", "2.0"}, {"id", 1}, {"method", "x"}});
         const auto b = rpc::encode(Json{{"jsonrpc", "2.0"}, {"id", 2}, {"method", "y"}});
@@ -23,8 +25,8 @@ int main() {
         auto second = r.next();
         check(second && Json::parse(*second)["id"] == 2);
         check(!r.next());
-    }
-    {
+    };
+    "the server answers and refuses"_test = [&] {
         std::mutex m;
         std::vector<Json> out;
         rpc::Server s([&](std::string_view frame) {
@@ -58,6 +60,5 @@ int main() {
         check(!cancelled);   // the handler answered (it saw the flag) with a result, which is kept
         s.dispatch("not json");
         check(out.back()["error"]["code"] == rpc::PARSE_ERROR);
-    }
-    std::println("test_rpc: ok");
-}
+    };
+}};

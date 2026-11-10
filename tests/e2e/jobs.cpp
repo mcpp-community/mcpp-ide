@@ -2,12 +2,14 @@
 // `failed` with its diagnostics, and a cancelled one ends `cancelled` with mcpp's record saying so.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcpplibs.os;
 import mcppide.mcpp;
 import mcppide.jobs;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 namespace jobs = mcppide::jobs;
 using Json = nlohmann::json;
@@ -21,7 +23,7 @@ struct Seen {
 
 }  // namespace
 
-int main() {
+E2E jobQueue{"jobs", [] {
     const auto mock = testsupport::built("mcpp-ide-mock-mcpp");
     check(!mock.empty());
     // The mock reads its fixtures and its behaviour from the environment of each run.
@@ -82,5 +84,4 @@ int main() {
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
-    std::println("test_jobs: ok");
-}
+}};

@@ -1,0 +1,2 @@
+{"failures":[],"id":"alpha","ms":0.4,"program":"unit/a","reason":"","status":"pass","kind":"bench","started_ms":1,"metrics":[{"name":"ready","value":4.2,"unit":"s","better":"lower"}],"bounds":[{"metric":"ready","max":15}]}
+{"failures":[{"file":"tests/unit/b.cpp","line":4,"message":"sum == 4","expected":"4","actual":"5"}],"id":"beta","ms":1.6,"program":"unit/b","reason":"","status":"fail","kind":"unit","started_ms":1}

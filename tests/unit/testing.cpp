@@ -5,6 +5,7 @@
 // backend's source/entries and test/cases over a project on disk.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.scan;
 import mcpplibs.mtest.manifest;
@@ -13,6 +14,7 @@ import mcppide.rpc;
 import mcppide.server;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -27,9 +29,9 @@ const testing::Framework& fw(std::string_view id) {
 
 }  // namespace
 
-int main() {
+UTest sources{"sources", [] {
     // main: the first `int main(` or `auto main(` at file scope, outside comments and literals.
-    {
+    "main is found outside comments and literals"_test = [&] {
         const auto r = scan::scan(R"(// int main() in a comment
 /* int main() */
 const char* s = "int main(";
@@ -43,10 +45,10 @@ main(int argc, char** argv) { return 0; }
         check(r.mainLine && *r.mainLine == 8);
         check(!scan::scan("void f() { obj.main(); std::main(); }", {}).mainLine);
         check(scan::scan("export auto main() -> int { return 0; }", {}).mainLine == 0);
-    }
+    };
     // Macro calls at the start of a declaration, with their arguments.
     const auto macros = testing::macros(Json::object());
-    {
+    "macro calls and their arguments"_test = [&] {
         const auto r = scan::scan(R"(#include <gtest/gtest.h>
 TEST(Math, Adds) { EXPECT_EQ(1 + 1, 2); }
 // TEST(Not, This)
@@ -60,10 +62,10 @@ TEST(Math,
         check(r.calls[1].name == "TEST_P" && r.calls[1].line == 3);
         check(r.calls[2].line == 5 && r.calls[2].arguments[1] == "Spans");
         check(scan::literal_value(R"("a \"b\"" " c")") == "a \"b\" c");
-    }
+    };
 
     // A program's framework: its package in the plan and its macros in its source.
-    {
+    "a framework needs its package and its macros"_test = [&] {
         const auto gtestSource = scan::scan("TEST(A, B) {}\nTEST_F(F, C) {}\n", macros);
         check(testing::framework_of({"app", "compat.gtest"}, gtestSource, Json::object()) == &fw("gtest"));
         check(testing::framework_of({"app"}, gtestSource, Json::object()) == nullptr);
@@ -83,10 +85,10 @@ TEST(Math,
         check(catchCases.size() == 2 && catchCases[0].name == "adds" && catchCases[1].name == "Scenario: grows");
         const auto doctestCases = testing::static_cases(fw("doctest"), both, Json::object());
         check(doctestCases[1].name == "  Scenario: grows");
-    }
+    };
 
     // Listings, base names and the merge.
-    {
+    "listings, base names and the merge"_test = [&] {
         const auto names = testing::listed(fw("gtest"), "Math.\n  Adds\n  Spans\nInst/Param.\n  Works/0  # GetParam() = 1\n  Works/1  # GetParam() = 2\nTyped/0.  # TypeParam = int\n  Holds\n");
         check(names == std::vector<std::string>({"Math.Adds", "Math.Spans", "Inst/Param.Works/0", "Inst/Param.Works/1", "Typed/0.Holds"}));
         check(testing::base_name(fw("gtest"), "Inst/Param.Works/1") == "Param.Works");
@@ -101,20 +103,20 @@ TEST(Math,
         check(listedCatch == std::vector<std::string>({"adds", "a, b"}));
         const auto listedDoctest = testing::listed(fw("doctest"), "[doctest] doctest version is \"2.4.12\"\n===\nadds\n  Scenario: grows\n===\n[doctest] unskipped test cases passing the current filters: 2\n");
         check(listedDoctest == std::vector<std::string>({"adds", "  Scenario: grows"}));
-    }
+    };
 
     // The arguments after `--`: the filter escaped by the framework's rules, and the report.
-    {
+    "the filter and the report arguments"_test = [&] {
         const auto g = testing::run_args(fw("gtest"), {"Math.Adds", "Inst/Param.Works/0"}, "/r/out");
         check(g == std::vector<std::string>({"--gtest_filter=Math.Adds:*/Math.Adds/*:Math/*.Adds:Inst/Param.Works/0", "--gtest_output=json:/r/out"}));
         const auto c = testing::run_args(fw("catch2"), {"a, b", "x[1]"}, "/r/out");
         check(c == std::vector<std::string>({"a\\, b,x\\[1\\]", "--reporter", "json::out=/r/out"}));
         const auto d = testing::run_args(fw("doctest"), {}, "/r/out");
         check(d == std::vector<std::string>({"--reporters=junit", "--out=/r/out"}));
-    }
+    };
 
     // Reports.
-    {
+    "reports"_test = [&] {
         const auto g = testing::read_report(fw("gtest"), R"({"testsuites": [{"name": "Math", "testsuite": [
             {"name": "Adds", "status": "RUN", "result": "COMPLETED", "time": "0.002s"},
             {"name": "Spans", "status": "RUN", "result": "COMPLETED", "time": "0s", "failures": [{"failure": "a.cpp:3\nExpected 2"}]},
@@ -148,13 +150,13 @@ TEST(Math,
         check(outputs.at("Math.Spans").contains("a.cpp:3: Failure") && outputs.at("Math.Spans").ends_with("[  FAILED  ] Math.Spans (0 ms)\n"));
         check(outputs.at("Math.Crashes") == "[ RUN      ] Math.Crashes\nhalf way\n");
         check(testing::case_outputs(fw("catch2"), "[ RUN      ] x\n").empty());
-    }
+    };
 
     // mtest's cases as mtest's static manifest reads them: each object (`UTest`, `Suite`, ...) is a
     // case, and so is each `"name"_test` declared in one, under its name; never a literal in a
     // comment or one not followed by `_test`. The framework is claimed by its package and its
     // cases, and a record of `mcpp test` lists and reports them (the test protocol).
-    {
+    "mtest cases by its manifest"_test = [&] {
         const auto r = scan::scan(R"(import mcpplibs.mtest;
 using namespace mcpplibs::mtest;
 // "commented"_test
@@ -190,11 +192,11 @@ int main() { "top"_test = [] {}; return report(); }
               && outcomes[1].outcome.message.contains("expected 2, actual 1"));
         check(outcomes.size() == 4 && outcomes[2].outcome.status == "skipped" && outcomes[2].outcome.message == "later");
         check(outcomes.size() == 4 && outcomes[3].outcome.status == "passed");
-    }
+    };
 
     // A suite type the project's tests declare in a module beside them is a suite type in every
     // file that uses it: the server reads the types across tests/ before it scans a file.
-    {
+    "suite types across sources"_test = [&] {
         const std::vector<std::string> sources{
             "export module cts;\nimport mcpplibs.mtest;\nexport class Fixture : public mcpplibs::mtest::CTS {\n"
             "public:\n    using CTS::CTS;\n};\n"};
@@ -203,11 +205,11 @@ int main() { "top"_test = [] {}; return report(); }
         const auto r = scan::scan(cases, {}, types);
         check(r.cases.size() == 2 && r.cases[0].id == "one" && r.cases[1].id == "two@warm" && r.cases[1].line == 2);
         check(scan::scan(cases, {}).cases.empty());
-    }
+    };
 
     // source/entries and test/cases over a project on disk (no mcpp: the plan's packages are not
     // known, so no framework is claimed, and the static entries still answer).
-    {
+    "source entries and cases on disk"_test = [&] {
         const auto base = testsupport::temp() / std::format("mcppide-testing-{}", std::random_device{}());
         std::filesystem::create_directories(base / "src");
         std::filesystem::create_directories(base / "tests" / "unit");
@@ -246,8 +248,5 @@ int main() { "top"_test = [] {}; return report(); }
         check(cases["framework"].is_null() && cases["cases"].empty());
         std::error_code ignored;
         std::filesystem::remove_all(base, ignored);
-    }
-
-    std::println("test_testing: ok");
-    return 0;
-}
+    };
+}};

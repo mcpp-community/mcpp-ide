@@ -1,8 +1,8 @@
 /**
- * The graph page mcpp-clion shows in JCEF (webui/, mcpp design 2026-10-30 part 2 §9): webui/src/graph.ts
- * bundled into graph.js, beside graph.html and mermaid, into webui/dist (or the directory named by
- * --out), with files.txt listing them (what mcpp-clion extracts from its jar). Nothing it writes is
- * kept in the repository.
+ * The pages mcpp-clion shows in JCEF (webui/, mcpp design 2026-10-30 part 2 §9): webui/src/graph.ts and
+ * webui/src/tests.ts bundled into graph.js and tests.js, beside graph.html, tests.html and mermaid, into
+ * webui/dist (or the directory named by --out), with files.txt listing them (what mcpp-clion extracts
+ * from its jar). Nothing it writes is kept in the repository.
  */
 import { build } from "esbuild";
 import fs from "node:fs";
@@ -16,17 +16,19 @@ const out = at > 0 ? path.resolve(process.argv[at + 1]) : path.join(webui, "dist
 
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, "vendor"), { recursive: true });
-await build({
-  entryPoints: [path.join(webui, "src", "graph.ts")],
-  bundle: true,
-  format: "iife",
-  platform: "browser",
-  target: "chrome120",
-  outfile: path.join(out, "graph.js"),
-  logLevel: "warning",
-  legalComments: "eof",
-});
-fs.copyFileSync(path.join(webui, "graph.html"), path.join(out, "graph.html"));
+for (const page of ["graph", "tests"]) {
+  await build({
+    entryPoints: [path.join(webui, "src", `${page}.ts`)],
+    bundle: true,
+    format: "iife",
+    platform: "browser",
+    target: "chrome120",
+    outfile: path.join(out, `${page}.js`),
+    logLevel: "warning",
+    legalComments: "eof",
+  });
+  fs.copyFileSync(path.join(webui, `${page}.html`), path.join(out, `${page}.html`));
+}
 const mermaid = path.join(extension, "node_modules", "@mermaid-js", "tiny");
 fs.copyFileSync(path.join(mermaid, "dist", "mermaid.tiny.js"), path.join(out, "vendor", "mermaid.js"));
 fs.copyFileSync(path.join(mermaid, "LICENSE"), path.join(out, "vendor", "MERMAID-LICENSE"));

@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import type { JobFinished } from "./protocol";
 import type { Session } from "./session";
 
-const JOB_EVENTS = ["job/started", "job/output", "job/plan", "job/progress", "job/diagnostic", "job/artifact", "job/record", "job/finished", "test/result", "test/summary", "test/caseResult"];
+const JOB_EVENTS = ["job/started", "job/output", "job/plan", "job/progress", "job/diagnostic", "job/artifact", "job/record", "job/finished", "test/result", "test/summary", "test/caseResult", "test/caseEvent"];
 
 export interface JobEvents {
   output?(text: string): void;
@@ -17,6 +17,8 @@ export interface JobEvents {
   testSummary?(p: any): void;
   /** A case's outcome (test/runCases), sent before the job's end. */
   caseResult?(p: any): void;
+  /** A case as it begins or ends while its program runs (test-case-stream, mcpp#917). */
+  caseEvent?(p: any): void;
   finished?(p: JobFinished): void;
 }
 
@@ -83,6 +85,7 @@ export class Jobs implements vscode.Disposable {
       case "test/result": e.testResult?.(params); break;
       case "test/summary": e.testSummary?.(params); break;
       case "test/caseResult": e.caseResult?.(params); break;
+      case "test/caseEvent": e.caseEvent?.(params); break;
       case "job/finished":
         e.finished?.(params);
         owner.handle.finish(params);

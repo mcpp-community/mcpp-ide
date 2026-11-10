@@ -30,23 +30,13 @@ repositories {
 
 // The mcppls CLion plugin, from its release: the dependency the sandbox, the tests and the verifier
 // load beside this plugin. Fetched once, when the build is configured, because the platform's
-// dependency resolution reads it then. mcppls ships one package per platform, each carrying that
-// platform's server (mcppls 0.0.19); this machine's is the one loaded here.
+// dependency resolution reads it then. Since mcppls 0.0.20 one package serves every system: its
+// payload holds the server's ok images and each system's runner.
 val mcpplsVersion = providers.gradleProperty("mcpplsPluginVersion").get()
-val hostPlatform: String = run {
-    val os = System.getProperty("os.name").lowercase()
-    val system = when {
-        os.startsWith("windows") -> "win32"
-        os.startsWith("mac") -> "darwin"
-        else -> "linux"
-    }
-    val arch = System.getProperty("os.arch").lowercase()
-    "$system-${if (arch == "aarch64" || arch == "arm64") "arm64" else "x64"}"
-}
-val mcpplsArchive: File = layout.buildDirectory.file("mcppls/mcppls-clion-$mcpplsVersion-$hostPlatform.zip").get().asFile
+val mcpplsArchive: File = layout.buildDirectory.file("mcppls/mcppls-clion-$mcpplsVersion.zip").get().asFile
 if (!mcpplsArchive.exists()) {
     mcpplsArchive.parentFile.mkdirs()
-    val url = "https://github.com/Sunrisepeak/mcpp-language-server/releases/download/v$mcpplsVersion/mcppls-clion-$mcpplsVersion-$hostPlatform.zip"
+    val url = "https://github.com/Sunrisepeak/mcpp-language-server/releases/download/v$mcpplsVersion/mcppls-clion-$mcpplsVersion.zip"
     val partial = File(mcpplsArchive.path + ".part")
     uri(url).toURL().openStream().use { input -> partial.outputStream().use { input.copyTo(it) } }
     partial.renameTo(mcpplsArchive)
@@ -89,7 +79,7 @@ val generateDeclarations = tasks.register<Exec>("generateDeclarations") {
     if (dev != null) commandLine(dev, "gen", "jetbrains", "--out", out.absolutePath)
     else commandLine("mcpp", "run", "mcpp-ide-dev", "--", "gen", "jetbrains", "--out", out.absolutePath)
 }
-// The graph page JCEF loads (../../webui, mcpp design 2026-10-30 part 2 §9): webui/src/graph.ts and
+// The pages JCEF loads (../../webui, mcpp design 2026-10-30 part 2 §9): webui/src/graph.ts, tests.ts and
 // mermaid, bundled by the extension's tools/bundle-webui.mjs (Node; `npm ci` in ../vscode first),
 // with webui/files.txt naming its files.
 val webuiOut = layout.buildDirectory.dir("generated/webui/webui")
@@ -97,6 +87,7 @@ val bundleWebui = tasks.register<Exec>("bundleWebui") {
     val extension = repositoryRoot.resolve("mide-plugins/vscode")
     inputs.dir(repositoryRoot.resolve("webui/src"))
     inputs.file(repositoryRoot.resolve("webui/graph.html"))
+    inputs.file(repositoryRoot.resolve("webui/tests.html"))
     inputs.file(extension.resolve("tools/bundle-webui.mjs"))
     outputs.dir(webuiOut)
     workingDir = extension

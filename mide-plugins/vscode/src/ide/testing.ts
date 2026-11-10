@@ -1,23 +1,27 @@
 /**
- * mcpp's tests in VS Code's Testing view (design 2026-10-30 part 2 §7). The tests of each project
- * come from `test/list` (mcpp test --list: no build), each a program located at its `main`; a
- * program of a test framework has its cases as children, located at their macros (`test/cases`,
- * read from the source), and after a build the program lists them (only where its source calls its
- * framework's macros, and only in a trusted workspace), which adds the cases macros generate.
+ * mcpp's tests in VS Code's Testing view (design 2026-10-30 part 2 §7; design 2026-11-10). The tests of
+ * each project come from `test/list` (mcpp test --list: no build), each a program located at its
+ * `main`; a program of several files (`[test] programs = "directory"`) has its files as children,
+ * each the part of the program a run gives a process. A program of a test framework has its cases as
+ * children of the file that declares them (`test/cases`, read from the sources), and after a build the
+ * program lists them (only in a trusted workspace). A case carries the test tags `kind:<kind>` and its
+ * own tags, so `@kind:bench` filters the view.
  *
- * A run of whole programs is one test job, filtered to the program asked for; a run of cases is
- * `test/runCases`, whose program receives the framework's filter, and each `test/caseResult` marks
- * its case.
+ * A run of whole programs, or of one file's part, is one test job; a run of cases is `test/runCases`.
+ * Results arrive per case as the program writes them when the project's mcpp states them
+ * (`test/caseEvent`, test-case-stream), else with each part's record (`test/result` and its cases). A
+ * failure that states both sides is a diff; after a run each case's line ends with its verdict, its
+ * duration and its metrics against their bounds.
  */
 import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { t } from "../i18n/t";
 import type { Jobs } from "./jobs";
-import { baseCaseName, caseId, parseCaseId, parseTestId, testId } from "./mapping";
+import { baseCaseName, caseId, caseSummary, caseTags, fileId, parseCaseId, parseFileId, parseTestId, testId } from "./mapping";
 import type { IdeProjects } from "./projects";
 import type { Session } from "./session";
-import type { CaseResult, FailureLocation, JobFinished, TestCases, TestResult } from "./protocol";
+import type { CaseEvent, CaseOutcome, CaseResult, FailureLocation, JobFinished, TestCases, TestProgram, TestResult } from "./protocol";
 
 /** Text for the test terminal, whose lines end in `\r\n`. */
 function terminal(text: string): string {
@@ -44,16 +48,71 @@ function attribute(run: vscode.TestRun, item: vscode.TestItem, output: string | 
   if (truncated) run.appendOutput(terminal(`${t("(the output was longer; its head and tail are shown)")}\n`), at, item);
 }
 
+/** A failed case's message: a diff when the failure states both sides (VS Code compares them). */
+function failureMessage(root: string, o: CaseOutcome, item: vscode.TestItem): vscode.TestMessage {
+  const first = o.failures?.[0];
+  const text = o.unexpectedPass ? t("The case passed, though it is expected to fail.") : o.message || o.reason || o.status;
+  const message = first?.expected !== undefined && first.actual !== undefined
+    ? vscode.TestMessage.diff(first.message || text, first.expected, first.actual)
+    : new vscode.TestMessage(text);
+  message.location = failureAt(root, o.location, item);
+  return message;
+}
+
 interface Program {
   root: string;
   member: string;
   test: string;
   framework: string | null;
+  /** The cases by name, and the files' items by part. */
+  cases: Map<string, vscode.TestItem>;
+  parts: Map<string, vscode.TestItem>;
+}
+
+/** After a run, each case's line ends with what the run said of it. */
+class CaseDecorations implements vscode.Disposable {
+  private readonly type = vscode.window.createTextEditorDecorationType({
+    after: { color: new vscode.ThemeColor("descriptionForeground"), margin: "0 0 0 2em" },
+  });
+  private readonly byFile = new Map<string, Map<number, string>>();
+  private readonly disposables: vscode.Disposable[] = [
+    this.type,
+    vscode.window.onDidChangeVisibleTextEditors(() => this.apply()),
+    vscode.workspace.onDidChangeTextDocument((e) => { if (this.byFile.delete(e.document.uri.fsPath)) this.apply(); }),
+  ];
+
+  set(item: vscode.TestItem, text: string): void {
+    if (!item.uri || !item.range) return;
+    const lines = this.byFile.get(item.uri.fsPath) ?? new Map<number, string>();
+    lines.set(item.range.start.line, text);
+    this.byFile.set(item.uri.fsPath, lines);
+    this.apply();
+  }
+
+  clear(files: Iterable<string>): void {
+    for (const f of files) this.byFile.delete(f);
+    this.apply();
+  }
+
+  private apply(): void {
+    for (const editor of vscode.window.visibleTextEditors) {
+      const lines = this.byFile.get(editor.document.uri.fsPath);
+      editor.setDecorations(this.type, [...(lines ?? [])].map(([line, text]) => ({
+        range: new vscode.Range(line, Number.MAX_SAFE_INTEGER, line, Number.MAX_SAFE_INTEGER),
+        renderOptions: { after: { contentText: text } },
+      })));
+    }
+  }
+
+  dispose(): void {
+    this.disposables.forEach((d) => d.dispose());
+  }
 }
 
 export class Testing implements vscode.Disposable {
   private readonly controller = vscode.tests.createTestController("mcpp", "mcpp");
-  private readonly disposables: vscode.Disposable[] = [this.controller];
+  private readonly decorations = new CaseDecorations();
+  private readonly disposables: vscode.Disposable[] = [this.controller, this.decorations];
   private readonly programs = new Map<string, Program>();
 
   constructor(private readonly session: Session, private readonly jobs: Jobs, private readonly projects: IdeProjects) {
@@ -74,18 +133,19 @@ export class Testing implements vscode.Disposable {
     );
   }
 
-  /** The program a test's `main` is, by its project and name (the CodeLens runs it). */
-  item(root: string, test: string): vscode.TestItem | undefined {
-    const group = this.controller.items.get(root);
-    let found: vscode.TestItem | undefined;
-    group?.children.forEach((child) => {
-      const id = parseTestId(child.id);
-      if (id && id.test === test) found = child;
-    });
-    return found;
+  /** The program a test's `main` is, or the item of one file's part of it (the CodeLens and the Run menu run it). */
+  item(root: string, test: string, part?: string): vscode.TestItem | undefined {
+    const program = this.programs.get(this.findProgramId(root, test) ?? "");
+    if (part && program) return program.parts.get(part);
+    return this.controller.items.get(root)?.children.get(this.findProgramId(root, test) ?? "");
   }
 
-  /** Runs one program or case, as the Testing view's ▶ does. */
+  private findProgramId(root: string, test: string): string | undefined {
+    for (const [id, p] of this.programs) if (p.root === root && p.test === test) return id;
+    return undefined;
+  }
+
+  /** Runs one program, file or case, as the Testing view's ▶ does. */
   async runItem(item: vscode.TestItem): Promise<void> {
     const source = new vscode.CancellationTokenSource();
     try {
@@ -97,9 +157,9 @@ export class Testing implements vscode.Disposable {
 
   async discover(list = false): Promise<void> {
     for (const project of this.projects.all()) {
-      let tests: { test: string; member: string; main: string }[] = [];
+      let tests: TestProgram[] = [];
       try {
-        tests = (await this.session.request<{ tests: { test: string; member: string; main: string }[] }>("test/list", { root: project.root })).tests;
+        tests = (await this.session.request<{ tests: TestProgram[] }>("test/list", { root: project.root })).tests;
       } catch {
         continue;
       }
@@ -109,41 +169,78 @@ export class Testing implements vscode.Disposable {
         this.controller.items.add(group);
       }
       const items: vscode.TestItem[] = [];
-      for (const test of tests) {
-        const id = testId(project.root, test.member, test.test);
-        const item = this.controller.createTestItem(id, test.member ? `${test.member} · ${test.test}` : test.test,
-                                                    test.main ? vscode.Uri.file(test.main) : undefined);
-        const program: Program = { root: project.root, member: test.member, test: test.test, framework: null };
-        let cases: TestCases | undefined;
-        try {
-          cases = await this.session.request<TestCases>("test/cases", { root: project.root, test: test.test, list });
-        } catch {
-          cases = undefined;
-        }
-        // The program at its `main` (F11); a framework's program at its first case when it has none.
-        const mainLine = cases?.main?.line ?? cases?.cases.find((c) => c.line !== undefined)?.line ?? 0;
-        if (test.main) item.range = new vscode.Range(mainLine, 0, mainLine, 0);
-        if (cases?.framework) {
-          program.framework = cases.framework;
-          item.description = cases.framework;
-          item.children.replace(cases.cases.map((c) => {
-            const child = this.controller.createTestItem(caseId(project.root, test.member, test.test, c.name), c.name,
-                                                         test.main ? vscode.Uri.file(test.main) : undefined);
-            if (test.main && c.line !== undefined) child.range = new vscode.Range(c.line, 0, c.line, 0);
-            return child;
-          }));
-        }
-        this.programs.set(id, program);
-        items.push(item);
-      }
+      for (const test of tests) items.push(await this.programItem(project.root, test, list));
       group.children.replace(items);
     }
   }
 
+  private async programItem(root: string, test: TestProgram, list: boolean): Promise<vscode.TestItem> {
+    const id = testId(root, test.member, test.test);
+    const home = test.main || test.files?.[0] || "";
+    const item = this.controller.createTestItem(id, test.member ? `${test.member} · ${test.test}` : test.test, home ? vscode.Uri.file(home) : undefined);
+    const program: Program = { root, member: test.member, test: test.test, framework: null, cases: new Map(), parts: new Map() };
+    let cases: TestCases | undefined;
+    try {
+      cases = await this.session.request<TestCases>("test/cases", { root, test: test.test, list });
+    } catch {
+      cases = undefined;
+    }
+    // The program at its `main` (F11); a framework's program at its first case when it has none.
+    const mainLine = cases?.main?.line ?? cases?.cases.find((c) => c.line !== undefined)?.line ?? 0;
+    if (home) item.range = new vscode.Range(mainLine, 0, mainLine, 0);
+    if (cases?.framework) {
+      program.framework = cases.framework;
+      item.description = cases.framework;
+    }
+    const caseItem = (c: TestCases["cases"][number]): vscode.TestItem => {
+      const file = c.file || home;
+      const child = this.controller.createTestItem(caseId(root, test.member, test.test, c.name), c.name, file ? vscode.Uri.file(file) : undefined);
+      if (file && c.line !== undefined) child.range = new vscode.Range(c.line, 0, c.line, 0);
+      child.tags = caseTags(c.kind, c.tags).map((tag) => new vscode.TestTag(tag));
+      if (c.kind && c.kind !== "unit") child.description = c.kind;
+      program.cases.set(c.name, child);
+      return child;
+    };
+    const parts = test.layout === "directory" ? test.parts ?? [] : [];
+    if (parts.length > 0) {
+      // A program of several files: each file is the part a run gives a process, its cases beneath it.
+      item.children.replace(parts.map((part) => {
+        const child = this.controller.createTestItem(fileId(root, test.member, test.test, part.name), path.basename(part.file), vscode.Uri.file(part.file));
+        const own = (cases?.cases ?? []).filter((c) => c.file === part.file);
+        child.range = new vscode.Range(own.find((c) => c.line !== undefined)?.line ?? 0, 0, own.find((c) => c.line !== undefined)?.line ?? 0, 0);
+        child.children.replace(cases?.framework ? own.map(caseItem) : []);
+        program.parts.set(part.name, child);
+        return child;
+      }));
+    } else if (cases?.framework) {
+      item.children.replace(cases.cases.map(caseItem));
+    }
+    this.programs.set(id, program);
+    return item;
+  }
+
+  /** A case's outcome, marked on its item; its line then ends with what the run said. */
+  private markCase(run: vscode.TestRun, program: Program, o: CaseOutcome, seen: Set<vscode.TestItem>, output?: string, truncated?: boolean): void {
+    const item = program.cases.get(o.case) ?? program.cases.get(baseCaseName(program.framework, o.case));
+    if (!item) return;
+    seen.add(item);
+    const at = o.status === "failed" ? failureAt(program.root, o.location, item) : undefined;
+    // Every case's own output reaches its item, passed or not (D16).
+    attribute(run, item, output, truncated, at);
+    const ms = o.durationMs;
+    if (o.status === "passed") run.passed(item, ms);
+    else if (o.status === "skipped") {
+      if (o.reason) run.appendOutput(terminal(`${o.reason}\n`), undefined, item);
+      run.skipped(item);
+    } else if (o.status === "errored") run.errored(item, failureMessage(program.root, o, item), ms);
+    else run.failed(item, failureMessage(program.root, o, item), ms);
+    this.decorations.set(item, caseSummary(o));
+  }
+
   private async run(request: vscode.TestRunRequest, token: vscode.CancellationToken): Promise<void> {
     const run = this.controller.createTestRun(request);
-    // One job per program whose cases were asked for; one job per project for whole programs.
-    const wholePrograms = new Map<string, vscode.TestItem[]>();
+    // One job per program whose cases were asked for; one job per project for whole programs and parts.
+    const whole = new Map<string, { item: vscode.TestItem; filter: string }[]>();
     const casesOf = new Map<string, vscode.TestItem[]>();
     const collect = (item: vscode.TestItem) => {
       if (request.exclude?.includes(item)) return;
@@ -153,91 +250,114 @@ export class Testing implements vscode.Disposable {
         casesOf.set(owner, [...(casesOf.get(owner) ?? []), item]);
         return;
       }
+      const f = parseFileId(item.id);
+      if (f) {
+        whole.set(f.root, [...(whole.get(f.root) ?? []), { item, filter: f.part }]);
+        return;
+      }
       const id = parseTestId(item.id);
       if (!id) { item.children.forEach(collect); return; }
-      wholePrograms.set(id.root, [...(wholePrograms.get(id.root) ?? []), item]);
+      whole.set(id.root, [...(whole.get(id.root) ?? []), { item, filter: id.test }]);
     };
     if (request.include) request.include.forEach(collect);
     else this.controller.items.forEach(collect);
 
     for (const [owner, items] of casesOf) {
       if (token.isCancellationRequested) break;
-      const program = this.programs.get(owner);
-      if (!program?.framework) continue;
-      items.forEach((i) => run.enqueued(i));
-      // Every case of the program asked for: the filter is left out and the program runs them all.
-      let all = 0;
-      this.controller.items.get(program.root)?.children.get(owner)?.children.forEach(() => { all++; });
-      const names = items.length === all ? [] : items.map((i) => parseCaseId(i.id)!.name);
-      const byName = new Map(items.map((i) => [parseCaseId(i.id)!.name, i]));
-      const seen = new Set<vscode.TestItem>();
-      const handle = await this.jobs.start(
-        { root: program.root, test: program.test, framework: program.framework, cases: names, color: true },
-        {
-          output: (text) => run.appendOutput(terminal(text)),
-          caseResult: (r: CaseResult) => {
-            const item = byName.get(r.case) ?? byName.get(baseCaseName(program.framework, r.case));
-            if (!item) return;
-            seen.add(item);
-            // Every case's own output reaches its item, passed or not (D16).
-            const at = r.status === "failed" ? failureAt(program.root, r.location, item) : undefined;
-            attribute(run, item, r.output, r.outputTruncated, at);
-            if (r.status === "passed") run.passed(item, r.durationMs);
-            else if (r.status === "skipped") run.skipped(item);
-            else {
-              const message = new vscode.TestMessage(r.message || r.output || r.status);
-              message.location = at;
-              run.failed(item, message, r.durationMs);
-            }
-          },
-        },
-        "test/runCases",
-      );
-      const cancel = token.onCancellationRequested(() => void handle.cancel());
-      const done = await handle.done;
-      cancel.dispose();
-      for (const i of items)
-        if (!seen.has(i)) {
-          if (done.status === "ok" || done.status === "failed") run.skipped(i);
-          else run.errored(i, new vscode.TestMessage(t("The test program did not run: {0}", done.status)));
-        }
+      await this.runCases(run, token, owner, items);
     }
-
-    for (const [root, items] of wholePrograms) {
+    for (const [root, targets] of whole) {
       if (token.isCancellationRequested) break;
-      items.forEach((i) => run.enqueued(i));
-      const index = new Map(items.map((i) => [parseTestId(i.id)!.test, i]));
-      const filter = items.length === 1 && request.include ? parseTestId(items[0].id)!.test : undefined;
-      const handle = await this.jobs.start({ kind: "test", root, filter, color: true }, {
-        output: (text) => run.appendOutput(terminal(text)),
-        testResult: (r: TestResult) => {
-          const item = index.get(r.test);
-          if (!item) return;
-          const ms = r.durationMs;
-          const failing = r.status === "failed" || r.status === "timedOut" || r.status === "errored";
-          const at = failing ? failureAt(root, r.location, item) : undefined;
-          // The program's output reaches its item whatever the result (D16).
-          attribute(run, item, r.output, r.outputTruncated, at);
-          if (r.status === "passed") run.passed(item, ms);
-          else if (r.status === "skipped") {
-            if (r.reason) run.appendOutput(terminal(`${r.reason}\n`), undefined, item);
-            run.skipped(item);
-          } else {
-            const headline = r.status === "timedOut" ? t("The test timed out.")
-              : r.compileFailed ? t("The test did not compile.") : undefined;
-            const message = new vscode.TestMessage([headline, r.output || r.reason || r.status].filter(Boolean).join("\n"));
-            message.location = at;
-            if (r.status === "errored") run.errored(item, message, ms); else run.failed(item, message, ms);
-          }
-        },
-      });
-      const cancel = token.onCancellationRequested(() => void handle.cancel());
-      const done = await handle.done;
-      cancel.dispose();
-      if (done.status !== "ok" && done.status !== "failed")
-        for (const i of items) run.skipped(i);
+      await this.runWhole(run, token, root, targets, request.include !== undefined);
     }
     run.end();
+  }
+
+  private async runCases(run: vscode.TestRun, token: vscode.CancellationToken, owner: string, items: vscode.TestItem[]): Promise<void> {
+    const program = this.programs.get(owner);
+    if (!program?.framework) return;
+    items.forEach((i) => run.enqueued(i));
+    // Every case of the program asked for: the filter is left out and the program runs them all.
+    const names = items.length === program.cases.size ? [] : items.map((i) => parseCaseId(i.id)!.name);
+    const seen = new Set<vscode.TestItem>();
+    const handle = await this.jobs.start(
+      { root: program.root, test: program.test, framework: program.framework, cases: names, color: true },
+      {
+        output: (text) => run.appendOutput(terminal(text)),
+        caseEvent: (e: CaseEvent) => this.onCaseEvent(run, program, e, seen),
+        caseResult: (r: CaseResult) => {
+          const item = program.cases.get(r.case) ?? program.cases.get(baseCaseName(program.framework, r.case));
+          if (item && seen.has(item)) return;
+          this.markCase(run, program, r, seen, r.output, r.outputTruncated);
+        },
+      },
+      "test/runCases",
+    );
+    const cancel = token.onCancellationRequested(() => void handle.cancel());
+    const done = await handle.done;
+    cancel.dispose();
+    for (const i of items)
+      if (!seen.has(i)) {
+        if (done.status === "ok" || done.status === "failed") run.skipped(i);
+        else run.errored(i, new vscode.TestMessage(t("The test program did not run: {0}", done.status)));
+      }
+  }
+
+  /** A case begins (VS Code shows it running) or ends, as the program writes it (test-case-stream). */
+  private onCaseEvent(run: vscode.TestRun, program: Program, e: CaseEvent, seen: Set<vscode.TestItem>): void {
+    if (e.event === "begin") {
+      const item = program.cases.get(e.case);
+      if (item) run.started(item);
+    } else if (e.status) {
+      this.markCase(run, program, e as CaseOutcome, seen);
+    }
+  }
+
+  private async runWhole(run: vscode.TestRun, token: vscode.CancellationToken, root: string,
+                         targets: { item: vscode.TestItem; filter: string }[], included: boolean): Promise<void> {
+    targets.forEach((target) => run.enqueued(target.item));
+    const filter = targets.length === 1 && included ? targets[0].filter : undefined;
+    const programs = [...this.programs.values()].filter((p) => p.root === root);
+    const programOf = (name: string) => programs.find((p) => p.test === name);
+    this.decorations.clear(programs.flatMap((p) => [...p.cases.values()].map((c) => c.uri?.fsPath ?? "")));
+    const seen = new Set<vscode.TestItem>();
+    const handle = await this.jobs.start({ kind: "test", root, filter, color: true }, {
+      output: (text) => run.appendOutput(terminal(text)),
+      caseEvent: (e: CaseEvent) => {
+        const program = programOf(e.program);
+        if (program) this.onCaseEvent(run, program, e, seen);
+      },
+      testResult: (r: TestResult) => {
+        const program = programOf(r.program ?? r.test);
+        const item = (r.part ? program?.parts.get(r.part) : undefined) ?? this.item(root, r.program ?? r.test);
+        for (const o of r.cases ?? []) {
+          const caseItem = program?.cases.get(o.case);
+          if (program && !(caseItem && seen.has(caseItem))) this.markCase(run, program, o, seen, o.status === "failed" ? o.message : undefined);
+        }
+        if (!item) return;
+        const ms = r.durationMs;
+        const failing = r.status === "failed" || r.status === "timedOut" || r.status === "errored";
+        const at = failing ? failureAt(root, r.location, item) : undefined;
+        // The program's output reaches its item whatever the result (D16).
+        attribute(run, item, r.output, r.outputTruncated, at);
+        if (r.status === "passed") run.passed(item, ms);
+        else if (r.status === "skipped") {
+          if (r.reason) run.appendOutput(terminal(`${r.reason}\n`), undefined, item);
+          run.skipped(item);
+        } else {
+          const headline = r.status === "timedOut" ? t("The test timed out.")
+            : r.compileFailed ? t("The test did not compile.") : undefined;
+          const message = new vscode.TestMessage([headline, r.output || r.reason || r.status].filter(Boolean).join("\n"));
+          message.location = at;
+          if (r.status === "errored") run.errored(item, message, ms); else run.failed(item, message, ms);
+        }
+      },
+    });
+    const cancel = token.onCancellationRequested(() => void handle.cancel());
+    const done = await handle.done;
+    cancel.dispose();
+    if (done.status !== "ok" && done.status !== "failed")
+      for (const target of targets) run.skipped(target.item);
   }
 
   dispose(): void {

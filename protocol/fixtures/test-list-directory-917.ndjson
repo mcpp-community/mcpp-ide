@@ -1,0 +1,3 @@
+{"member":"","test":"smoke","main":"@ROOT@/tests/smoke.cpp","files":["@ROOT@/tests/smoke.cpp"],"parts":[]}
+{"member":"","test":"unit","main":null,"files":["@ROOT@/tests/unit/a.cpp","@ROOT@/tests/unit/b.cpp"],"parts":[{"name":"unit/a","file":"@ROOT@/tests/unit/a.cpp"},{"name":"unit/b","file":"@ROOT@/tests/unit/b.cpp"}]}
+{"summary":{"total":2}}

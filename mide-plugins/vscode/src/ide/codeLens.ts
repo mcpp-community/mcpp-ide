@@ -45,9 +45,10 @@ export class McppCodeLens implements vscode.CodeLensProvider, vscode.Disposable 
       vscode.languages.registerCodeLensProvider([{ language: "cpp", scheme: "file" }], this),
       session.onDidStart.event(() => this.changed.fire()),
       vscode.workspace.onDidChangeConfiguration((e) => { if (e.affectsConfiguration("mcpp.codeLens")) this.changed.fire(); }),
-      vscode.commands.registerCommand(CODELENS_COMMANDS.runTest, async (root: string, test: string) => {
-        if (!this.testing.item(root, test)) await this.testing.discover();
-        const item = this.testing.item(root, test);
+      // A test's program, or the part of it one file is (a program of several files, design 2026-11-10).
+      vscode.commands.registerCommand(CODELENS_COMMANDS.runTest, async (root: string, test: string, part?: string) => {
+        if (!this.testing.item(root, test, part)) await this.testing.discover();
+        const item = this.testing.item(root, test, part);
         if (item) await this.testing.runItem(item);
       }),
       vscode.commands.registerCommand(CODELENS_COMMANDS.debugTest, async (root: string, test: string) => {
@@ -58,7 +59,7 @@ export class McppCodeLens implements vscode.CodeLensProvider, vscode.Disposable 
       vscode.commands.registerCommand(CODELENS_COMMANDS.runThisFile, async () => {
         const entry = await this.activeEntry();
         if (entry?.kind === "program") await vscode.commands.executeCommand("mcpp.run");
-        else if (entry?.kind === "test" && entry.root) await vscode.commands.executeCommand(CODELENS_COMMANDS.runTest, entry.root, entry.test ?? "");
+        else if (entry?.kind === "test" && entry.root) await vscode.commands.executeCommand(CODELENS_COMMANDS.runTest, entry.root, entry.test ?? "", entry.part);
       }),
       vscode.commands.registerCommand(CODELENS_COMMANDS.debugThisFile, async () => {
         const entry = await this.activeEntry();

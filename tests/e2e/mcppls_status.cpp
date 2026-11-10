@@ -4,6 +4,7 @@
 // mcppls sits in a payload made here, as an editor's own payload would.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.rpc;
 import mcppide.server;
@@ -11,6 +12,7 @@ import mcppide.languageservice;
 import mcpplibs.os;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -55,9 +57,9 @@ Json command(const Json& list, std::string_view id) {
 
 }  // namespace
 
-int main() {
+E2E mcpplsStatus{"mcppls status", [] {
     // The document, read: what `status` printed, and the frozen table when it printed nothing usable.
-    {
+    "the document read"_test = [&] {
         const auto r = ls::parse_status(R"({"schema": 1, "capabilities": ["status", 7], "workspace": {"state": "ready"},
                                             "actions": [{"id": "restart", "vscode": "mcppls.restartServer"}, {"title": "no id"}]})");
         check(r.source == "status");
@@ -66,7 +68,7 @@ int main() {
         const auto broken = ls::parse_status("mcppls: unknown command status");
         check(broken.source == "frozen" && !broken.detail.empty());
         check(broken.actions == ls::frozen_actions());
-    }
+    };
 
     const auto mock = testsupport::built("mcpp-ide-mock-mcppls");
     check(!mock.empty());
@@ -136,6 +138,4 @@ int main() {
 
     std::error_code ignored;
     std::filesystem::remove_all(base, ignored);
-    std::println("test_mcppls_status: ok");
-    return 0;
-}
+}};

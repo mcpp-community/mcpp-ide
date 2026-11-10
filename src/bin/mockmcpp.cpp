@@ -12,6 +12,9 @@
 //   MOCK_MCPP_LOG        every argv is appended here, one line each, and the value of
 //                        XLINGS_PROJECT_DIR the run received (`<unset>` when none)
 //
+// `.mock-mcpp-tests` in the directory a command runs in selects the programs `mcpp test` states
+// (protocol/fixtures/test*-<set>.ndjson).
+//
 // AND A VERSION MANAGER'S SHIM, per directory (design 2026-10-30 part 2 §4.2): in the directory a
 // command runs in, `.mock-mcpp-version` names the version that answers (every output's version is
 // that one), `.mock-mcpp-features` the features its envelopes state (comma-separated; without
@@ -192,6 +195,16 @@ int main(int argc, char** argv) {
     // A program that implements the test protocol: its listing (`--cases`) and a run of a selection
     // (`--case`), each a record with the protocol's fields (mcpp docs/50 §8).
     if (first(0) == "test") {
+        // `.mock-mcpp-tests` names another set of programs: `directory` is a protocol program of two
+        // files and a file program as mcpp 2026.11.9.1 states them; `directory-917` the same with
+        // mcpp#917's parts, case records and metrics (its listing of cases is the first set's).
+        if (const auto set = here_file(".mock-mcpp-tests"); !set.empty()) {
+            const auto kind = has("--list") ? "test-list" : has("--cases") ? "test-cases" : "test";
+            auto name = std::format("{}-{}.ndjson", kind, set);
+            if (!std::filesystem::exists(fixtures_dir() / name)) name = std::format("{}-{}.ndjson", kind, set.substr(0, set.find('-')));
+            out(fixture(name));
+            return 0;
+        }
         out(fixture(has("--list") ? "test-list.ndjson" : has("--cases") ? "test-cases.ndjson"
                     : has("--case") ? "test-protocol.ndjson" : "test.ndjson"));
         return 0;

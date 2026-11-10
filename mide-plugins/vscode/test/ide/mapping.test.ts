@@ -2,7 +2,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { availableDebuggers, baseCaseName, caseId, format, mainLineOf, parseCaseId, parseTestId, severityOf, testId, zeroBased } from "../../src/ide/mapping";
+import { availableDebuggers, baseCaseName, caseId, caseSummary, caseTags, fileId, format, mainLineOf, measured, metricText, parseCaseId, parseFileId, parseTestId, severityOf, testId, zeroBased } from "../../src/ide/mapping";
 
 test("positions are 1-based in mcpp and 0-based in VS Code", () => {
   assert.deepEqual(zeroBased({ line: 1, column: 21 }), { line: 0, character: 20 });
@@ -46,4 +46,30 @@ test("main is the language service's top-level function of that name", () => {
   assert.equal(mainLineOf([{ name: "main(int, char **)", kind: 11, range: at(3) }]), 3);
   assert.equal(mainLineOf([{ name: "main", kind: 12, range: at(3) }]), undefined);
   assert.equal(mainLineOf(undefined), undefined);
+});
+
+test("a file of a program of several files is a part of its program (design 2026-11-10)", () => {
+  const id = fileId("/w/p", "", "unit", "unit/a");
+  assert.deepEqual(parseFileId(id), { root: "/w/p", member: "", test: "unit", part: "unit/a" });
+  assert.equal(parseTestId(id), undefined);
+  assert.equal(parseCaseId(id), undefined);
+  assert.equal(parseFileId(testId("/w/p", "", "unit")), undefined);
+  assert.equal(parseFileId(caseId("/w/p", "", "unit", "alpha")), undefined);
+});
+
+test("a case's line after a run: its verdict, duration and metrics against their bounds", () => {
+  assert.equal(caseSummary({ status: "passed", durationMs: 3 }), "✓ · 3 ms");
+  assert.equal(caseSummary({ status: "failed", durationMs: 12 }), "✗ · 12 ms");
+  assert.equal(caseSummary({ status: "skipped", durationMs: 0 }), "○");
+  assert.equal(caseSummary({ status: "passed", durationMs: 0, expectedFailure: true }), "✓ xfail · 0 ms");
+  assert.equal(caseSummary({ status: "passed", durationMs: 4200, metrics: [{ name: "ready", value: 4.2, unit: "s" }],
+                             bounds: [{ metric: "ready", max: 15 }] }), "✓ · 4200 ms · ready 4.2 s ≤ 15 s");
+  assert.equal(metricText("recall", 0.9312, "1", { metric: "recall", min: 0.9 }), "recall 0.931 ≥ 0.9");
+  assert.equal(metricText("peak", 1250.4, "ms", undefined), "peak 1250 ms");
+  assert.equal(measured(0.000123, "s"), "0.000123 s");
+});
+
+test("a case's test tags: its kind and its own", () => {
+  assert.deepEqual(caseTags("bench", ["slow"]), ["kind:bench", "slow"]);
+  assert.deepEqual(caseTags(undefined, undefined), []);
 });

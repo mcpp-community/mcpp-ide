@@ -1,0 +1,4 @@
+{"member":"","test":"unit/a","status":"pass","exit_code":0,"signal":null,"duration_ms":1,"timed_out":false,"compile_output":"","run_output":"","reason":"","build_ms":0,"protocol":1,"cases":[{"duration_ms":0.4,"id":"alpha","status":"pass"}]}
+{"member":"","test":"unit/b","status":"run_fail","exit_code":1,"signal":null,"duration_ms":2,"timed_out":false,"compile_output":"","run_output":"","reason":"","build_ms":0,"protocol":1,"cases":[{"duration_ms":1.6,"id":"beta","status":"fail","failures":[{"file":"tests/unit/b.cpp","line":4,"message":"sum == 4","expected":"4","actual":"5"}]}]}
+{"member":"","test":"smoke","status":"pass","exit_code":0,"signal":null,"duration_ms":1,"timed_out":false,"compile_output":"","run_output":"smoke: ok\n","reason":"","build_ms":0,"protocol":null}
+{"summary":{"member":"","passed":2,"failed":1,"not_run":0,"not_run_reason":"","built":0,"elapsed_ms":12,"build_ms":0,"run_ms":4}}

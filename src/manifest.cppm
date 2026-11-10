@@ -10,7 +10,7 @@
 // Positions in: a 0-based line and a UTF-16 column, as the editors count. Positions out: the same,
 // except a diagnostic's, which is 1-based (`line:column`, the form a terminal prints). A port of
 // mcpp-vscode 0.9's src/toml/{completion,hover,navigation,diagnostics}.ts (design 2026-10-30 part 2
-// §8); tests/rules holds that implementation's answers over a corpus, and this one gives them.
+// §8); tests/cts/rules holds that implementation's answers over a corpus, and this one gives them.
 export module mcppide.manifest;
 
 import std;

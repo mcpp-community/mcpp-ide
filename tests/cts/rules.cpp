@@ -1,10 +1,11 @@
 // The rules layer answers what mcpp-vscode 0.9's TypeScript answered (design 2026-10-30 part 2 §8):
-// over each file of tests/rules/corpus, at every position of every line (and past them), the
+// over each file of tests/cts/rules/corpus, at every position of every line (and past them), the
 // scanner's structure and cursor contexts, the completions, hovers, jumps, version contexts and
-// diagnostics equal tests/rules/golden, which that implementation wrote (with the documents of its
+// diagnostics equal tests/cts/rules/golden, which that implementation wrote (with the documents of its
 // parser tests, golden/snippets.json). A difference is printed with its file and position.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.text;
 import mcppide.manifest;
@@ -12,6 +13,7 @@ import mcppide.buildscript;
 import mcppide.toml;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 using Json = nlohmann::json;
@@ -276,8 +278,8 @@ void check_catalogue(const Json& golden) {
 
 }  // namespace
 
-int main() {
-    const auto root = testsupport::repo() / "tests" / "rules";
+CTS rules{"rules", [] {
+    const auto root = testsupport::repo() / "tests" / "cts" / "rules";
     std::vector<std::filesystem::path> files;
     for (const auto& e : std::filesystem::directory_iterator(root / "corpus")) files.push_back(e.path());
     std::ranges::sort(files);
@@ -312,6 +314,4 @@ int main() {
 
     if (failures) std::println(std::cerr, "{} mismatch(es)", failures);
     check(failures == 0);
-    std::println("rules: the goldens hold");
-    return 0;
-}
+}};

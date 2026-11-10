@@ -2,14 +2,16 @@
 // needing a preview or an acknowledgement is not confirmed without it.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.policy;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 
-int main() {
+UTest policy{"policy", [] {
     policy::CleanOptions o;
     for (auto a : policy::kActions) check(policy::plan(a, o).has_value());
     check(!policy::plan("everything", o));
@@ -25,5 +27,4 @@ int main() {
     check(!policy::confirmed(all, nlohmann::json{{"confirmed", true}, {"previewShown", true}}));
     check(policy::confirmed(all, nlohmann::json{{"confirmed", true}, {"previewShown", true}, {"acknowledged", true}}));
     check(policy::confirmed(*policy::plan("cacheVerify", o), nullptr));
-    std::println("test_policy: ok");
-}
+}};

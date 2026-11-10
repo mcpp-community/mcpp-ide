@@ -71,7 +71,7 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^mcpplsPluginVersion *= *//p' mide-plugins/clion/gradle.properties)"
           gh release download "v$version" --repo Sunrisepeak/mcpp-language-server \
-            --pattern "mcppls-clion-$version-linux-x64.zip" --dir stable-plugin
+            --pattern "mcppls-clion-$version.zip" --dir stable-plugin
       - name: Start the real IDE and complete the plugin startup chain
         env:
           IDE_VERSION: ${{ matrix.version }}

@@ -113,7 +113,14 @@ check('another series is refused, naming both versions and what installs this on
   older ~= nil and older:find('0.2.1', 1, true) ~= nil and older:find('series 0.2', 1, true) ~= nil
     and older:find('mcpp-ide@1.2.0', 1, true) ~= nil, older)
 check('another protocol is refused', session.incompatibility({ protocol = 1, series = '1.2' }, '1.2.0') ~= nil)
-check('the plugin is of the backend series this repository builds', session.series_of(session.version) == '1.2')
+-- The backend's version is the package's (mcpp.toml), always its series' X.Y.0.
+local built = vim.fn.readfile(repo .. '/mcpp.toml')
+local package_version
+for _, line in ipairs(built) do
+  package_version = package_version or line:match('^version%s*=%s*"([^"]+)"')
+end
+check('the plugin is of the backend series this repository builds',
+  package_version ~= nil and session.series_of(session.version) == session.series_of(package_version), package_version)
 local diagnostics = require('mcpp.diagnostics')
 local views = require('mcpp.views')
 
@@ -409,6 +416,39 @@ if mock then
   vim.cmd('Mcpp pack')
   done = finished('pack', before)
   check(':Mcpp pack runs mcpp pack as a job', done ~= nil and done.kind == 'pack', done and done.status)
+
+  -- A program of several files as mcpp#917 states it (design 2026-11-10): its cases arrive as the
+  -- program writes them, a failure says both sides, a case's line its metrics against their bounds;
+  -- and the runs mcpp kept, as text.
+  write('.mock-mcpp-tests', 'directory-917\n')
+  write('.mock-mcpp-features', 'test-protocol,test-parts,test-case-stream,test-metrics\n')
+  write('tests/unit/a.cpp', 'import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\n\nBench alpha{"alpha", at_most{"ready", 15}, [] {}};\n')
+  write('tests/unit/b.cpp', 'import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\n\nUTest beta{"beta", [] {}};\n')
+  before = session.state.last
+  vim.cmd('Mcpp test')
+  done = finished('test', before)
+  local streamed = table.concat(vim.api.nvim_buf_get_lines(vim.fn.bufnr('mcpp://tests'), 0, -1, false), '\n')
+  check('a part\'s failing case is said with both sides', streamed:find('unit/b › beta', 1, true) ~= nil
+    and streamed:find('expected: 4', 1, true) ~= nil, streamed:sub(1, 400))
+  check('a case\'s line says its metrics against their bounds', (tests_mod.said_of(root, 'unit', 'alpha') or ''):find('ready 4.2 s ≤ 15 s', 1, true) ~= nil,
+    tests_mod.said_of(root, 'unit', 'alpha'))
+  local qf_both = vim.fn.getqflist()[1] or {}
+  check('its quickfix item says both sides, once', (qf_both.text or '') == 'unit › beta: sum == 4 (expected 4, actual 5)', qf_both.text)
+  local store = repo .. '/protocol/fixtures/mtest-store'
+  for name, kind in vim.fs.dir(store, { depth = 3 }) do
+    if kind == 'file' then
+      local f = assert(io.open(store .. '/' .. name, 'rb'))
+      write('target/mtest/' .. name, f:read('*a'))
+      f:close()
+    end
+  end
+  vim.cmd('Mcpp test.insights')
+  local insight = float_text()
+  check(':Mcpp test.insights says what the kept runs say', insight:find('Critical path', 1, true) ~= nil
+    and insight:find('beta', 1, true) ~= nil and insight:find('ready', 1, true) ~= nil, insight:sub(1, 300))
+  check('a metric\'s trend is drawn in blocks', tests_mod.sparkline({ 1, 2, 3 }) == '▁▅█', tests_mod.sparkline({ 1, 2, 3 }))
+  os.remove(root .. '/.mock-mcpp-tests')
+  os.remove(root .. '/.mock-mcpp-features')
 
   -- The backend ends during a build: the build ends as failed, and the next command starts another.
   local function count(text)

@@ -1,18 +1,20 @@
 // The view models, from the golden fixtures: what each panel and tree shows.
 import std;
 import mcppide.testsupport;
+import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.views;
 import mcppide.policy;
 
 using testsupport::check;
+using namespace mcpplibs::mtest;
 
 using namespace mcppide;
 using Json = nlohmann::json;
 
 static Json fixture(const char* name) { return Json::parse(testsupport::read(testsupport::fixtures() / name)); }
 
-int main() {
+UTest views{"views", [] {
     auto cache = fixture("cache-list.json");
     views::CacheOptions o;
     o.topN = 3;
@@ -157,5 +159,4 @@ int main() {
     check(views::failure_location("C:/p/b.cpp:7: Failure")["path"] == "C:/p/b.cpp");
     check(views::failure_location("started at 12:30: ok").is_null());
     check(views::failure_location("no location here").is_null());
-    std::println("test_views: ok");
-}
+}};

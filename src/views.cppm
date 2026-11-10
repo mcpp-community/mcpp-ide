@@ -57,8 +57,8 @@ Json targets(const Json& toolchainListEnvelope, std::string_view selected, bool 
 std::string platform_text(const Json& platform);
 
 // One record of a `--message-format json` stream (a build's events, a test's records), as the
-// adapters consume it: {"type": "plan" | "progress" | "diagnostic" | "artifact" | "test" | "summary" |
-// "other", ...}.
+// adapters consume it: {"type": "plan" | "progress" | "diagnostic" | "artifact" | "test" | "case" |
+// "summary" | "other", ...}.
 //
 // A TEST'S STATUS IS mcpp's, VALUE FOR VALUE (mcpp docs/50, the test record; design 2026-11-07, D16):
 // `pass` is passed; `run_fail` failed, or timedOut when `timed_out`; `compile_fail` failed, with
@@ -539,12 +539,16 @@ Json stream_record(const Json& r) {
                     {"failed", s.value("failed", 0)}, {"notRun", s.value("not_run", 0)},
                     {"notRunReason", s.value("not_run_reason", "")}, {"elapsedMs", s.value("elapsed_ms", 0)}};
     }
+    // A case as it begins or ends, written while its program runs (mcpp#917, `test-case-stream`).
+    if (r.contains("case") && r["case"].is_object()) return Json{{"type", "case"}, {"case", r["case"]}};
     if (r.contains("test") && r["test"].is_string()) {
         const auto raw = r.value("status", "");
         const bool timedOut = r.value("timed_out", false);
         std::string status;
         std::string reason = r.value("reason", "");
         Json out{{"type", "test"}, {"member", r.value("member", "")}, {"test", r["test"]}};
+        // The program a part's record belongs to, when mcpp states it (mcpp#917, `test-parts`).
+        if (r.contains("part_of") && r["part_of"].is_string()) out["partOf"] = r["part_of"];
         if (raw == "pass") status = "passed";
         else if (raw == "run_fail") status = timedOut ? "timedOut" : "failed";
         else if (raw == "compile_fail") { status = "failed"; out["compileFailed"] = true; }

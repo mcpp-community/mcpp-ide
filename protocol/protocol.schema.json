@@ -106,18 +106,38 @@
       "result": {
         "type": "object", "required": ["file", "kind"],
         "properties": { "file": { "type": "string" }, "root": { "type": "string" }, "kind": { "enum": ["program", "test", "none"] }, "test": { "type": "string" },
+                        "part": { "type": "string", "description": "A file of a program of several files: the part of the program the file is (`unit/a`); `test` is the program (design 2026-11-10)" },
                         "framework": { "type": "string" }, "main": { "type": "object", "required": ["line"], "properties": { "line": { "type": "integer" }, "approximate": { "type": "boolean" } } } }
       }
     },
     "mcpp-ide/test/cases": {
-      "description": "A test program's cases (part 2 §7.3): as its source names them (a framework's macros), and with `list` -- trusted, and only for a source that calls its framework's macros -- as the program lists them. Without a framework, no cases: the program is the unit.",
+      "description": "A test program's cases (part 2 §7.3): as its sources name them (a framework's macros; every file of a program of several files, each case with its file), and with `list` -- trusted, and only for a source that calls its framework's macros -- as the program lists them. Without a framework, no cases: the program is the unit. A case of the test protocol carries its kind, tags, expectation and the bounds on its metrics when its source or its listing states them (design 2026-11-10).",
       "params": { "type": "object", "properties": { "root": { "type": "string" }, "test": { "type": "string" }, "file": { "type": "string" }, "list": { "type": "boolean" }, "target": { "type": "string" } } },
       "result": {
         "type": "object", "required": ["root", "test", "framework", "cases"],
         "properties": { "root": { "type": "string" }, "test": { "type": "string" }, "file": { "type": "string" }, "framework": { "type": ["string", "null"] }, "listed": { "type": "boolean" },
-                        "main": { "type": "object" },
-                        "cases": { "type": "array", "items": { "type": "object", "required": ["name", "source"], "properties": { "name": { "type": "string" }, "line": { "type": "integer" }, "source": { "enum": ["static", "listed"] } } } } }
+                        "main": { "type": "object" }, "files": { "type": "array", "items": { "type": "string" } },
+                        "cases": { "type": "array", "items": { "type": "object", "required": ["name", "source"], "properties": { "name": { "type": "string" }, "line": { "type": "integer" }, "source": { "enum": ["static", "listed"] },
+                                   "file": { "type": "string" }, "kind": { "type": "string" }, "tags": { "type": "array", "items": { "type": "string" } }, "expect": { "type": "string" }, "bounds": { "$ref": "#/$defs/bounds" } } } } }
       }
+    },
+    "mcpp-ide/test/history": {
+      "description": "A project's test runs as mcpp kept them in mtest's store (target/mtest, or [test] store; mtest spec P12; design 2026-11-10): the last `runs` (20 by default, 50 at most), and each case's results across them, of one program or one case when asked. A store mcpp has not written answers no run.",
+      "params": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "program": { "type": "string" }, "case": { "type": "string" }, "runs": { "type": "integer", "minimum": 1 } } },
+      "result": { "type": "object", "required": ["root", "store", "runs", "cases"], "properties": { "root": { "type": "string" }, "store": { "type": "string" },
+        "runs": { "type": "array", "items": { "$ref": "#/$defs/storedRun" } },
+        "cases": { "type": "array", "items": { "type": "object", "required": ["program", "case", "results"], "properties": { "program": { "type": "string" }, "case": { "type": "string" }, "kind": { "type": "string" },
+          "results": { "type": "array", "items": { "type": "object", "required": ["run", "status", "ms"], "properties": { "run": { "type": "string" }, "status": { "type": "string" }, "ms": { "type": "number" }, "metrics": { "$ref": "#/$defs/metrics" } } } } } } } } }
+    },
+    "mcpp-ide/test/insights": {
+      "description": "What the last runs of a project's tests say (design 2026-11-10): the last run and its counts by kind; its failures, each with the run since which it fails; the slowest cases with their median; the cases whose status changed (flaky); each metric's series against its bound, with the last value's margin; the last run's schedule, a lane per worker with its critical path. `available` says which inputs the store holds, `features` which mcpp states.",
+      "params": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "runs": { "type": "integer", "minimum": 1 } } },
+      "result": { "type": "object", "required": ["root", "store", "runs", "run", "failures", "slowest", "flaky", "metrics", "schedule", "available", "features"], "properties": {
+        "root": { "type": "string" }, "store": { "type": "string" }, "runs": { "type": "integer" }, "run": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/storedRun" }] },
+        "byKind": { "type": "object" }, "failures": { "type": "array" }, "slowest": { "type": "array" }, "flaky": { "type": "array" }, "metrics": { "type": "array" },
+        "schedule": { "oneOf": [{ "type": "null" }, { "type": "object", "required": ["lanes", "criticalPath"] }] },
+        "available": { "type": "object", "properties": { "kinds": { "type": "boolean" }, "metrics": { "type": "boolean" }, "cases": { "type": "boolean" } } },
+        "features": { "type": "object", "properties": { "parts": { "type": "boolean" }, "live": { "type": "boolean" }, "metrics": { "type": "boolean" } } } } }
     },
     "mcpp-ide/test/runCases": {
       "description": "Runs some of a test program's cases (all of them when `cases` is empty): a test job whose program receives the framework's filter and report arguments after `--`. Each case's outcome is sent as test/caseResult when the job ends.",
@@ -216,12 +236,14 @@
       "result": { "type": "object", "required": ["engine", "configuration", "launch"] }
     },
     "mcpp-ide/test/list": {
-      "description": "The tests of a project without building them (mcpp test --list).",
+      "description": "The tests of a project without building them (mcpp test --list): each program with its own files, the file that defines its main (empty when none does), its layout, and the parts a run divides it into (a protocol program of several files runs as a process per file, `<program>/<stem>`; mcpp states them with test-parts, else they are derived; design 2026-11-10).",
       "params": { "$ref": "#/$defs/rooted" },
       "result": {
-        "type": "object",
-        "required": ["root", "tests"],
-        "properties": { "tests": { "type": "array", "items": { "type": "object", "required": ["test"], "properties": { "test": { "type": "string" }, "member": { "type": "string" }, "main": { "type": "string" } } } } }
+        "type": "object", "required": ["root", "tests"],
+        "properties": { "tests": { "type": "array", "items": { "type": "object", "required": ["test"], "properties": {
+          "test": { "type": "string" }, "member": { "type": "string" }, "main": { "type": "string" },
+          "files": { "type": "array", "items": { "type": "string" } }, "layout": { "enum": ["file", "directory"] },
+          "parts": { "type": "array", "items": { "type": "object", "required": ["name", "file"], "properties": { "name": { "type": "string" }, "file": { "type": "string" } } } } } } } }
       }
     },
     "mcpp-ide/library/search": {
@@ -460,7 +482,13 @@
           "output": { "type": "string" },
           "outputTruncated": { "type": "boolean" },
           "location": { "$ref": "#/$defs/failureLocation" },
-          "reason": { "type": "string" }
+          "reason": { "type": "string" },
+          "program": { "type": "string", "description": "The program the record belongs to: mcpp's part_of, else the listed program whose name is the record's or begins it with a `/`" },
+          "part": { "type": "string", "description": "The part of the program the record is, when it is one (`unit/a`)" },
+          "partOf": { "type": "string" },
+          "protocol": { "type": "integer" },
+          "cases": { "type": "array", "items": { "$ref": "#/$defs/caseOutcome" }, "description": "A protocol program's cases, each as it ended" },
+          "usage": { "type": "object", "description": "What the program used (mtest protocol P10.2), when mcpp states it (test-metrics)" }
         }
       }
     },
@@ -469,10 +497,17 @@
     "mcpp-ide/manifest/changed": { "params": { "type": "object", "required": ["root"] } },
     "mcpp-ide/manifest/diagnostics": { "params": { "type": "object", "required": ["root", "diagnostics"] } },
     "mcpp-ide/project/mcppChanged": { "description": "A job's envelope named another mcpp than the project's was asked as: it is asked again on its next use.", "params": { "type": "object", "required": ["root", "version"] } },
-    "mcpp-ide/test/caseResult": { "description": "One case's outcome, read from the framework's report when a test/runCases job ended, with the case's own output (GoogleTest's console between [ RUN ] and its result line; empty for a framework whose console names no case) and a failure's location.", "params": { "type": "object", "required": ["jobId", "root", "test", "case", "status", "output", "outputTruncated"], "properties": { "status": { "enum": ["passed", "failed", "skipped"] }, "durationMs": { "type": "integer" }, "message": { "type": "string" }, "output": { "type": "string" }, "outputTruncated": { "type": "boolean" }, "location": { "$ref": "#/$defs/failureLocation" } } } },
+    "mcpp-ide/test/caseResult": { "description": "One case's outcome when a test/runCases job ended: read from the framework's report, or from each record of a protocol program (one per part of a program of several files), with the case's own output (GoogleTest's console between [ RUN ] and its result line; a protocol case's first failure) and a failure's location.", "params": { "allOf": [{ "$ref": "#/$defs/caseOutcome" }, { "type": "object", "required": ["jobId", "root", "test", "case", "status", "output", "outputTruncated"], "properties": { "test": { "type": "string" }, "program": { "type": "string" }, "part": { "type": "string" }, "output": { "type": "string" }, "outputTruncated": { "type": "boolean" } } }] } },
+    "mcpp-ide/test/caseEvent": { "description": "A case began or ended while its program runs, as mcpp writes it (test-case-stream, mcpp#917): `begin` names the case; `end` carries its outcome. `program` is the program the part belongs to.", "params": { "allOf": [{ "type": "object", "required": ["jobId", "root", "program", "part", "case", "event"], "properties": { "program": { "type": "string" }, "part": { "type": "string" }, "member": { "type": "string" }, "event": { "enum": ["begin", "end"] }, "tMs": { "type": "number" } } }, { "$ref": "#/$defs/caseOutcomePartial" }] } },
     "mcpp-ide/languageService/changed": { "description": "mcppls answered differently from the last time it was asked: another program or version, other actions, or another state of the workspace. An editor that lists the commands asks for them again.", "params": { "type": "object", "required": ["root", "state", "workspaceState"] } }
   },
   "$defs": {
+    "storedRun": { "type": "object", "required": ["id", "status"], "properties": { "id": { "type": "string" }, "started": { "type": "string" }, "status": { "type": "string" }, "ms": { "type": "number" }, "jobs": { "type": "integer" }, "counts": { "type": "object" } } },
+    "bounds": { "description": "The bounds a case states on its metrics (mtest protocol P6.5)", "type": "array", "items": { "type": "object", "required": ["metric"], "properties": { "metric": { "type": "string" }, "max": { "type": "number" }, "min": { "type": "number" } } } },
+    "metrics": { "description": "What a case measured (mtest protocol P6), when mcpp states it (test-metrics)", "type": "array", "items": { "type": "object", "required": ["name", "value"], "properties": { "name": { "type": "string" }, "value": { "type": "number" }, "unit": { "type": "string" }, "samples": { "type": "array", "items": { "type": "number" } }, "better": { "enum": ["lower", "higher"] }, "precision": { "type": "string" } } } },
+    "caseFailure": { "type": "object", "required": ["path", "line", "message"], "properties": { "path": { "type": "string" }, "line": { "type": "integer", "minimum": 0 }, "message": { "type": "string" }, "expected": { "type": "string" }, "actual": { "type": "string" } } },
+    "caseOutcome": { "description": "A case as it ended: pass is passed, fail failed, skip skipped, xfail passed with expectedFailure, xpass failed with unexpectedPass, invalid (a measurement that cannot be judged) errored. Lines are 0-based; message is the first failure with its place, else the reason.", "type": "object", "required": ["case", "status"], "properties": { "case": { "type": "string" }, "status": { "enum": ["passed", "failed", "skipped", "errored"] }, "durationMs": { "type": "integer" }, "reason": { "type": "string" }, "message": { "type": "string" }, "location": { "$ref": "#/$defs/failureLocation" }, "failures": { "type": "array", "items": { "$ref": "#/$defs/caseFailure" } }, "metrics": { "$ref": "#/$defs/metrics" }, "bounds": { "$ref": "#/$defs/bounds" }, "kind": { "type": "string" }, "tags": { "type": "array", "items": { "type": "string" } }, "expectedFailure": { "type": "boolean" }, "unexpectedPass": { "type": "boolean" } } },
+    "caseOutcomePartial": { "type": "object", "properties": { "case": { "type": "string" }, "status": { "enum": ["passed", "failed", "skipped", "errored"] }, "durationMs": { "type": "integer" }, "failures": { "type": "array", "items": { "$ref": "#/$defs/caseFailure" } }, "metrics": { "$ref": "#/$defs/metrics" }, "bounds": { "$ref": "#/$defs/bounds" } } },
     "failureLocation": { "description": "Where a failure is: the first file:line (or file(line):) its output names, line 0-based; null when it names none.", "oneOf": [{ "type": "null" }, { "type": "object", "required": ["path", "line"], "properties": { "path": { "type": "string" }, "line": { "type": "integer", "minimum": 0 } } }] },
     "settingValues": { "type": "object", "additionalProperties": true },
     "resolvedSettings": { "type": "object", "required": ["values", "rejected", "renames", "deprecated"] },

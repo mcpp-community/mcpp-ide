@@ -2,6 +2,60 @@
 
 The changelog is kept by series (`X.Y`); each section lists its components' releases.
 
+## 1.3
+
+### 1.3.0
+
+Every component is 1.3.0: the backend, mcpp-vscode, mcpp-clion and mcpp-nvim (from 1.2.1, 1.2.0, 1.2.0
+and 1.2.0).
+
+- **A change of the backend begins a series.** The VS Code and CLion packages carry the backend, so a
+  change of it is a change of every package: it is released as `vX.Y.0`, every component at `X.Y.0`,
+  and the backend is always its series' `X.Y.0`. `Z` is an editor plugin's own patch (`vscode-`,
+  `clion-`, `nvim-vX.Y.Z`), which carries its series' backend. The release refuses a `backend-v` tag,
+  a backend that is not `X.Y.0`, and a plugin's patch when a path of the backend has changed since its
+  series' tag. Backend 1.2.1 reached `xlings install mcpp-ide` alone; its change, mtest's cases read
+  with mtest's own static manifest, is in every package of 1.3.0.
+- **Tests as mcpp states them** (design 2026-11-10). A program of several files (`[test] programs =
+  "directory"`, mcpp 2026.11.9.1) is shown with its files as children, each the part of the program a
+  run gives a process (`unit/a` of `unit`), and a part's record is attributed to its program; 1.2 listed
+  `unit` and lost the results of `unit/a` and `unit/b`. A case carries its file, kind, tags, expectation
+  and the bounds on its metrics, from mtest's manifest and the program's listing. A whole run marks every
+  case of a protocol program, and a run of cases reports every part's record, not only the last.
+  `xfail` passes, `xpass` fails as an unexpected pass, and `invalid` is errored. A failure that states
+  both sides is a diff in VS Code, a comparison failure in CLion, and two lines in Neovim's buffer and
+  quickfix item.
+  - **Live results.** With mcpp's `test-case-stream` (mcpp#917), each case is shown as it begins and
+    ends (`test/caseEvent`).
+  - **Metrics.** With `test-metrics`, a case's metrics are shown against their bounds: at the end of its
+    line in VS Code and Neovim, and in its output in CLion.
+  - **Test Insights** (`mcpp.test.insights`; `test/insights`, `test/history`). It reads the runs mcpp
+    keeps in `target/mtest`: the last run and its counts by kind; its failures and since when; each
+    metric's trend against its bound; the slowest and the flaky cases; the schedule with its critical
+    path. VS Code shows it in a webview, CLion in the mcpp tool window (both draw `webui/tests.html`),
+    and Neovim as text.
+  - **Older mcpp.** A view that needs a feature the project's mcpp does not state is left out, and
+    `capabilities/explain` names the feature (`tests.cases`, `tests.parts`, `tests.live`,
+    `tests.metrics`).
+  - **Speed.** The suite types of a project's tests are read again only when its test files change.
+  - **CLion.** The test tree is ID-based, so parts that run at once report into their own suites.
+- **The backend's tests are mtest's** (mtest 0.5.2). `tests/unit`, `tests/e2e`, `tests/cts` and
+  `tests/bench` are each one program whose files declare their cases, with no `main`; the rules
+  goldens and the published payloads sit beside the cases that read them. `tests/bench` bounds the
+  latency of a keystroke in a manifest of 400 dependencies, of reading a test file of 2000 cases, and
+  of the insights over 50 runs of 400 cases. testsupport's `check` is mtest's fatal expectation, and
+  CI reports each run with `mtest report` in the job's summary.
+- **A deprecated command is VS Code's alone.** `commands/list` offered CLion the deprecated ids VS Code keeps
+  for earlier releases (`mcpp.checkModuleSupport`, `mcpp.configureClangd`, ...) once mcppls 0.21 named a
+  CLion action for what they forward; CLion declares none of them, so they were offered and not registered.
+- **Dependencies.** The backend builds with mcpp 2026.11.9.1, mcpplibs.os 0.4.2 and
+  mcpplibs.mtest.manifest 0.5.2.
+- **mcppls 0.21.** mcpp-clion is built and tested against the mcppls CLion plugin 0.21.0, whose one
+  package serves every system (`mcppls-clion-<version>.zip`, since mcppls 0.0.20); the build fetched
+  0.0.19's package of this machine. mcppls 0.21 numbers its versions as a series and a patch (0.0.21
+  is released as 0.21.0); the backend reads that version, its payloads (version 5) and `mcppls status`
+  as before.
+
 ## 1.2
 
 ### backend 1.2.1
