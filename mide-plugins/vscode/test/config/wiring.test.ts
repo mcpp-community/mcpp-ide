@@ -46,7 +46,7 @@ const READ_INDIRECTLY: ReadonlyArray<{ key: string; file: string; evidence: stri
     evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
   },
   {
-    key: "mcpp.test.macros",
+    key: "mcpp.test.session",
     file: "src/ide/session.ts",
     evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
   },

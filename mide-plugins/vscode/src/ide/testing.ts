@@ -2,26 +2,31 @@
  * mcpp's tests in VS Code's Testing view (design 2026-10-30 part 2 §7; design 2026-11-10). The tests of
  * each project come from `test/list` (mcpp test --list: no build), each a program located at its
  * `main`; a program of several files (`[test] programs = "directory"`) has its files as children,
- * each the part of the program a run gives a process. A program of a test framework has its cases as
- * children of the file that declares them (`test/cases`, read from the sources), and after a build the
- * program lists them (only in a trusted workspace). A case carries the test tags `kind:<kind>` and its
+ * each the part of the program a run gives a process. A program that implements the test protocol
+ * has its cases as children of the file that declares them, as the program lists them (`test/cases`,
+ * `mcpp test --cases`; only in a trusted workspace). A case carries the test tags `kind:<kind>` and its
  * own tags, so `@kind:bench` filters the view.
  *
  * A run of whole programs, or of one file's part, is one test job; a run of cases is `test/runCases`.
  * Results arrive per case as the program writes them when the project's mcpp states them
- * (`test/caseEvent`, test-case-stream), else with each part's record (`test/result` and its cases). A
- * failure that states both sides is a diff; after a run each case's line ends with its verdict, its
- * duration and its metrics against their bounds.
+ * (`test/caseEvent`, test-case-stream), else with each part's record (`test/result` and its cases).
+ * Each failed check is a message at its place: a diff when it states both sides, with its statement
+ * and whether it ended the case; a case's own output is shown with it; after a run each case's line
+ * ends with its verdict, its duration, the checks that failed and its metrics against their bounds.
+ *
+ * NOTHING HERE KNOWS A TEST FRAMEWORK (design 2026-11-10 supplement, T14). Cases are what a program
+ * that implements the test protocol lists (mcpp test spec B3) and are run by identifier (P4); a program
+ * of no protocol is run whole. Tests run beside each other: each is a job of its own.
  */
 import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { t } from "../i18n/t";
 import type { Jobs } from "./jobs";
-import { baseCaseName, caseId, caseSummary, caseTags, fileId, parseCaseId, parseFileId, parseTestId, testId } from "./mapping";
+import { caseId, caseSummary, caseTags, fileId, parseCaseId, parseFileId, parseTestId, testId } from "./mapping";
 import type { IdeProjects } from "./projects";
 import type { Session } from "./session";
-import type { CaseEvent, CaseOutcome, CaseResult, FailureLocation, JobFinished, TestCases, TestProgram, TestResult } from "./protocol";
+import type { CaseEvent, CaseFailure, CaseOutcome, CaseResult, FailureLocation, JobFinished, TestCases, TestProgram, TestResult } from "./protocol";
 
 /** Text for the test terminal, whose lines end in `\r\n`. */
 function terminal(text: string): string {
@@ -48,21 +53,46 @@ function attribute(run: vscode.TestRun, item: vscode.TestItem, output: string | 
   if (truncated) run.appendOutput(terminal(`${t("(the output was longer; its head and tail are shown)")}\n`), at, item);
 }
 
-/** A failed case's message: a diff when the failure states both sides (VS Code compares them). */
-function failureMessage(root: string, o: CaseOutcome, item: vscode.TestItem): vscode.TestMessage {
-  const first = o.failures?.[0];
-  const text = o.unexpectedPass ? t("The case passed, though it is expected to fail.") : o.message || o.reason || o.status;
-  const message = first?.expected !== undefined && first.actual !== undefined
-    ? vscode.TestMessage.diff(first.message || text, first.expected, first.actual)
-    : new vscode.TestMessage(text);
-  message.location = failureAt(root, o.location, item);
-  return message;
+/** One failed check, as a person reads it: what did not hold, the statement, and whether the case went on. */
+function checkText(f: CaseFailure): string {
+  const lines = [f.message];
+  if (f.source && f.source !== f.message) lines.push(f.source);
+  if (f.fatal) lines.push(t("fatal: the rest of the case did not run"));
+  return lines.join("\n");
+}
+
+/**
+ * A failed case's messages (mcpp test spec O3): one per check that did not hold, at its place, a diff
+ * when it states both sides (VS Code compares them); without a failure, the case's reason.
+ */
+function failureMessages(root: string, o: CaseOutcome, item: vscode.TestItem): vscode.TestMessage[] {
+  if (o.unexpectedPass) {
+    const m = new vscode.TestMessage(t("The case passed, though it is expected to fail."));
+    m.location = failureAt(root, o.location, item);
+    return [m];
+  }
+  const failures = o.failures ?? [];
+  if (failures.length === 0) {
+    const m = new vscode.TestMessage(o.message || o.reason || o.status);
+    m.location = failureAt(root, o.location, item);
+    return [m];
+  }
+  return failures.map((f) => {
+    const m = f.expected !== undefined && f.actual !== undefined
+      ? vscode.TestMessage.diff(checkText(f), f.expected, f.actual)
+      : new vscode.TestMessage(checkText(f));
+    m.location = failureAt(root, { path: f.path, line: f.line }, item);
+    return m;
+  });
 }
 
 interface Program {
   root: string;
   member: string;
   test: string;
+  /** The program implements the test protocol: its cases are listed and run by identifier. */
+  protocol: boolean;
+  /** The framework's name the project states, shown beside the program. */
   framework: string | null;
   /** The cases by name, and the files' items by part. */
   cases: Map<string, vscode.TestItem>;
@@ -114,23 +144,39 @@ export class Testing implements vscode.Disposable {
   private readonly decorations = new CaseDecorations();
   private readonly disposables: vscode.Disposable[] = [this.controller, this.decorations];
   private readonly programs = new Map<string, Program>();
+  /** A discovery the events asked for, run once they settle: a save, a build's end and a changed result arrive together. */
+  private pending: { timer: ReturnType<typeof setTimeout>; list: boolean } | undefined;
 
   constructor(private readonly session: Session, private readonly jobs: Jobs, private readonly projects: IdeProjects) {
-    this.controller.resolveHandler = async (item) => { if (!item) await this.discover(); };
+    this.controller.resolveHandler = async (item) => { if (!item) await this.discover(vscode.workspace.isTrusted); };
     this.controller.refreshHandler = async () => { await this.discover(true); };
     this.controller.createRunProfile(t("Run"), vscode.TestRunProfileKind.Run, (request, token) => this.run(request, token), true);
     this.disposables.push(
-      session.on("manifest/changed", () => void this.discover()),
-      session.on("result/changed", () => void this.discover()),
-      session.onDidStart.event(() => void this.discover()),
-      // A build ended: the programs can list the cases their macros generate.
+      session.on("manifest/changed", () => this.discoverSoon()),
+      session.on("result/changed", () => this.discoverSoon()),
+      session.onDidStart.event(() => this.discoverSoon(vscode.workspace.isTrusted)),
+      // A build ended: the programs list their cases (mcpp test spec B3).
       session.on("job/finished", (p: JobFinished) => {
-        if (p.status === "ok" && (p.kind === "build" || p.kind === "test") && vscode.workspace.isTrusted) void this.discover(true);
+        if (p.status === "ok" && (p.kind === "build" || p.kind === "test") && vscode.workspace.isTrusted) this.discoverSoon(true);
       }),
       vscode.workspace.onDidSaveTextDocument((doc) => {
-        if (doc.languageId === "cpp" && /[\\/]tests[\\/]/.test(doc.uri.fsPath)) void this.discover();
+        if (doc.languageId === "cpp" && /[\\/]tests[\\/]/.test(doc.uri.fsPath)) this.discoverSoon();
       }),
+      { dispose: () => { if (this.pending) clearTimeout(this.pending.timer); } },
     );
+  }
+
+  /** A discovery after the events of a moment settle (400 ms), listing when any of them asked for it. */
+  private discoverSoon(list = false): void {
+    const wanted = list || (this.pending?.list ?? false);
+    if (this.pending) clearTimeout(this.pending.timer);
+    this.pending = {
+      list: wanted,
+      timer: setTimeout(() => {
+        this.pending = undefined;
+        void this.discover(wanted);
+      }, 400),
+    };
   }
 
   /** The program a test's `main` is, or the item of one file's part of it (the CodeLens and the Run menu run it). */
@@ -178,19 +224,20 @@ export class Testing implements vscode.Disposable {
     const id = testId(root, test.member, test.test);
     const home = test.main || test.files?.[0] || "";
     const item = this.controller.createTestItem(id, test.member ? `${test.member} · ${test.test}` : test.test, home ? vscode.Uri.file(home) : undefined);
-    const program: Program = { root, member: test.member, test: test.test, framework: null, cases: new Map(), parts: new Map() };
+    const program: Program = { root, member: test.member, test: test.test, protocol: false, framework: null, cases: new Map(), parts: new Map() };
     let cases: TestCases | undefined;
     try {
       cases = await this.session.request<TestCases>("test/cases", { root, test: test.test, list });
     } catch {
       cases = undefined;
     }
-    // The program at its `main` (F11); a framework's program at its first case when it has none.
+    // The program at its `main` (F11); a program of cases at its first case when it has none.
     const mainLine = cases?.main?.line ?? cases?.cases.find((c) => c.line !== undefined)?.line ?? 0;
     if (home) item.range = new vscode.Range(mainLine, 0, mainLine, 0);
-    if (cases?.framework) {
+    if (cases?.protocol) {
+      program.protocol = true;
       program.framework = cases.framework;
-      item.description = cases.framework;
+      if (cases.framework) item.description = cases.framework;
     }
     const caseItem = (c: TestCases["cases"][number]): vscode.TestItem => {
       const file = c.file || home;
@@ -208,12 +255,12 @@ export class Testing implements vscode.Disposable {
         const child = this.controller.createTestItem(fileId(root, test.member, test.test, part.name), path.basename(part.file), vscode.Uri.file(part.file));
         const own = (cases?.cases ?? []).filter((c) => c.file === part.file);
         child.range = new vscode.Range(own.find((c) => c.line !== undefined)?.line ?? 0, 0, own.find((c) => c.line !== undefined)?.line ?? 0, 0);
-        child.children.replace(cases?.framework ? own.map(caseItem) : []);
+        child.children.replace(program.protocol ? own.map(caseItem) : []);
         program.parts.set(part.name, child);
         return child;
       }));
-    } else if (cases?.framework) {
-      item.children.replace(cases.cases.map(caseItem));
+    } else if (program.protocol) {
+      item.children.replace((cases?.cases ?? []).map(caseItem));
     }
     this.programs.set(id, program);
     return item;
@@ -221,19 +268,19 @@ export class Testing implements vscode.Disposable {
 
   /** A case's outcome, marked on its item; its line then ends with what the run said. */
   private markCase(run: vscode.TestRun, program: Program, o: CaseOutcome, seen: Set<vscode.TestItem>, output?: string, truncated?: boolean): void {
-    const item = program.cases.get(o.case) ?? program.cases.get(baseCaseName(program.framework, o.case));
+    const item = program.cases.get(o.case);
     if (!item) return;
     seen.add(item);
     const at = o.status === "failed" ? failureAt(program.root, o.location, item) : undefined;
-    // Every case's own output reaches its item, passed or not (D16).
-    attribute(run, item, output, truncated, at);
+    // Every case's own output reaches its item, passed or not (D16): what it wrote (O8), else what the record carries.
+    attribute(run, item, o.output || output, truncated, at);
     const ms = o.durationMs;
     if (o.status === "passed") run.passed(item, ms);
     else if (o.status === "skipped") {
       if (o.reason) run.appendOutput(terminal(`${o.reason}\n`), undefined, item);
       run.skipped(item);
-    } else if (o.status === "errored") run.errored(item, failureMessage(program.root, o, item), ms);
-    else run.failed(item, failureMessage(program.root, o, item), ms);
+    } else if (o.status === "errored") run.errored(item, failureMessages(program.root, o, item), ms);
+    else run.failed(item, failureMessages(program.root, o, item), ms);
     this.decorations.set(item, caseSummary(o));
   }
 
@@ -275,18 +322,18 @@ export class Testing implements vscode.Disposable {
 
   private async runCases(run: vscode.TestRun, token: vscode.CancellationToken, owner: string, items: vscode.TestItem[]): Promise<void> {
     const program = this.programs.get(owner);
-    if (!program?.framework) return;
+    if (!program?.protocol) return;
     items.forEach((i) => run.enqueued(i));
     // Every case of the program asked for: the filter is left out and the program runs them all.
     const names = items.length === program.cases.size ? [] : items.map((i) => parseCaseId(i.id)!.name);
     const seen = new Set<vscode.TestItem>();
     const handle = await this.jobs.start(
-      { root: program.root, test: program.test, framework: program.framework, cases: names, color: true },
+      { root: program.root, test: program.test, cases: names, color: true },
       {
         output: (text) => run.appendOutput(terminal(text)),
         caseEvent: (e: CaseEvent) => this.onCaseEvent(run, program, e, seen),
         caseResult: (r: CaseResult) => {
-          const item = program.cases.get(r.case) ?? program.cases.get(baseCaseName(program.framework, r.case));
+          const item = program.cases.get(r.case);
           if (item && seen.has(item)) return;
           this.markCase(run, program, r, seen, r.output, r.outputTruncated);
         },

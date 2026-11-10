@@ -255,7 +255,7 @@ function M.finish()
   vim.fn.setqflist({}, ' ', { title = 'mcpp test', items = M.failures or {} })
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) then
-      M.signs(buf)
+      M.signs(buf, true)
     end
   end
 end
@@ -278,8 +278,10 @@ local function place(buf, line, status, text)
 end
 
 -- The signs of a buffer: ▶ on a program's or a test's `main` and on each case its file declares, or
--- the last result, with what the case's line says.
-function M.signs(buf)
+-- the last result, with what the case's line says. The cases are the program's own listing (mcpp
+-- test spec B3): `list` lists the project again when it changed since; without it the last listing
+-- answers, so that writing a file builds nothing.
+function M.signs(buf, list)
   local name = vim.api.nvim_buf_get_name(buf)
   if name == '' or vim.bo[buf].buftype ~= '' or not session.state.ready then
     return
@@ -296,7 +298,7 @@ function M.signs(buf)
     if entries.kind ~= 'test' then
       return
     end
-    session.request('test/cases', { root = entries.root, test = entries.test }, function(cerr, cases)
+    session.request('test/cases', { root = entries.root, test = entries.test, list = list or false }, function(cerr, cases)
       if cerr or not cases or not vim.api.nvim_buf_is_valid(buf) then
         return
       end

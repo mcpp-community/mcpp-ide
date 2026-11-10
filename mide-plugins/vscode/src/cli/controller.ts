@@ -22,6 +22,7 @@ import { runMcppCommand } from "./process";
 import {
   McppOperationRegistry,
   classifyTaskExit,
+  projectTaskIsExclusive,
   projectTaskPlan,
   TASK_ARGUMENT_SETTINGS,
   shouldRefreshLanguageServerAfterTask,
@@ -355,11 +356,17 @@ export class McppCliController {
 
     // `mcpp.runtime.concurrency` picks the mutual-exclusion scope: one task at a
     // time per project (the default), or one task at a time for the whole window.
+    // Only a task that removes or replaces what others read is held to it
+    // (`clean`, `pack`): mcpp builds one configuration at a time itself and
+    // releases its directory before a program or a test runs, so a build, a
+    // run and a test proceed beside each other (design 2026-11-10 supplement, T14).
+    const exclusive = projectTaskIsExclusive(kind);
     const globalScope = read<string>("mcpp.runtime.concurrency") === "global";
     const token: OperationToken = {};
-    const active = globalScope
-      ? this.operations.beginGlobal(token)
-      : this.operations.beginProject(project.root, token);
+    const active = !exclusive ? undefined
+      : globalScope
+        ? this.operations.beginGlobal(token)
+        : this.operations.beginProject(project.root, token);
     if (active !== undefined) {
       const labels = controllerLabels();
       const choice = await vscode.window.showWarningMessage(
@@ -388,7 +395,9 @@ export class McppCliController {
       );
       this.appendTaskCompletion(project.root, plan.title, plan.args, completion);
     } finally {
-      if (globalScope) {
+      if (!exclusive) {
+        // nothing was held
+      } else if (globalScope) {
         this.operations.finishGlobal(token);
       } else {
         this.operations.finishProject(project.root, token);

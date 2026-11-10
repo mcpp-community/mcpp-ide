@@ -340,10 +340,13 @@ E2E protocol{"protocol", [] {
         << "import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\nsuite parsing{\"parsing\", [] {\n"
            "    \"an empty line\"_test = [] {};\n    \"a field\"_test = [] {};\n}};\n";
     const auto listing = result_of("mcpp-ide/test/cases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}, {"list", true}});
-    check(listing["framework"] == "mtest" && listing.value("listed", false));
+    check(listing["protocol"] == 1 && listing.value("listed", false) && listing["framework"].is_string());
     check(listing["cases"].size() == 2 && listing["cases"][0]["name"] == "parsing/an empty line" && listing["cases"][0]["line"] == 3);
+    // Without `list` the last listing answers: the cases shown stay until a listing replaces them.
+    const auto kept = result_of("mcpp-ide/test/cases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}});
+    check(kept.value("listed", false) && kept["cases"] == listing["cases"]);
     const auto caseResultsBefore = wire.notifications("mcpp-ide/test/caseResult").size();
-    const auto run = result_of("mcpp-ide/test/runCases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}, {"framework", "mtest"},
+    const auto run = result_of("mcpp-ide/test/runCases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"},
                                                              {"cases", Json::array({"parsing/an empty line", "parsing/a field"})}});
     check(run.contains("jobId"));
     for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/test/caseResult").size() < caseResultsBefore + 2; ++i)
@@ -357,6 +360,36 @@ E2E protocol{"protocol", [] {
               && failed["message"].get<std::string>().contains("expected 2, actual 1"));
         for (const auto& n : caseResults)
             check(conforms(n, protocol["notifications"]["mcpp-ide/test/caseResult"]["params"], protocol, "mcpp-ide/test/caseResult"));
+    }
+    // THROUGH A TEST SESSION (the mcpp test spec's O9): a project whose framework states one
+    // (`mcpp test --guide`, B6) and whose mcpp gives launches (B5) runs its cases through it: the
+    // run is a job of its own, its cases arrive as they begin and end with their checks and output,
+    // and its end is the job's.
+    {
+        const auto dir = root.parent_path() / (root.filename().string() + "-session");
+        std::filesystem::create_directories(dir / "tests" / "unit");
+        std::ofstream(dir / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.1.0\"\n";
+        std::ofstream(dir / ".mock-mcpp-features") << "test-protocol,test-launch-records";
+        std::ofstream(dir / ".mock-mcpp-session") << "on";
+        std::ofstream(dir / "tests" / "unit" / "parse.cpp") << "int main() { return 0; }\n";
+        const auto events = wire.notifications("mcpp-ide/test/caseEvent").size();
+        const auto ran = result_of("mcpp-ide/test/runCases", Json{{"root", dir.generic_string()}, {"test", "unit/parse"},
+                                                                 {"cases", Json::array({"parsing/a field"})}});
+        const auto job = ran.value("jobId", "");
+        check(job.starts_with("job-s"));
+        auto finished = [&] {
+            for (const auto& n : wire.notifications("mcpp-ide/job/finished")) if (n.value("jobId", "") == job) return n;
+            return Json();
+        };
+        for (int i = 0; i < 2000 && finished().is_null(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        check(finished().value("status", "") == "ok");
+        const auto all = wire.notifications("mcpp-ide/test/caseEvent");
+        check(all.size() >= events + 2);
+        if (all.size() >= events + 2) {
+            check(all[events]["event"] == "begin" && all[events]["case"] == "parsing/a field" && all[events]["jobId"] == job);
+            const auto& end = all[events + 1];
+            check(end["event"] == "end" && end["status"] == "passed" && end["checks"]["held"] == 1 && end["output"] == "said\n");
+        }
     }
     // A program of several files (design 2026-11-10): as mcpp 2026.11.9.1 states it (its parts
     // derived), and as mcpp#917 states it (parts, case records, metrics). A run's part records are
@@ -389,12 +422,11 @@ E2E protocol{"protocol", [] {
         }
         const auto entries = result_of("mcpp-ide/source/entries", Json{{"file", b}});
         check(entries["kind"] == "test" && entries["test"] == "unit" && entries["part"] == "unit/b");
-        // Before a listing, the program's files (its cases are read from them where its plan holds
-        // mtest; the mock's plan does not); the listing places each case in its file.
+        // Before a listing, the program's files and no case; the listing places each case in its file.
         const auto statics = result_of("mcpp-ide/test/cases", Json{{"root", dir.generic_string()}, {"test", "unit"}});
         check(statics["test"] == "unit" && statics["files"].size() == 2 && same(statics["files"][0], a) && same(statics["files"][1], b));
         const auto listedCases = result_of("mcpp-ide/test/cases", Json{{"root", dir.generic_string()}, {"test", "unit"}, {"list", true}});
-        check(listedCases.value("listed", false) && listedCases["framework"] == "mtest" && listedCases["cases"].size() == 2);
+        check(listedCases.value("listed", false) && listedCases["protocol"] == 1 && listedCases["cases"].size() == 2);
         if (listedCases["cases"].size() == 2) {
             const auto& alpha = listedCases["cases"][0];
             check(alpha["name"] == "alpha" && same(alpha["file"], a) && alpha["line"] == 3 && alpha["kind"] == "bench" && alpha["bounds"][0]["max"] == 15);
@@ -429,7 +461,7 @@ E2E protocol{"protocol", [] {
         // record states them, not the job's filter.
         const auto caseResultsBefore = wire.notifications("mcpp-ide/test/caseResult").size();
         const auto finishedCases = wire.notifications("mcpp-ide/job/finished").size();
-        result_of("mcpp-ide/test/runCases", Json{{"root", dir.generic_string()}, {"test", "unit/a"}, {"framework", "mtest"},
+        result_of("mcpp-ide/test/runCases", Json{{"root", dir.generic_string()}, {"test", "unit/a"},
                                                  {"cases", Json::array({"alpha"})}});
         for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/job/finished").size() <= finishedCases; ++i)
             std::this_thread::sleep_for(std::chrono::milliseconds(5));

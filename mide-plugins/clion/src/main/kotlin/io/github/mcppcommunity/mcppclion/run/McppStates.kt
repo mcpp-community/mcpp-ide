@@ -163,12 +163,11 @@ class McppTestState(private val c: McppRunConfiguration, env: ExecutionEnvironme
             }
             out.toMap()
         }.getOrDefault(emptyMap())
-        // A framework's cases (test/runCases): the program receives the framework's filter.
-        if (c.options.framework.isNotBlank() && c.options.filter.isNotBlank())
+        // Some cases of a test (test/runCases): run by their identifiers (mcpp test spec P4).
+        if (c.options.cases.isNotBlank() && c.options.filter.isNotBlank())
             return TestJobProcessHandler(session, jobParams(c, "test").apply {
                 remove("kind")
                 addProperty("test", c.options.filter)
-                addProperty("framework", c.options.framework)
                 add("cases", JsonArray().apply { c.options.cases.lines().filter { it.isNotBlank() }.forEach { add(it) } })
             }, places, "test/runCases")
         return TestJobProcessHandler(session, jobParams(c, "test").apply {

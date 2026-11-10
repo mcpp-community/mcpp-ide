@@ -254,19 +254,19 @@ A CodeLens above the main of a program or a test: Run and Debug. Where C++ Modul
 | Applies | Takes effect immediately |
 | Since | 1.1.0 |
 
-### `mcpp.test.macros` — advanced
+### `mcpp.test.session` — advanced
 
-Macros that write a test framework's cases, each as framework:MACRO (gtest:MY_TEST). A test program's cases are listed only when its source calls one of its framework's macros.
+auto: when the project's test framework states a test session (mcpp test --guide), cases are run, added and cancelled through it; off: each run of cases is a run of mcpp test.
 
-书写测试框架用例的宏，每项写作 框架:宏名（gtest:MY_TEST）。测试程序的源文件调用了其框架的宏时才列举它的用例。
+auto：工程的测试框架声明了测试会话（mcpp test --guide）时，经由它运行、加入和取消用例；off：每次运行用例都是一次 mcpp test。
 
 | | |
 |---|---|
-| Type | `array` |
-| Default | `[]` |
+| Type | `string`: `auto` \| `off` |
+| Default | `"auto"` |
 | Scope | per folder |
 | Applies | Takes effect immediately |
-| Since | 1.1.0 |
+| Since | 1.5.0 |
 
 ## C++ Modules language service
 

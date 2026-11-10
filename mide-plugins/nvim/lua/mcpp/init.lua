@@ -128,7 +128,7 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufWritePost' }, {
     group = group, pattern = { '*.cpp', '*.cc', '*.cxx', '*.cppm', '*.ixx', '*.mpp' },
     callback = function(a)
-      require('mcpp.tests').signs(a.buf)
+      require('mcpp.tests').signs(a.buf, a.event == 'BufReadPost')
     end,
   })
   -- Once the backend is ready (McppStatus fires on every change of the statusline; the signs are
@@ -146,7 +146,7 @@ function M.setup(opts)
       end
       for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_is_loaded(buf) then
-          require('mcpp.tests').signs(buf)
+          require('mcpp.tests').signs(buf, true)
         end
       end
     end,

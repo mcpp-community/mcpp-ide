@@ -82,6 +82,34 @@ E2E jobQueue{"jobs", [] {
     if (mcpplibs::os::host() == mcpplibs::os::platform::windows) check(record.find("\"ok\"") == std::string::npos);
     else check(record.find("\"cancelled\"") != std::string::npos);
 
+    // Tests run beside each other (design 2026-11-10 supplement, T14): a test asked for while
+    // another of the project runs starts at once, and cancelling one leaves the other running.
+    jobs::Request first{.kind = jobs::Kind::test, .root = root, .args = {"test", "--message-format", "json"}, .mode = jobs::Mode::ndjson};
+    first.env = fixtures;
+    first.env.push_back({"MOCK_MCPP_SLOW_MS", "20000"});
+    auto second = first;
+    const auto a = runner.submit(first);
+    const auto b = runner.submit(second);
+    bool both = false;
+    for (int i = 0; i < 200 && !both; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        const auto list = runner.list();
+        both = std::ranges::count_if(list, [](const Json& j) { return j.value("state", "") == "running"; }) == 2;
+    }
+    check(both);
+    check(runner.cancel(a));
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    {
+        const auto list = runner.list();
+        check(std::ranges::any_of(list, [&](const Json& j) { return j.value("id", "") == b && j.value("state", "") == "running"; }));
+    }
+    check(runner.cancel(b));
+    runner.drain();
+    {
+        std::lock_guard g(seen.lock);
+        check(seen.finished[a]["status"] == "cancelled" && seen.finished[b]["status"] == "cancelled");
+    }
+
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
 }};

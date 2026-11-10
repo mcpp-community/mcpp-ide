@@ -107,7 +107,7 @@ class TestTree(
                 val program = p["program"]?.asString ?: return ""
                 case(program, p["part"]?.asString, p, if (p["event"]?.asString == "end") "" else null)
             }
-            // A case of a framework or of the test protocol (test/runCases).
+            // A case of a test/runCases job, from its program's records.
             "test/caseResult" -> {
                 val program = p["program"]?.asString ?: p["test"].asString
                 case(program, p["part"]?.asString, p, p["output"]?.takeIf { it.isJsonPrimitive }?.asString ?: "")

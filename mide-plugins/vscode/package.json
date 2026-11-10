@@ -2,7 +2,7 @@
   "name": "mcpp-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "publisher": "mcpp-community",
   "license": "Apache-2.0",
   "icon": "media/logo.png",
@@ -647,13 +647,17 @@
           "description": "%mcpp.codeLens.enable.title%",
           "markdownDescription": "%mcpp.codeLens.enable.description%"
         },
-        "mcpp.test.macros": {
-          "type": "array",
-          "default": [],
+        "mcpp.test.session": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "off"
+          ],
           "scope": "resource",
           "order": 20150,
-          "description": "%mcpp.test.macros.title%",
-          "markdownDescription": "%mcpp.test.macros.description%"
+          "description": "%mcpp.test.session.title%",
+          "markdownDescription": "%mcpp.test.session.description%"
         },
         "mcpp.languageService.menuItems": {
           "type": "boolean",

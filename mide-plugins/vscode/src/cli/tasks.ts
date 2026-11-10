@@ -1,6 +1,16 @@
 import { t } from "../i18n/t";
 
 export type ProjectTaskKind = "build" | "run" | "test" | "clean" | "pack";
+
+/**
+ * Whether a project task is held to `mcpp.runtime.concurrency`: one that removes or replaces what
+ * other tasks read (`clean` its target/, `pack` the dist tree). A build, a run and a test are not:
+ * mcpp builds one configuration at a time and releases its directory before a program or a test
+ * runs (mcpp#915).
+ */
+export function projectTaskIsExclusive(kind: ProjectTaskKind): boolean {
+  return kind === "clean" || kind === "pack";
+}
 export type TaskState = "succeeded" | "failed" | "cancelled";
 
 export interface ProjectTaskPlan {

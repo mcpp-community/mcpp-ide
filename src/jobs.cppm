@@ -1,10 +1,14 @@
 // Jobs: a run of mcpp that takes time and reports while it runs -- a build, a
 // test, a pack, a clean, a toolchain install, `mcpp add`.
 //
-// ONE JOB AT A TIME PER PROJECT. A project's jobs run in the order they were
-// asked for. A new job of a kind that supersedes (a build asked for again on
-// save) replaces the waiting one of that kind, and the running one is
-// cancelled when the request says `supersede`. Cancelling sends the polite
+// ONE JOB AT A TIME PER PROJECT, A TEST BESIDE IT. A project's jobs run in the
+// order they were asked for. A new job of a kind that supersedes (a build asked
+// for again on save) replaces the waiting one of that kind, and the running one
+// is cancelled when the request says `supersede`. A test runs at once in a lane
+// of its own (design 2026-11-10 supplement, T14): mcpp builds one configuration
+// at a time and releases the build directory before the tests run (mcpp#915),
+// so a second test, or a build, does not wait for a running one, and cancelling
+// one ends that one. Cancelling sends the polite
 // signal: mcpp ends the steps it started and leaves its result record
 // `cancelled` (mcpp SPEC-003 §3.7).
 //
@@ -82,6 +86,8 @@ private:
         std::deque<std::shared_ptr<Job>> queue;
         std::shared_ptr<Job> running;
         std::jthread worker;
+        bool once = false;   // a test's lane: its one job, then it ends
+        bool ended = false;
     };
     void run_lane(std::string key);
     void execute(const std::shared_ptr<Job>& job);
@@ -146,15 +152,27 @@ void Jobs::set_client(mcpp::Client client) {
 
 std::string Jobs::submit(Request request) {
     auto job = std::make_shared<Job>();
-    const auto key = request.root.lexically_normal().generic_string();
+    auto key = request.root.lexically_normal().generic_string();
     {
         std::lock_guard lock(mutex_);
         job->id = std::format("job-{}", next_++);
         job->request = std::move(request);
+        // The lanes of tests that ended are let go.
+        for (auto it = lanes_.begin(); it != lanes_.end();) {
+            if (it->second.once && it->second.ended) {
+                if (it->second.worker.joinable()) it->second.worker.join();
+                it = lanes_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        const bool once = job->request.kind == Kind::test;
+        if (once) key += "\x1f" + job->id;
         auto& lane = lanes_[key];
+        lane.once = once;
         // The same kind asked for again replaces the one still waiting: a save
         // followed by another save builds once.
-        if (job->request.kind == Kind::build || job->request.kind == Kind::test) {
+        if (job->request.kind == Kind::build) {
             std::erase_if(lane.queue, [&](const std::shared_ptr<Job>& waiting) {
                 if (waiting->request.kind != job->request.kind) return false;
                 waiting->cancelled = true;
@@ -198,7 +216,8 @@ Json Jobs::list() const {
     Json out = Json::array();
     for (const auto& [key, lane] : lanes_) {
         auto describe = [&](const std::shared_ptr<Job>& j, std::string_view state) {
-            out.push_back(Json{{"id", j->id}, {"kind", kind_name(j->request.kind)}, {"root", key},
+            out.push_back(Json{{"id", j->id}, {"kind", kind_name(j->request.kind)},
+                               {"root", j->request.root.lexically_normal().generic_string()},
                                {"state", state}, {"args", j->request.args}});
         };
         if (lane.running) describe(lane.running, "running");
@@ -235,7 +254,12 @@ void Jobs::run_lane(std::string key) {
         execute(job);
         {
             std::lock_guard lock(mutex_);
-            lanes_[key].running.reset();
+            auto& lane = lanes_[key];
+            lane.running.reset();
+            if (lane.once) {
+                lane.ended = true;
+                return;
+            }
         }
     }
 }

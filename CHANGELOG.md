@@ -2,6 +2,39 @@
 
 The changelog is kept by series (`X.Y`); each section lists its components' releases.
 
+## 1.5
+
+### 1.5.0
+
+Every component is 1.5.0: the backend, mcpp-vscode, mcpp-clion and mcpp-nvim (from 1.4.0).
+
+- **Tests by the mcpp test spec** (mcpp docs/specs/test.md, SPEC-017 v2.0). The backend knows no test
+  framework by name. A program's cases are its listing (`mcpp test --cases`, B3), one listing per
+  project, kept: a listing is asked when cases are first shown and after a build or a test, and writing
+  a file shows the last listing and builds nothing. Cases run by identifier (`--case`, P4), whatever
+  framework or language wrote them. A framework's name and capabilities are what `mcpp test --guide`
+  states of it (B6). The framework table (`spec/test-frameworks.json`), the static reading of cases with
+  mtest's manifest and the setting `mcpp.test.macros` are removed.
+- **Checks and output.** A case carries the checks it ran and those that failed, each failure's
+  statement and whether the case went on (O3), and its own output (O8). VS Code shows one message per
+  failed check, a diff where both sides are stated, and the failed checks on the case's line.
+- **Test sessions** (O9). Where a project's framework states a test session and its mcpp gives launches
+  (`test-launch-records`, mcpp 2026.11.10.1), a run of some cases goes through the session, started once
+  per project: its cases arrive as they begin and end, and a run after the first does not start
+  `mcpp test` again. `mcpp.test.session` (`auto`, `off`) chooses.
+- **Tests run beside each other.** A test runs at once in a lane of its own: two tests of a project, or
+  a test beside a build, do not wait for each other, and cancelling one leaves the other (mcpp
+  2026.11.10.1 releases its build directory before tests run). `mcpp.runtime.concurrency` holds only
+  clean and pack.
+- **One configuration for every test command.** A listing, a run and a debug launch take the profile,
+  the target and `mcpp.task.testArgs` alike. Discovery after events is debounced. Debugging some cases of
+  a protocol program states the protocol's variables and the selection.
+- **CLion.** A run configuration names a test and its cases; its framework field is removed. The gutter
+  places a case's run on the first element of the line its program lists it at.
+- **Neovim.** Signs list the cases when a file is read, when the session starts and after a run.
+- **Protocol.** `protocol.schema.json` states `test/cases`, `test/runCases`, `test/caseResult` and
+  `test/caseEvent` by the spec; `framework` of `test/runCases` is accepted and not read.
+
 ## 1.4
 
 ### 1.4.0

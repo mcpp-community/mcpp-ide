@@ -99,7 +99,7 @@ An individual packaged plugin can be checked without rebuilding the backend:
 
 ```bash
 xvfb-run -a gradle --no-daemon -p integration-tests test \
-  -PpluginZip=/absolute/path/mcpp-clion-1.4.0.zip \
+  -PpluginZip=/absolute/path/mcpp-clion-1.5.0.zip \
   -PmcpplsZip=/absolute/path/mcppls-clion-0.21.0.zip \
   -PideVersion=2026.1.5.2
 ```

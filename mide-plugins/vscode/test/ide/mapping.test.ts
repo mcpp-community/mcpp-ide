@@ -2,7 +2,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { availableDebuggers, baseCaseName, caseId, caseSummary, caseTags, fileId, format, mainLineOf, measured, metricText, parseCaseId, parseFileId, parseTestId, severityOf, testId, zeroBased } from "../../src/ide/mapping";
+import { availableDebuggers, caseId, checksText, caseSummary, caseTags, fileId, format, mainLineOf, measured, metricText, parseCaseId, parseFileId, parseTestId, severityOf, testId, zeroBased } from "../../src/ide/mapping";
 
 test("positions are 1-based in mcpp and 0-based in VS Code", () => {
   assert.deepEqual(zeroBased({ line: 1, column: 21 }), { line: 0, character: 20 });
@@ -33,11 +33,10 @@ test("a case's id holds its program's and its name, which may hold ::", () => {
   assert.equal(parseCaseId(testId("/w/p", "", "unit/math")), undefined);
 });
 
-test("a GoogleTest result is matched to its source's case without instance and parameter", () => {
-  assert.equal(baseCaseName("gtest", "Inst/Param.Works/1"), "Param.Works");
-  assert.equal(baseCaseName("gtest", "Typed/0.Holds"), "Typed.Holds");
-  assert.equal(baseCaseName("gtest", "Math.Adds"), "Math.Adds");
-  assert.equal(baseCaseName("catch2", "a/b.c"), "a/b.c");
+test("a case's checks read as the count that failed of those it ran", () => {
+  assert.equal(checksText({ held: 3, failed: 2 }), "2 of 5 checks failed");
+  assert.equal(caseSummary({ status: "failed", durationMs: 4, checks: { held: 3, failed: 2 } }), "✗ · 4 ms · 2 of 5 checks failed");
+  assert.equal(caseSummary({ status: "passed", durationMs: 4, checks: { held: 3, failed: 0 } }), "✓ · 4 ms");
 });
 
 test("main is the language service's top-level function of that name", () => {
