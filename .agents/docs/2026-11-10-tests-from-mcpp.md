@@ -1,6 +1,6 @@
 # Tests as mcpp states them: programs, parts, cases, live results, metrics and history
 
-Status, 2026-11-10: implemented in mcpp-ide 1.3.0 (mcpp-ide#8), with the client side of mcpp#917; the backend's own tests are mtest's.
+Status, 2026-11-10: implemented in mcpp-ide 1.3.0 (mcpp-ide#8), with the client side of mcpp#917; the backend's own tests are mtest's. mcpp-ide 1.5.0 reads tests by the mcpp test spec (last section): the static reading of cases with mtest's manifest is withdrawn.
 
 ## Scope and principle
 
@@ -183,3 +183,32 @@ insights are empty and say so.
 - Neovim: the smoke test covers live results, the virtual text and `:Mcpp test.insights`.
 - CLion: the comparison failure and the nested suites, in the plugin's unit tests.
 - The insights page is rendered by a Chromium test, as the graph page is.
+
+## 1.5.0: the mcpp test spec
+
+mcpp 2026.11.10.1 states what an editor may rely on of any test framework as the mcpp test spec
+(mcpp docs/specs/test.md, SPEC-017 v2.0): a base every framework implements (B1–B6) and optional
+capabilities a framework states of itself (O1–O9). From 1.5.0 the backend reads tests by that spec and
+knows no framework by name.
+
+- **Cases.** A program's cases are its listing (B3, `mcpp test --cases`), one listing per project. The
+  last listing is kept: `test/cases` with `list` lists again when the project changed since, and
+  without it answers the kept listing. Writing a file builds nothing; the cases shown stay until a
+  listing after a build or a test replaces them. No case is read from a source.
+- **Selection.** Cases run by identifier (P4, `--case`). A configuration names a test and its cases;
+  no framework is named.
+- **Outcomes.** A case carries its checks (O3: held, failed; each failure's statement and whether the
+  case went on) and its own output (O8).
+- **Frameworks.** What a framework offers beyond the base is what `mcpp test --guide` states of it
+  (B6): its name, shown beside a program, and its capabilities.
+- **Sessions.** A framework that states a test session (`test-session`, O9), with an mcpp that gives
+  launches (`test-launch-records`, B5), runs a selection of cases without a new `mcpp test`: the backend
+  starts the session once per project and speaks JSON-RPC 2.0 to it on its standard streams. A run is
+  answered at once; its build, its cases and its end arrive as notifications and become the job's
+  `test/caseEvent` and `job/finished`. A run is registered when its answer is read, before any
+  notification of it. The session ends at the end of its input, hence with the backend; a lifetime
+  bound by the system is not used, since on Linux it follows the thread that started the process.
+  `mcpp.test.session = "off"` runs every case through `mcpp test`.
+- **Concurrency.** A test runs in a lane of its own; two tests, or a test and a build, do not wait for
+  each other. `mcpp.runtime.concurrency` holds only clean and pack.
+

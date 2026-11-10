@@ -35,13 +35,13 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "1.4.0";
+inline constexpr std::string_view kVersion = "1.5.0";
 // THE SERIES (mcpp design 2026-11-07, D15): `X.Y` of `X.Y.Z`, shared by the backend and every editor
 // plugin; components of one series work together. A plugin refuses a backend of another series,
 // naming both versions. The backend is always `X.Y.0`: the VS Code and CLion packages carry it, so a
 // change of the backend is a change of every package, and it begins a series (1.3.0). `Z` is an
 // editor plugin's own patch.
-inline constexpr std::string_view kSeries = "1.4";
+inline constexpr std::string_view kSeries = "1.5";
 static_assert(kVersion.starts_with(kSeries) && kVersion.size() == kSeries.size() + 2 && kVersion.ends_with(".0"));
 inline constexpr int kProtocol = 2;
 
