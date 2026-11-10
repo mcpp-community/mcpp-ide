@@ -8,6 +8,7 @@ import mcpplibs.mtest;
 import nlohmann.json;
 import mcppide.server;
 import mcppide.schema;
+import mcppide.spec;
 
 using testsupport::check;
 using namespace mcpplibs::mtest;
@@ -64,5 +65,18 @@ CTS contracts{"contracts", [] {
         for (const auto& m : registered) if (!methods.contains(m)) std::println(std::cerr, "registered method not in the schema: {}", m);
         check(methods == registered);
         check(notifications == sent);
+    };
+    // An editor is offered the commands it declares: a deprecated id stays VS Code's (its manifest keeps
+    // declaring it), and CLion, Neovim and an agent are never offered one, whatever mcppls forwards.
+    "a deprecated command is offered to VS Code alone"_test = [] {
+        const auto& table = spec::commands();
+        int deprecated = 0;
+        for (const auto& c : table["commands"]) {
+            if (!c.value("deprecated", false)) continue;
+            ++deprecated;
+            check(spec::offered_in(c, "vscode"));
+            for (const auto* editor : {"jetbrains", "nvim", "cli"}) check(!spec::offered_in(c, editor));
+        }
+        check(deprecated > 0);
     };
 }};

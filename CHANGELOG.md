@@ -45,6 +45,9 @@ and 1.2.0).
   latency of a keystroke in a manifest of 400 dependencies, of reading a test file of 2000 cases, and
   of the insights over 50 runs of 400 cases. testsupport's `check` is mtest's fatal expectation, and
   CI reports each run with `mtest report` in the job's summary.
+- **A deprecated command is VS Code's alone.** `commands/list` offered CLion the deprecated ids VS Code keeps
+  for earlier releases (`mcpp.checkModuleSupport`, `mcpp.configureClangd`, ...) once mcppls 0.21 named a
+  CLion action for what they forward; CLion declares none of them, so they were offered and not registered.
 - **Dependencies.** The backend builds with mcpp 2026.11.9.1, mcpplibs.os 0.4.2 and
   mcpplibs.mtest.manifest 0.5.2.
 - **mcppls 0.21.** mcpp-clion is built and tested against the mcppls CLion plugin 0.21.0, whose one

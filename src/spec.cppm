@@ -122,6 +122,9 @@ const Json& test_frameworks() {
 }
 
 bool offered_in(const Json& c, std::string_view editor) {
+    // A deprecated id is VS Code's alone: its manifest keeps declaring it for the settings and
+    // keybindings of earlier releases, and no other editor declares it.
+    if (c.value("deprecated", false) && editor != "vscode") return false;
     if (c.contains("editors") && c["editors"].is_array())
         return std::ranges::any_of(c["editors"], [&](const Json& e) { return e.is_string() && e.get<std::string>() == editor; });
     const auto kind = c.contains("action") && c["action"].is_object() ? c["action"].value("kind", "") : std::string{};

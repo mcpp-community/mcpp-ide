@@ -343,7 +343,7 @@ int gen_jetbrains(std::span<const std::string> args) {
     xml += "      <add-to-group group-id=\"ToolsMenu\" anchor=\"last\"/>\n";
     std::map<std::string, std::vector<const Json*>> byGroup;
     for (const auto& c : spec.commands["commands"])
-        if (offered_in(c, "jetbrains") && !c.value("deprecated", false)) byGroup[c.value("group", "")].push_back(&c);
+        if (offered_in(c, "jetbrains")) byGroup[c.value("group", "")].push_back(&c);
     for (const auto& g : spec.commands["groups"]) {
         const auto gid = g.value("id", "");
         if (!byGroup.contains(gid)) continue;
