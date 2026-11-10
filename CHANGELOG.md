@@ -2,6 +2,19 @@
 
 The changelog is kept by series (`X.Y`); each section lists its components' releases.
 
+## 1.4
+
+### 1.4.0
+
+Every component is 1.4.0: the backend, mcpp-vscode, mcpp-clion and mcpp-nvim (from 1.3.0).
+
+- **A run of cases through a part names its program.** `test/caseResult` names the program and the part
+  as the record states them, as `test/result` does. 1.3.0 named the job's filter as the program: cases
+  run through a part (`unit/a`) were reported as the program `unit/a`, and CLion and Neovim placed them
+  under a suite of that name. mcpp names a run that selects cases (`--case`) after the program; such a
+  result carries no part.
+- **Docs.** The Neovim command of the test insights is `:Mcpp test.insights`.
+
 ## 1.3
 
 ### 1.3.0
