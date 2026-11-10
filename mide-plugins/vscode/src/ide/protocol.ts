@@ -199,11 +199,11 @@ export interface Metric {
   better?: "lower" | "higher";
 }
 
-/** A case of `test/cases`: its place, and what the test protocol states of it (design 2026-11-10). */
+/** A case of `test/cases`, as its program lists it (mcpp test spec B3): its place and what it states. */
 export interface TestCase {
   name: string;
   line?: number;
-  source: "static" | "listed";
+  source: "listed";
   /** The file that declares it, in a program of several files. */
   file?: string;
   kind?: string;
@@ -212,13 +212,18 @@ export interface TestCase {
   bounds?: MetricBound[];
 }
 
-/** `test/cases` (§7.3): a test program's cases, from its sources and, once listed, from the program. */
+/**
+ * `test/cases`: a test program's cases as it lists them (mcpp test spec B3). `protocol` is the version
+ * of the test protocol it implements, or null: a program of none is one case. `framework` is the name
+ * the project's framework states (B6), shown beside the program; nothing is decided by it.
+ */
 export interface TestCases {
   root: string;
   test: string;
   file: string;
   /** The files of a program of several files. */
   files?: string[];
+  protocol?: number | null;
   framework: string | null;
   listed?: boolean;
   main?: { line: number; approximate?: boolean };
@@ -235,13 +240,15 @@ export interface TestProgram {
   layout?: "file" | "directory";
 }
 
-/** A failure of a case: its place (0-based line) and, when stated, both sides. */
+/** A failure of a case (mcpp test spec O3): its place (0-based line), and when stated both sides, the statement and whether it ended the case. */
 export interface CaseFailure {
   path: string;
   line: number;
   message: string;
   expected?: string;
   actual?: string;
+  source?: string;
+  fatal?: boolean;
 }
 
 /** A case as it ended, as the backend maps the test protocol's statuses. */
@@ -259,6 +266,10 @@ export interface CaseOutcome {
   tags?: string[];
   expectedFailure?: boolean;
   unexpectedPass?: boolean;
+  /** Of the checks the case ran, those that held and those that did not (O3). */
+  checks?: { held: number; failed: number };
+  /** What the case wrote (O8): its own output, as its program stated it. */
+  output?: string;
 }
 
 /** `test/caseEvent`: a case began or ended while its program runs (test-case-stream, mcpp#917). */
@@ -272,7 +283,7 @@ export interface CaseEvent extends Partial<CaseOutcome> {
   tMs?: number;
 }
 
-/** `test/caseResult`: one case's outcome, read from the framework's report. */
+/** `test/caseResult`: one case's outcome, from mcpp's records. */
 /** Where a failure is: the first `file:line` its output names, the line 0-based. */
 export interface FailureLocation {
   path: string;
@@ -289,7 +300,7 @@ export interface CaseResult extends CaseOutcome {
   status: "passed" | "failed" | "skipped" | "errored";
   durationMs: number;
   message: string;
-  /** The case's own output (GoogleTest's console between `[ RUN ]` and its result); empty without boundaries. */
+  /** The case's own output (O8), or a failure's text; empty when neither. */
   output?: string;
   outputTruncated?: boolean;
   location?: FailureLocation | null;

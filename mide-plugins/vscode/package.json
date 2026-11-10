@@ -647,14 +647,6 @@
           "description": "%mcpp.codeLens.enable.title%",
           "markdownDescription": "%mcpp.codeLens.enable.description%"
         },
-        "mcpp.test.macros": {
-          "type": "array",
-          "default": [],
-          "scope": "resource",
-          "order": 20150,
-          "description": "%mcpp.test.macros.title%",
-          "markdownDescription": "%mcpp.test.macros.description%"
-        },
         "mcpp.languageService.menuItems": {
           "type": "boolean",
           "default": true,

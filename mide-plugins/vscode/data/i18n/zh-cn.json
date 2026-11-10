@@ -683,5 +683,6 @@
   "Schedule": "调度",
   "worker {0}": "工作线程 {0}",
   "Critical path": "关键路径",
-  "Metrics appear when the project's mcpp states them (test-metrics, mcpp#917).": "项目的 mcpp 声明指标后才会显示（test-metrics，mcpp#917）。"
+  "Metrics appear when the project's mcpp states them (test-metrics, mcpp#917).": "项目的 mcpp 声明指标后才会显示（test-metrics，mcpp#917）。",
+  "fatal: the rest of the case did not run": "致命：该用例余下的部分未运行"
 }

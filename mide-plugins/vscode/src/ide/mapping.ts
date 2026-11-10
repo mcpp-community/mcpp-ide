@@ -24,7 +24,7 @@ export function testId(root: string, member: string, test: string): string {
   return `${root}::${member}::${test}`;
 }
 
-/** What separates a case's name from its program's id: a name is the framework's, and may hold "::". */
+/** What separates a case's name from its program's id: a case's identifier may hold "::". */
 const CASE = "\u001f";
 
 /** A case of a test program (design 2026-10-30 part 2 §7): its program's id, then its full name. */
@@ -37,16 +37,6 @@ export function parseCaseId(id: string): { root: string; member: string; test: s
   if (at < 0) return undefined;
   const program = parseTestId(id.slice(0, at));
   return program === undefined ? undefined : { ...program, name: id.slice(at + 1) };
-}
-
-/** A case result's name as its source names it: GoogleTest's instance prefix and parameter dropped. */
-export function baseCaseName(framework: string | null, name: string): string {
-  if (framework !== "gtest") return name;
-  const dot = name.indexOf(".");
-  if (dot < 0) return name;
-  const suiteParts = name.slice(0, dot).split("/").filter((part) => part !== "" && !/^\d+$/.test(part));
-  const test = name.slice(dot + 1).split("/")[0];
-  return `${suiteParts[suiteParts.length - 1] ?? ""}.${test}`;
 }
 
 /** VS Code's SymbolKind.Function (LSP numbers it 12). */
@@ -118,13 +108,19 @@ export function metricText(name: string, value: number, unit: string | undefined
 }
 
 /** What follows a case's line after a run: its verdict, its duration, its metrics against their bounds. */
-export function caseSummary(o: Pick<CaseOutcome, "status" | "durationMs" | "metrics" | "bounds" | "expectedFailure">): string {
+export function caseSummary(o: Pick<CaseOutcome, "status" | "durationMs" | "metrics" | "bounds" | "expectedFailure" | "checks">): string {
   const mark = o.status === "passed" ? "✓" : o.status === "skipped" ? "○" : "✗";
   const parts = [`${mark}${o.expectedFailure ? " xfail" : ""}`];
   if (o.durationMs !== undefined && o.status !== "skipped") parts.push(`${o.durationMs} ms`);
+  if (o.checks && o.checks.failed > 0) parts.push(checksText(o.checks));
   for (const m of o.metrics ?? [])
     parts.push(metricText(m.name, m.value, m.unit, o.bounds?.find((b) => b.metric === m.name)));
   return parts.join(" · ");
+}
+
+/** A case's checks (mcpp test spec O3): `2 of 5 checks failed`. */
+export function checksText(checks: { held: number; failed: number }): string {
+  return `${checks.failed} of ${checks.held + checks.failed} checks failed`;
 }
 
 /** The test tags of a case: `kind:<kind>` and each of its own (VS Code's `@tag` filter selects by them). */

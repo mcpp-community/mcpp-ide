@@ -1,59 +1,24 @@
-// What a C++ source says about where it starts and what it tests, read as text (mcpp design
-// 2026-10-30 part 2 §6.3, §7.3): the line of `main`, and the calls of a test framework's macros.
+// Where a C++ source starts, read as text (mcpp design 2026-10-30 part 2 §6.3): the line of `main`.
+// What a test program's cases are is the program's to say (mcpp test spec B3); nothing of a test
+// framework is read here.
 //
 // NOTHING IS BUILT AND NOTHING IS RUN. A file is scanned when it is opened, before any build and
 // without mcppls, so the editors can place ▶ at once. Comments, string and character literals (raw
-// strings included) and preprocessor lines are skipped, so a `main(` in a comment or a `TEST(` in a
-// string is not one. A position found this way is approximate where a language service has a
-// better one: the editors take the language service's position of `main` when it gives one.
-//
-// A MACRO CALL COUNTS AT THE START OF A DECLARATION: after `;`, `{`, `}`, a preprocessor line or
-// the start of the file. That is where a framework's test macros are written (at namespace scope,
-// or in a test body for a section), and an expression that merely contains the name is not one.
+// strings included) and preprocessor lines are skipped, so a `main(` in a comment or a string is
+// not one. A position found this way is approximate where a language service has a better one: the
+// editors take the language service's position of `main` when it gives one.
 export module mcppide.scan;
 
 import std;
-import mcpplibs.mtest.manifest;
 
 export namespace mcppide::scan {
 
-// One call of a macro: its name, where it is (0-based line and column of the name), and its
-// arguments as written, split at the top-level commas, each trimmed.
-struct Call {
-    std::string name;
-    int line = 0;
-    int column = 0;
-    std::vector<std::string> arguments;
-};
-
-// A case of the mtest library -- an object (`UTest parse{"parse", ...}`, any suite type) or a
-// `"name"_test` declared in one -- as mtest's own static manifest reads it
-// (mcpplibs.mtest.manifest): its identifier, the names of what declares it and its own joined by
-// `/`, and where its name is (0-based); the kind, tags and bounds on its metrics it states (empty
-// kind: its program's).
-struct Literal {
-    std::string id;
-    int line = 0;
-    int column = 0;
-    std::string kind;
-    std::vector<std::string> tags;
-    std::vector<mcpplibs::mtest::manifest::static_bound> bounds;
-};
-
 struct Result {
     std::optional<int> mainLine;   // 0-based
-    std::vector<Call> calls;
-    std::vector<Literal> cases;    // mtest's cases, by mcpplibs.mtest.manifest
 };
 
-// Scans `text` for `main` and for calls of the macros named in `macros`. `types` are the suite types
-// the project's tests declare elsewhere (`class Fixture : public CTS` in a module beside them).
-Result scan(std::string_view text, const std::vector<std::string>& macros,
-            const mcpplibs::mtest::manifest::suite_types& types = {});
-
-// A string literal's contents, as the program sees them for the plain escapes (\" \\ \n \t); the
-// argument itself when it is not one literal. Adjacent literals are joined.
-std::string literal_value(std::string_view argument);
+// Scans `text` for `main`.
+Result scan(std::string_view text);
 
 }  // namespace mcppide::scan
 
@@ -63,12 +28,6 @@ namespace {
 
 bool ident_start(char c) { return std::isalpha(static_cast<unsigned char>(c)) || c == '_'; }
 bool ident_char(char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; }
-
-std::string trim(std::string_view s) {
-    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) s.remove_prefix(1);
-    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) s.remove_suffix(1);
-    return std::string(s);
-}
 
 // A cursor over the text that knows its line and steps over what is not code.
 struct Cursor {
@@ -125,53 +84,12 @@ struct Cursor {
     }
 };
 
-// The arguments of a call whose `(` the cursor is on, split at top-level commas; the cursor ends
-// after the `)`.
-std::vector<std::string> arguments(Cursor& c) {
-    std::vector<std::string> out;
-    std::string current;
-    int depth = 0;
-    c.step();   // (
-    while (!c.done()) {
-        const char ch = c.peek();
-        if (ch == '/' && c.peek(1) == '/') { c.skip_line_comment(); continue; }
-        if (ch == '/' && c.peek(1) == '*') { c.skip_block_comment(); continue; }
-        if (ch == '"' || ch == '\'') {
-            const auto from = c.at;
-            c.skip_quoted(ch);
-            current.append(c.text.substr(from, c.at - from));
-            continue;
-        }
-        if (ch == '(' || ch == '[' || ch == '{' || ch == '<') { if (ch != '<') ++depth; }
-        if (ch == ')' || ch == ']' || ch == '}') {
-            if (depth == 0) {
-                c.step();
-                out.push_back(trim(current));
-                return out;
-            }
-            --depth;
-        }
-        if (ch == ',' && depth == 0) {
-            out.push_back(trim(current));
-            current.clear();
-            c.step();
-            continue;
-        }
-        current.push_back(ch);
-        c.step();
-    }
-    out.push_back(trim(current));
-    return out;
-}
-
 }  // namespace
 
-Result scan(std::string_view text, const std::vector<std::string>& macros,
-            const mcpplibs::mtest::manifest::suite_types& types) {
+Result scan(std::string_view text) {
     Result r;
     Cursor c{text};
     int depth = 0;                  // braces
-    bool atDeclaration = true;      // the next identifier starts a declaration
     bool lineHasCode = false;       // a `#` is a directive only first on its line
     std::string previous;           // the previous identifier, for `int main(`
     while (!c.done()) {
@@ -180,19 +98,18 @@ Result scan(std::string_view text, const std::vector<std::string>& macros,
         if (std::isspace(static_cast<unsigned char>(ch))) { c.step(); continue; }
         if (ch == '/' && c.peek(1) == '/') { c.skip_line_comment(); continue; }
         if (ch == '/' && c.peek(1) == '*') { c.skip_block_comment(); continue; }
-        if (ch == '#' && !lineHasCode) { c.skip_directive(); atDeclaration = true; previous.clear(); continue; }
+        if (ch == '#' && !lineHasCode) { c.skip_directive(); previous.clear(); continue; }
         lineHasCode = true;
-        if (c.on_raw()) { c.skip_raw(); atDeclaration = false; previous.clear(); continue; }
+        if (c.on_raw()) { c.skip_raw(); previous.clear(); continue; }
         if (ch == '"') {
             c.skip_quoted(ch);
-            atDeclaration = false;
             previous.clear();
             continue;
         }
-        if (ch == '\'') { c.skip_quoted(ch); atDeclaration = false; previous.clear(); continue; }
+        if (ch == '\'') { c.skip_quoted(ch); previous.clear(); continue; }
         if (ident_start(ch)) {
             const auto from = c.at;
-            const int line = c.line, column = c.column();
+            const int line = c.line;
             while (!c.done() && ident_char(c.peek())) c.step();
             const std::string word(text.substr(from, c.at - from));
             // What follows the name, past blanks and comments on the way.
@@ -204,61 +121,18 @@ Result scan(std::string_view text, const std::vector<std::string>& macros,
                 break;
             }
             const bool call = look.peek() == '(';
-            if (call && atDeclaration && std::ranges::find(macros, word) != macros.end()) {
-                c = look;
-                r.calls.push_back(Call{word, line, column, arguments(c)});
-                atDeclaration = false;
-                previous.clear();
-                continue;
-            }
             if (call && word == "main" && depth == 0 && !r.mainLine && (previous == "int" || previous == "auto"))
                 r.mainLine = line;
             previous = word;
-            atDeclaration = false;
             continue;
         }
-        if (ch == '{') {
-            ++depth;
-            atDeclaration = true;
-        } else if (ch == '}') {
-            if (depth > 0) --depth;
-            atDeclaration = true;
-        }
-        else if (ch == ';') atDeclaration = true;
-        else atDeclaration = false;
+        if (ch == '{') ++depth;
+        else if (ch == '}' && depth > 0) --depth;
         // `std::main`, `x.main`: not the program's.
         if (ch != ':' ) previous.clear();
         c.step();
     }
-    // mtest's cases as mtest reads them: its manifest is the one reader of its declarations.
-    for (const auto& found : mcpplibs::mtest::manifest::scan(text, types))
-        r.cases.push_back(Literal{found.id, found.line - 1, found.column - 1, found.kind, found.tags, found.bounds});
     return r;
-}
-
-std::string literal_value(std::string_view argument) {
-    std::string out;
-    std::size_t i = 0;
-    bool any = false;
-    while (i < argument.size()) {
-        while (i < argument.size() && std::isspace(static_cast<unsigned char>(argument[i]))) ++i;
-        if (i >= argument.size()) break;
-        if (argument[i] != '"') return std::string(argument);
-        ++i;
-        while (i < argument.size() && argument[i] != '"') {
-            if (argument[i] == '\\' && i + 1 < argument.size()) {
-                const char e = argument[i + 1];
-                out.push_back(e == 'n' ? '\n' : e == 't' ? '\t' : e);
-                i += 2;
-                continue;
-            }
-            out.push_back(argument[i++]);
-        }
-        if (i >= argument.size()) return std::string(argument);
-        ++i;
-        any = true;
-    }
-    return any ? out : std::string(argument);
 }
 
 }  // namespace mcppide::scan

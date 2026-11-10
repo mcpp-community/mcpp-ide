@@ -7,8 +7,8 @@
 //   MOCK_MCPP_FAIL       "build": the build fails with the compiler's diagnostic;
 //                        "manifest": it fails on the manifest (also read from the
 //                        project's `.mock-mcpp-fail`)
-//   MOCK_MCPP_SLOW_MS    the build waits this long before it ends, so a test can
-//                        cancel it; SIGTERM then leaves the record `cancelled`
+//   MOCK_MCPP_SLOW_MS    the build, or a run of tests, waits this long before it ends, so a
+//                        test can cancel it; SIGTERM then leaves a build's record `cancelled`
 //   MOCK_MCPP_LOG        every argv is appended here, one line each, and the value of
 //                        XLINGS_PROJECT_DIR the run received (`<unset>` when none)
 //
@@ -195,6 +195,9 @@ int main(int argc, char** argv) {
     // A program that implements the test protocol: its listing (`--cases`) and a run of a selection
     // (`--case`), each a record with the protocol's fields (mcpp docs/50 §8).
     if (first(0) == "test") {
+        // A run that takes its time, as a build does (MOCK_MCPP_SLOW_MS): ended by a request to end.
+        if (const auto slow = env("MOCK_MCPP_SLOW_MS"); !slow.empty() && !has("--list") && !has("--cases"))
+            if (mcpplibs::os::interrupt::wait(std::chrono::milliseconds(std::stoi(slow)))) return 130;
         // `.mock-mcpp-tests` names another set of programs: `directory` is a protocol program of two
         // files and a file program as mcpp 2026.11.9.1 states them; `directory-917` the same with
         // mcpp#917's parts, case records and metrics (its listing of cases is the first set's).

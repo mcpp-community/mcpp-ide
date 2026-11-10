@@ -340,10 +340,10 @@ E2E protocol{"protocol", [] {
         << "import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\nsuite parsing{\"parsing\", [] {\n"
            "    \"an empty line\"_test = [] {};\n    \"a field\"_test = [] {};\n}};\n";
     const auto listing = result_of("mcpp-ide/test/cases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}, {"list", true}});
-    check(listing["framework"] == "mtest" && listing.value("listed", false));
+    check(listing["protocol"] == 1 && listing.value("listed", false) && listing["framework"].is_string());
     check(listing["cases"].size() == 2 && listing["cases"][0]["name"] == "parsing/an empty line" && listing["cases"][0]["line"] == 3);
     const auto caseResultsBefore = wire.notifications("mcpp-ide/test/caseResult").size();
-    const auto run = result_of("mcpp-ide/test/runCases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}, {"framework", "mtest"},
+    const auto run = result_of("mcpp-ide/test/runCases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"},
                                                              {"cases", Json::array({"parsing/an empty line", "parsing/a field"})}});
     check(run.contains("jobId"));
     for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/test/caseResult").size() < caseResultsBefore + 2; ++i)
@@ -389,12 +389,11 @@ E2E protocol{"protocol", [] {
         }
         const auto entries = result_of("mcpp-ide/source/entries", Json{{"file", b}});
         check(entries["kind"] == "test" && entries["test"] == "unit" && entries["part"] == "unit/b");
-        // Before a listing, the program's files (its cases are read from them where its plan holds
-        // mtest; the mock's plan does not); the listing places each case in its file.
+        // Before a listing, the program's files and no case; the listing places each case in its file.
         const auto statics = result_of("mcpp-ide/test/cases", Json{{"root", dir.generic_string()}, {"test", "unit"}});
         check(statics["test"] == "unit" && statics["files"].size() == 2 && same(statics["files"][0], a) && same(statics["files"][1], b));
         const auto listedCases = result_of("mcpp-ide/test/cases", Json{{"root", dir.generic_string()}, {"test", "unit"}, {"list", true}});
-        check(listedCases.value("listed", false) && listedCases["framework"] == "mtest" && listedCases["cases"].size() == 2);
+        check(listedCases.value("listed", false) && listedCases["protocol"] == 1 && listedCases["cases"].size() == 2);
         if (listedCases["cases"].size() == 2) {
             const auto& alpha = listedCases["cases"][0];
             check(alpha["name"] == "alpha" && same(alpha["file"], a) && alpha["line"] == 3 && alpha["kind"] == "bench" && alpha["bounds"][0]["max"] == 15);
@@ -429,7 +428,7 @@ E2E protocol{"protocol", [] {
         // record states them, not the job's filter.
         const auto caseResultsBefore = wire.notifications("mcpp-ide/test/caseResult").size();
         const auto finishedCases = wire.notifications("mcpp-ide/job/finished").size();
-        result_of("mcpp-ide/test/runCases", Json{{"root", dir.generic_string()}, {"test", "unit/a"}, {"framework", "mtest"},
+        result_of("mcpp-ide/test/runCases", Json{{"root", dir.generic_string()}, {"test", "unit/a"},
                                                  {"cases", Json::array({"alpha"})}});
         for (int i = 0; i < 2000 && wire.notifications("mcpp-ide/job/finished").size() <= finishedCases; ++i)
             std::this_thread::sleep_for(std::chrono::milliseconds(5));

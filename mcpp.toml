@@ -80,8 +80,6 @@ main = "src/bin/dev.cpp"
 # runtime and loader remain the platform's.
 mcpplibs.os   = "0.4.2"
 nlohmann.json = "3.12.0"
-# mtest's static case manifest: the cases a test file declares, read as mtest reads them.
-mcpplibs.mtest.manifest = "0.5.2"
 
 # The tests are mtest's (mtest docs/layout.md): tests/unit, tests/e2e, tests/cts and tests/bench, each
 # directory one program whose files declare their cases; what every test shares is testsupport/, a

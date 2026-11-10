@@ -81,11 +81,10 @@ Bench keystroke{"a keystroke in a manifest of 400 dependencies", at_most{"manife
     });
 }};
 
-Bench testFile{"the entries and cases of a test file of 2000 cases", at_most{"tests.scan", 0.1}, [] {
+Bench testFile{"where a test file of 2000 cases starts", at_most{"tests.scan", 0.1}, [] {
     const auto text = test_file(2000);
     bench::measure("tests.scan", [&] {
-        const auto found = scan::scan(text, {});
-        testsupport::check(found.cases.size() == 2200);
+        const auto found = scan::scan(text);
         bench::keep(found);
     }, {.samples = 10});
 }};

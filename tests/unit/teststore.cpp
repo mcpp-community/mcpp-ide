@@ -7,7 +7,6 @@ import std;
 import mcppide.testsupport;
 import mcpplibs.mtest;
 import nlohmann.json;
-import mcppide.scan;
 import mcppide.testing;
 import mcppide.teststore;
 
@@ -123,14 +122,17 @@ UTest teststore{"teststore", [] {
         check(plain["message"] == "no network" && plain["location"].is_null() && !plain.contains("metrics") && !plain.contains("expectedFailure"));
     };
 
-    // A case's kind and the bounds on its metrics, as its source states them (mtest's manifest).
-    "a case as its source states it"_test = [&] {
-        const auto found = scan::scan("import mcpplibs.mtest;\nusing namespace mcpplibs::mtest;\n"
-                                      "Bench alpha{\"alpha\", at_most{\"ready\", 15}, [] {}};\nUTest beta{\"beta\", [] {}};\n", {});
-        const auto cases = testing::static_cases(*testing::framework("mtest"), found, Json::object());
-        check(cases.size() == 2 && cases[0].kind == "bench" && cases[0].bounds.size() == 1 && cases[0].bounds[0]["max"] == 15);
-        check(cases.size() == 2 && cases[1].kind == "unit" && cases[1].bounds.empty());
-        const auto row = testing::case_json(cases[0]);
+    // A case as a program lists it (mcpp test spec B3): its kind and the bounds on its metrics.
+    "a case as its program lists it"_test = [&] {
+        const auto listed = testing::protocol_listing(Json::parse(R"({"test":"b","protocol":1,
+            "listed":[{"id":"alpha","file":"t.cpp","line":3,"kind":"bench","bounds":[{"metric":"ready","max":15}]},
+                      {"id":"beta","file":"t.cpp","line":4,"kind":"unit"}]})"));
+        check(listed.size() == 2 && listed[0].kind == "bench" && listed[0].bounds.size() == 1 && listed[0].bounds[0]["max"] == 15);
+        check(listed.size() == 2 && listed[1].kind == "unit" && listed[1].bounds.empty() && listed[1].line == 3);
+        testing::Case c{listed[0].id, listed[0].line};
+        c.kind = listed[0].kind;
+        c.bounds = listed[0].bounds;
+        const auto row = testing::case_json(c);
         check(row["kind"] == "bench" && row["bounds"][0]["metric"] == "ready" && !row.contains("tags") && !row.contains("file"));
     };
 }};

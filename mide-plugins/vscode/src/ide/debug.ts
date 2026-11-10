@@ -69,7 +69,8 @@ export class Debugging implements vscode.DebugConfigurationProvider, vscode.Disp
           root: project.root,
           // A test's program (mcpp test --print-launch), where the project's mcpp describes one.
           ...(config.test ? { test: config.test } : {}),
-          ...(config.framework ? { framework: config.framework, cases: Array.isArray(config.cases) ? config.cases : [] } : {}),
+          // Some of its cases (mcpp test spec P4), as the program lists them.
+          ...(Array.isArray(config.cases) && config.cases.length > 0 ? { cases: config.cases } : {}),
           ...(config.target !== undefined ? { target: config.target } : {}),
           ...(config.profile ? { profile: config.profile } : {}),
           ...(config.engine ? { engine: config.engine } : {}),
