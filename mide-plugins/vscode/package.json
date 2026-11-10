@@ -647,6 +647,18 @@
           "description": "%mcpp.codeLens.enable.title%",
           "markdownDescription": "%mcpp.codeLens.enable.description%"
         },
+        "mcpp.test.session": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "off"
+          ],
+          "scope": "resource",
+          "order": 20150,
+          "description": "%mcpp.test.session.title%",
+          "markdownDescription": "%mcpp.test.session.description%"
+        },
         "mcpp.languageService.menuItems": {
           "type": "boolean",
           "default": true,

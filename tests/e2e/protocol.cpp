@@ -358,6 +358,36 @@ E2E protocol{"protocol", [] {
         for (const auto& n : caseResults)
             check(conforms(n, protocol["notifications"]["mcpp-ide/test/caseResult"]["params"], protocol, "mcpp-ide/test/caseResult"));
     }
+    // THROUGH A TEST SESSION (the mcpp test spec's O9): a project whose framework states one
+    // (`mcpp test --guide`, B6) and whose mcpp gives launches (B5) runs its cases through it: the
+    // run is a job of its own, its cases arrive as they begin and end with their checks and output,
+    // and its end is the job's.
+    {
+        const auto dir = root.parent_path() / (root.filename().string() + "-session");
+        std::filesystem::create_directories(dir / "tests" / "unit");
+        std::ofstream(dir / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.1.0\"\n";
+        std::ofstream(dir / ".mock-mcpp-features") << "test-protocol,test-launch-records";
+        std::ofstream(dir / ".mock-mcpp-session") << "on";
+        std::ofstream(dir / "tests" / "unit" / "parse.cpp") << "int main() { return 0; }\n";
+        const auto events = wire.notifications("mcpp-ide/test/caseEvent").size();
+        const auto ran = result_of("mcpp-ide/test/runCases", Json{{"root", dir.generic_string()}, {"test", "unit/parse"},
+                                                                 {"cases", Json::array({"parsing/a field"})}});
+        const auto job = ran.value("jobId", "");
+        check(job.starts_with("job-s"));
+        auto finished = [&] {
+            for (const auto& n : wire.notifications("mcpp-ide/job/finished")) if (n.value("jobId", "") == job) return n;
+            return Json();
+        };
+        for (int i = 0; i < 2000 && finished().is_null(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        check(finished().value("status", "") == "ok");
+        const auto all = wire.notifications("mcpp-ide/test/caseEvent");
+        check(all.size() >= events + 2);
+        if (all.size() >= events + 2) {
+            check(all[events]["event"] == "begin" && all[events]["case"] == "parsing/a field" && all[events]["jobId"] == job);
+            const auto& end = all[events + 1];
+            check(end["event"] == "end" && end["status"] == "passed" && end["checks"]["held"] == 1 && end["output"] == "said\n");
+        }
+    }
     // A program of several files (design 2026-11-10): as mcpp 2026.11.9.1 states it (its parts
     // derived), and as mcpp#917 states it (parts, case records, metrics). A run's part records are
     // attributed to their program, each part's cases reported, and the store's runs read back.

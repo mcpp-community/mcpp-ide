@@ -45,6 +45,11 @@ const READ_INDIRECTLY: ReadonlyArray<{ key: string; file: string; evidence: stri
     file: "src/ide/session.ts",
     evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
   },
+  {
+    key: "mcpp.test.session",
+    file: "src/ide/session.ts",
+    evidence: "for (const key of Object.keys(props)) out[key] = config.get(key);",
+  },
   // The rules layer of mcpp.toml and build.mcpp is the backend's (design 2026-10-30 part 2 §8).
   {
     key: "mcpp.toml.completion",

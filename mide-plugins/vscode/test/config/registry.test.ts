@@ -21,7 +21,7 @@ test("the registry declares 10 groups and 78 settings", () => {
   // 0.9.0's 69, the seven the mcpp-ide backend reads (build target, profile and on-save, the
   // debugger, the backend's path, the effects an untrusted workspace denies, its log level), the
   // CodeLens above main and the macros of a test framework.
-  assert.equal(SETTINGS.length, 77);
+  assert.equal(SETTINGS.length, 78);
 });
 
 test("the registry's own shape rules hold", () => {
@@ -31,7 +31,7 @@ test("the registry's own shape rules hold", () => {
 test("37 settings are public and the rest are advanced", () => {
   assert.equal(settingsByTier("public").length, 37);
   // 37 advanced + the 4 deprecated keys the Settings UI keeps out of the way.
-  assert.equal(settingsByTier("advanced").length, 40);
+  assert.equal(settingsByTier("advanced").length, 41);
   // The four deprecated keys live in `advanced` so the Settings UI keeps them out of the way.
   assert.equal(settingsByTier("advanced").filter((entry) => entry.deprecated === true).length, 4);
 });

@@ -15,6 +15,10 @@
 // `.mock-mcpp-tests` in the directory a command runs in selects the programs `mcpp test` states
 // (protocol/fixtures/test*-<set>.ndjson).
 //
+// AND A TEST SESSION (the mcpp test spec's O9): `.mock-mcpp-session` in the directory makes
+// `mcpp test --guide` state a framework whose session is this program run as `session`, which
+// answers `test/run` at once and states one case that begins and passes, then the run's end.
+//
 // AND A VERSION MANAGER'S SHIM, per directory (design 2026-10-30 part 2 §4.2): in the directory a
 // command runs in, `.mock-mcpp-version` names the version that answers (every output's version is
 // that one), `.mock-mcpp-features` the features its envelopes state (comma-separated; without
@@ -152,8 +156,39 @@ int build(bool message) {
 
 }  // namespace
 
+// The session: one JSON-RPC message per line on the standard streams.
+int session() {
+    std::string line;
+    int runs = 0;
+    auto send = [](const std::string& m) { std::cout << m << '\n' << std::flush; };
+    while (std::getline(std::cin, line)) {
+        const auto id_at = line.find("\"id\":");
+        std::string id = "null";
+        if (id_at != std::string::npos) {
+            auto end = line.find_first_of(",}", id_at + 5);
+            id = line.substr(id_at + 5, end - id_at - 5);
+        }
+        if (line.find("\"test/run\"") != std::string::npos) {
+            const auto run = std::format("r{}", ++runs);
+            send(std::format(R"({{"jsonrpc":"2.0","id":{},"result":{{"run":"{}"}}}})", id, run));
+            send(std::format(R"({{"jsonrpc":"2.0","method":"test/build","params":{{"run":"{}","event":"end","ok":true}}}})", run));
+            send(std::format(R"({{"jsonrpc":"2.0","method":"test/case","params":{{"run":"{}","program":"unit/parse","id":"parsing/a field","event":"begin","t_ms":1}}}})", run));
+            send(std::format(R"({{"jsonrpc":"2.0","method":"test/case","params":{{"run":"{}","program":"unit/parse","id":"parsing/a field","event":"output","stream":"out","text":"said\n"}}}})", run));
+            send(std::format(R"({{"jsonrpc":"2.0","method":"test/case","params":{{"run":"{}","program":"unit/parse","id":"parsing/a field","event":"end","status":"pass","ms":2,"checks":{{"held":1,"failed":0}}}}}})", run));
+            send(std::format(R"({{"jsonrpc":"2.0","method":"test/run","params":{{"run":"{}","status":"pass","counts":{{"pass":1}}}}}})", run));
+        } else if (line.find("\"shutdown\"") != std::string::npos) {
+            send(std::format(R"({{"jsonrpc":"2.0","id":{},"result":null}})", id));
+            return 0;
+        } else if (id != "null") {
+            send(std::format(R"({{"jsonrpc":"2.0","id":{},"result":{{}}}})", id));
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
+    if (!args.empty() && args[0] == "session") return session();
     auto log = env("MOCK_MCPP_LOG");
     if (log.empty() && std::filesystem::exists(".mock-mcpp-log")) log = ".mock-mcpp-log";
     if (!log.empty()) {
@@ -194,6 +229,14 @@ int main(int argc, char** argv) {
     }
     // A program that implements the test protocol: its listing (`--cases`) and a run of a selection
     // (`--case`), each a record with the protocol's fields (mcpp docs/50 §8).
+    if (first(0) == "test" && has("--guide")) {
+        // The project's framework (B6), with a session when the directory asks for one.
+        const bool withSession = !here_file(".mock-mcpp-session").empty();
+        std::string self = std::filesystem::absolute(argv[0]).generic_string();
+        out(std::format(R"({{"guide":{{"frameworks":[{{"package":"mcpplibs.mtest","version":"0.6.0","entry":"mtest/main","protocol":1,"guide":null,"repo":"","capabilities":[{}],"session":{}}}]}}}})",
+                        withSession ? "\"session\"" : "", withSession ? std::format(R"(["{}","session"])", self) : "null") + "\n");
+        return 0;
+    }
     if (first(0) == "test") {
         // A run that takes its time, as a build does (MOCK_MCPP_SLOW_MS): ended by a request to end.
         if (const auto slow = env("MOCK_MCPP_SLOW_MS"); !slow.empty() && !has("--list") && !has("--cases"))

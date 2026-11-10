@@ -274,5 +274,7 @@
   "mcpp.backend.logLevel.description": "mcpp-ide 后端写入编辑器日志的内容：只写错误、写警告、写它所做的事（缺省），或写每一次运行 mcpp 与 mcppls 及其参数。",
   "command.mcpp.exportReport.title": "导出 IDE 报告",
   "mcpp.codeLens.enable.title": "在 main 上方显示运行与调试",
-  "mcpp.codeLens.enable.description": "在程序或测试的 main 上方显示 CodeLens：运行、调试。C++ Modules 服务该文件时位置取自语言服务，否则从文本读出行号。"
+  "mcpp.codeLens.enable.description": "在程序或测试的 main 上方显示 CodeLens：运行、调试。C++ Modules 服务该文件时位置取自语言服务，否则从文本读出行号。",
+  "mcpp.test.session.title": "通过框架的测试会话运行用例",
+  "mcpp.test.session.description": "auto：工程的测试框架声明了测试会话（mcpp test --guide）时，经由它运行、加入和取消用例；off：每次运行用例都是一次 mcpp test。"
 }

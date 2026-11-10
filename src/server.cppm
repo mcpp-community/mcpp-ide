@@ -28,6 +28,7 @@ import mcppide.languageservice;
 import mcppide.scan;
 import mcppide.testing;
 import mcppide.teststore;
+import mcppide.testsession;
 import mcpplibs.os;
 
 export namespace mcppide::server {
@@ -120,6 +121,11 @@ private:
     std::vector<testing::Program> programs_of(const std::filesystem::path& root);
     std::optional<testing::Program> program_named(const std::filesystem::path& root, std::string_view name);
     std::optional<testing::Program> program_of_file(const std::filesystem::path& root, const std::filesystem::path& file);
+    // Some cases run through the project's test session (O9), when its framework states one and
+    // mcpp gives the programs' launches (B5); nothing when either is not so.
+    std::optional<Json> run_through_session(const std::filesystem::path& root, const std::string& test,
+                                            const std::vector<std::string>& cases, const Json& p);
+    void on_session(const std::filesystem::path& root, std::string_view method, const Json& params);
     // A program's cases as it lists them (mcpp test spec B3), from one listing of the project.
     std::optional<std::vector<testing::Case>> listed_cases(const std::filesystem::path& root, const std::string& test, const Json& p);
     // The records of `mcpp test --cases` for the whole project, kept until the project changes.
@@ -138,7 +144,6 @@ private:
     void protocol_case_results(std::string_view jobId, const std::filesystem::path& root, const std::string& test, const Json& record);
     // The store's last runs (kept per project; a run is read once).
     std::vector<teststore::Run> store_runs(const std::filesystem::path& root, std::size_t count);
-    // `mcpp.test.macros` as testing reads it: {"gtest": ["MY_TEST"]}.
     // The packages of a project's plan, from its build database when one was read.
     std::vector<std::string> plan_packages(const std::filesystem::path& root, bool read);
     Result project_mcpp(const Json& p);
@@ -218,6 +223,17 @@ private:
     std::map<std::filesystem::path, Json> buildDatabases_;
     std::map<std::filesystem::path, std::vector<Json>> listings_;   // project_listing
     std::map<std::filesystem::path, Frameworks> frameworks_;        // frameworks_of
+    // THE TEST SESSIONS (mcpp test spec O9): one per project whose framework states one, and the
+    // runs through them, each answered to the editor as a job of its own.
+    struct SessionRun {
+        std::string jobId;
+        std::filesystem::path root;
+        std::map<std::string, Json> cases;   // per case: its failures and its output, as they came
+    };
+    std::map<std::filesystem::path, std::unique_ptr<testsession::Client>> testSessions_;
+    std::map<std::string, SessionRun> sessionRuns_;                                   // by the session's run
+    std::map<std::string, std::pair<std::filesystem::path, std::string>> sessionJobs_; // job -> project, run
+    std::uint64_t sessionJobNext_ = 1;
     // The project and kind of each job, for the notifications its records become.
     std::map<std::string, std::pair<std::filesystem::path, std::string>, std::less<>> jobOf_;
     // The whole output of the last test record of each running test job, for a case run to divide
@@ -1762,6 +1778,7 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
     const auto test = p.value("test", "");
     if (root.empty() || test.empty()) return std::unexpected(invalid("test/runCases names a project and a test"));
     const auto cases = strings_of(p.value("cases", Json::array()));
+    if (auto through = run_through_session(root, test, cases, p)) return *through;
     Json args = Json::array();
     for (const auto& c : cases) {
         args.push_back("--case");
@@ -1778,6 +1795,131 @@ std::expected<Json, rpc::Error> Session::test_run_cases(const Json& p) {
         }
         for (const auto& record : records) protocol_case_results(jobId, root, test, record);
     });
+}
+
+std::optional<Json> Session::run_through_session(const std::filesystem::path& root, const std::string& test,
+                                                 const std::vector<std::string>& cases, const Json& p) {
+    const auto chosen = setting("mcpp.test.session");
+    if (chosen.is_string() && chosen.get<std::string>() == "off") return std::nullopt;
+    bool trusted;
+    mcpp::Client client;
+    {
+        std::lock_guard lock(mutex_);
+        trusted = trusted_;
+        client = client_;
+    }
+    if (!trusted || !client.ready() || !has_feature(root, "test-launch-records")) return std::nullopt;
+    const auto command = frameworks_of(root, p).session;
+    if (command.empty()) return std::nullopt;
+    testsession::Client* session = nullptr;
+    {
+        std::lock_guard lock(mutex_);
+        if (auto it = testSessions_.find(root); it != testSessions_.end() && it->second->alive()) session = it->second.get();
+    }
+    if (!session) {
+        auto started = testsession::Client::start(
+            command, root, {{"MTEST_MCPP", client.program().string()}},
+            [this, root](std::string_view method, const Json& params) { on_session(root, method, params); });
+        if (!started) {
+            rpc_.notify("window/logMessage", Json{{"type", 2}, {"message", started.error()}});
+            return std::nullopt;
+        }
+        std::lock_guard lock(mutex_);
+        session = (testSessions_[root] = std::move(*started)).get();
+    }
+    // The configuration a run of mcpp plans, as every test command states it (test_args).
+    auto args = test_args(p);
+    args.erase(args.begin(), args.begin() + 3);   // `test --message-format json`
+    Json selection = Json::array({Json{{"program", test}, {"cases", cases}}});
+    std::string jobId;
+    {
+        std::lock_guard lock(mutex_);
+        jobId = std::format("job-s{}", sessionJobNext_++);
+    }
+    // The run is known, and its job started, before the session's first notification of it.
+    auto answered = session->request(
+        "test/run", Json{{"project", root.generic_string()}, {"selection", selection}, {"options", Json{{"args", args}}}},
+        std::chrono::seconds{60}, [this, root, test, jobId](const Json& result) {
+            if (!result.is_object() || !result.contains("run") || !result["run"].is_string()) return;
+            const auto run = result["run"].get<std::string>();
+            {
+                std::lock_guard lock(mutex_);
+                sessionRuns_[run] = SessionRun{jobId, root, {}};
+                sessionJobs_[jobId] = {root, run};
+            }
+            rpc_.notify("mcpp-ide/job/started", Json{{"jobId", jobId}, {"kind", "test"}, {"root", root.generic_string()},
+                                                     {"argv", Json::array({"test/run", test})}});
+        });
+    if (!answered || !answered->contains("run")) return std::nullopt;
+    return Json{{"jobId", jobId}};
+}
+
+// What the session states, as the editors receive a job's: a case's beginning and end
+// (`test/caseEvent`, with its failures and output as they came), a program's output where it has no
+// case of its own, and the run's end (`job/finished`).
+void Session::on_session(const std::filesystem::path& root, std::string_view method, const Json& params) {
+    const auto run = params.value("run", "");
+    std::string jobId;
+    {
+        std::lock_guard lock(mutex_);
+        auto it = sessionRuns_.find(run);
+        if (it == sessionRuns_.end()) return;
+        jobId = it->second.jobId;
+    }
+    const auto program = params.value("program", "");
+    if (method == "test/case") {
+        const auto id = params.value("id", "");
+        const auto event = params.value("event", "");
+        if (event == "begin") {
+            Json e{{"jobId", jobId}, {"root", root.generic_string()}, {"member", ""}, {"program", program}, {"part", program},
+                   {"case", id}, {"event", "begin"}};
+            if (params.contains("t_ms")) e["tMs"] = params["t_ms"];
+            rpc_.notify("mcpp-ide/test/caseEvent", e);
+        } else if (event == "output" || event == "failure") {
+            std::lock_guard lock(mutex_);
+            auto& c = sessionRuns_[run].cases[id];
+            if (!c.is_object()) c = Json::object();
+            if (event == "output") c["output"] = c.value("output", std::string{}) + params.value("text", std::string{});
+            else {
+                Json f = params;
+                for (const auto* k : {"run", "program", "event", "id"}) f.erase(k);
+                c["failures"].push_back(std::move(f));
+            }
+        } else if (event == "end") {
+            Json c{{"id", id}, {"status", params.value("status", std::string("fail"))}, {"duration_ms", params.value("ms", 0.0)},
+                   {"reason", params.value("reason", std::string{})}};
+            if (params.contains("checks")) c["checks"] = params["checks"];
+            {
+                std::lock_guard lock(mutex_);
+                const auto& kept = sessionRuns_[run].cases[id];
+                if (kept.contains("failures")) c["failures"] = kept["failures"];
+                if (kept.contains("output")) c["output"] = kept["output"];
+            }
+            Json e = testing::protocol_case(c);
+            e["jobId"] = jobId;
+            e["root"] = root.generic_string();
+            e["member"] = "";
+            e["program"] = program;
+            e["part"] = program;
+            e["event"] = "end";
+            rpc_.notify("mcpp-ide/test/caseEvent", e);
+        }
+    } else if (method == "test/program" || method == "test/build") {
+        std::string text;
+        if (params.contains("output") && params["output"].is_string()) text = params["output"].get<std::string>();
+        if (params.contains("error") && params["error"].is_string()) text += params["error"].get<std::string>() + "\n";
+        if (!text.empty()) rpc_.notify("mcpp-ide/job/output", Json{{"jobId", jobId}, {"text", text}});
+    } else if (method == "test/run") {
+        const auto status = params.value("status", std::string("fail"));
+        {
+            std::lock_guard lock(mutex_);
+            sessionRuns_.erase(run);
+            sessionJobs_.erase(jobId);
+        }
+        rpc_.notify("mcpp-ide/job/finished", Json{{"jobId", jobId}, {"kind", "test"}, {"root", root.generic_string()},
+                                                  {"status", status == "pass" ? "ok" : status == "cancelled" ? "cancelled" : "failed"},
+                                                  {"exitCode", status == "pass" ? 0 : 1}});
+    }
 }
 
 Json Session::test_result_of(const std::filesystem::path& root, const Json& record, Json n) {
@@ -2049,7 +2191,20 @@ void Session::install() {
     s.on("mcpp-ide/result/last", [](const Json& p, const rpc::Context&) -> Result { return projects::last_result(root_of(p)); });
     s.on("mcpp-ide/job/start", [this](const Json& p, const rpc::Context&) { return job_start(p); });
     s.on("mcpp-ide/job/cancel", [this](const Json& p, const rpc::Context&) -> Result {
-        return Json{{"cancelled", jobs_->cancel(p.value("jobId", ""))}};
+        const auto jobId = p.value("jobId", "");
+        testsession::Client* client = nullptr;
+        std::string run;
+        {
+            std::lock_guard lock(mutex_);
+            if (auto it = sessionJobs_.find(jobId); it != sessionJobs_.end())
+                if (auto c = testSessions_.find(it->second.first); c != testSessions_.end()) {
+                    client = c->second.get();
+                    run = it->second.second;
+                }
+        }
+        // A run through a test session is cancelled by the session: it ends the processes (O9).
+        if (client) return Json{{"cancelled", client->request("test/cancel", Json{{"run", run}}).has_value()}};
+        return Json{{"cancelled", jobs_->cancel(jobId)}};
     });
     s.on("mcpp-ide/job/list", [this](const Json&, const rpc::Context&) -> Result { return jobs_->list(); });
     s.on("mcpp-ide/run/launch", [this](const Json& p, const rpc::Context& c) { return run_launch(p, c); });
