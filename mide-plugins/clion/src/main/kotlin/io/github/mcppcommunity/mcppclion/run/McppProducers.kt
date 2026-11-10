@@ -1,9 +1,10 @@
 // Run configurations from context, and the ▶ in the gutter (mcpp design 2026-10-30 part 2 §6.3,
 // §7.4). What a file is -- a program's `main`, a test's, or neither -- is the backend's answer
 // (source/entries); where `main` is, the language service's: the ▶ stands on the PSI element `main`
-// on the line the backend read. A test program of a framework has a ▶ on each case's macro
-// (test/cases), which runs that case. Every ▶ comes from the same producer, so Run and Debug are
-// offered alike.
+// on the line the backend read. A test program that implements the test protocol has a ▶ on the
+// first element of the line each case is declared on, as the program lists its cases (test/cases,
+// mcpp test spec B3), which runs that case. Every ▶ comes from the same producer, so Run and Debug
+// are offered alike.
 package io.github.mcppcommunity.mcppclion.run
 
 import com.google.gson.JsonObject
@@ -17,6 +18,8 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.util.Ref
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiWhiteSpace
+import com.intellij.psi.util.PsiTreeUtil
 import io.github.mcppcommunity.mcppclion.McppSession
 import java.io.File
 
@@ -40,14 +43,24 @@ private fun lineOf(element: PsiElement): Int? {
 internal fun entriesOf(session: McppSession, file: VirtualFile): JsonObject? =
     session.entriesFor(file.path)?.takeIf { it["kind"]?.asString in setOf("program", "test") }
 
-/** The case written at `line` of a test's source, by its full name, with its framework. */
-internal fun caseAt(session: McppSession, entries: JsonObject, line: Int): Pair<String, String>? {
+/** The case declared at `line` of a test's source, by its identifier, as its program lists it. */
+internal fun caseAt(session: McppSession, entries: JsonObject, line: Int): String? {
     val root = entries["root"]?.asString ?: return null
     val test = entries["test"]?.asString ?: return null
+    val file = entries["file"]?.asString ?: return null
     val cases = session.casesFor(root, test) ?: return null
-    val framework = cases["framework"]?.takeIf { !it.isJsonNull }?.asString ?: return null
-    val hit = cases.getAsJsonArray("cases")?.firstOrNull { it.asJsonObject["line"]?.asInt == line } ?: return null
-    return hit.asJsonObject["name"].asString to framework
+    if (cases["protocol"]?.takeIf { !it.isJsonNull } == null) return null
+    val hit = cases.getAsJsonArray("cases")?.map { it.asJsonObject }?.firstOrNull { c ->
+        c["line"]?.asInt == line && (c["file"]?.asString?.let { File(it).canonicalPath == File(file).canonicalPath } ?: true)
+    } ?: return null
+    return hit["name"].asString
+}
+
+/** Whether an element is the first of its line: a case's ▶ stands on it. */
+private fun firstOfLine(element: PsiElement, line: Int): Boolean {
+    var before = PsiTreeUtil.prevLeaf(element)
+    while (before is PsiWhiteSpace) before = PsiTreeUtil.prevLeaf(before)
+    return before == null || lineOf(before) != line
 }
 
 class McppConfigurationProducer : LazyRunConfigurationProducer<McppRunConfiguration>() {
@@ -67,9 +80,8 @@ class McppConfigurationProducer : LazyRunConfigurationProducer<McppRunConfigurat
             val line = context.psiLocation?.let { lineOf(it) }
             val case = line?.let { caseAt(session, entries, it) }
             if (case != null) {
-                c.options.framework = case.second
-                c.options.cases = case.first
-                c.name = "mcpp test $test · ${case.first}"
+                c.options.cases = case
+                c.name = "mcpp test $test · $case"
             } else {
                 c.name = "mcpp test $test"
             }
@@ -87,11 +99,11 @@ class McppConfigurationProducer : LazyRunConfigurationProducer<McppRunConfigurat
         if (c.root != (entries["root"]?.asString ?: projectOf(file))) return false
         if (entries["kind"].asString != "test") return c.options.command == "run"
         val case = context.psiLocation?.let { lineOf(it) }?.let { caseAt(session, entries, it) }
-        return c.options.command == "test" && c.options.filter == entries["test"].asString && c.options.cases == (case?.first ?: "")
+        return c.options.command == "test" && c.options.filter == entries["test"].asString && c.options.cases == (case ?: "")
     }
 }
 
-/** The ▶ in the gutter: beside a program's or a test's `main`, and beside each case of a framework. */
+/** The ▶ in the gutter: beside a program's or a test's `main`, and beside each case a test program lists. */
 class McppRunLineMarker : RunLineMarkerContributor() {
     override fun getInfo(element: PsiElement): Info? {
         if (element.firstChild != null) return null
@@ -103,13 +115,13 @@ class McppRunLineMarker : RunLineMarkerContributor() {
         val text = element.text
         if (text == "main" && entries.getAsJsonObject("main")?.get("line")?.asInt == line)
             return Info(AllIcons.RunConfigurations.TestState.Run, ExecutorAction.getActions(0)) { "mcpp" }
-        // A case: the macro's name on the line the backend read the case from.
-        if (entries["kind"].asString == "test" && text.isNotEmpty() && text.all { it.isUpperCase() || it == '_' }) {
+        // A case: the first element of the line its program states it is declared on.
+        if (entries["kind"].asString == "test" && element !is PsiWhiteSpace && firstOfLine(element, line)) {
             val case = caseAt(session, entries, line) ?: return null
             // The last outcome of the case, as the test tree recorded it (its locationHint).
             val url = "file://${file.path}:${line + 1}"
             val icon = getTestStateIcon(url, element.project, false) ?: AllIcons.RunConfigurations.TestState.Run
-            return Info(icon, ExecutorAction.getActions(0)) { "mcpp: ${case.first}" }
+            return Info(icon, ExecutorAction.getActions(0)) { "mcpp: $case" }
         }
         return null
     }

@@ -342,6 +342,9 @@ E2E protocol{"protocol", [] {
     const auto listing = result_of("mcpp-ide/test/cases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}, {"list", true}});
     check(listing["protocol"] == 1 && listing.value("listed", false) && listing["framework"].is_string());
     check(listing["cases"].size() == 2 && listing["cases"][0]["name"] == "parsing/an empty line" && listing["cases"][0]["line"] == 3);
+    // Without `list` the last listing answers: the cases shown stay until a listing replaces them.
+    const auto kept = result_of("mcpp-ide/test/cases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"}});
+    check(kept.value("listed", false) && kept["cases"] == listing["cases"]);
     const auto caseResultsBefore = wire.notifications("mcpp-ide/test/caseResult").size();
     const auto run = result_of("mcpp-ide/test/runCases", Json{{"root", protocolRoot.generic_string()}, {"test", "unit/parse"},
                                                              {"cases", Json::array({"parsing/an empty line", "parsing/a field"})}});

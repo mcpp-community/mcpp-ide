@@ -127,9 +127,12 @@ private:
                                             const std::vector<std::string>& cases, const Json& p);
     void on_session(const std::filesystem::path& root, std::string_view method, const Json& params);
     // A program's cases as it lists them (mcpp test spec B3), from one listing of the project.
-    std::optional<std::vector<testing::Case>> listed_cases(const std::filesystem::path& root, const std::string& test, const Json& p);
-    // The records of `mcpp test --cases` for the whole project, kept until the project changes.
-    std::optional<std::vector<Json>> project_listing(const std::filesystem::path& root, const Json& p);
+    std::optional<std::vector<testing::Case>> listed_cases(const std::filesystem::path& root, const std::string& test,
+                                                           const Json& p, bool ask);
+    // The records of `mcpp test --cases` for the whole project. The last listing is kept: `ask` lists
+    // again when the project has changed since, and without it the last listing answers as it is, so
+    // that the cases shown stay until a listing replaces them.
+    std::optional<std::vector<Json>> project_listing(const std::filesystem::path& root, const Json& p, bool ask);
     // What the project's test frameworks state of themselves (mcpp test spec B6, `mcpp test --guide`):
     // the name the editors show, and the command of a session one of them offers (O9), else empty.
     struct Frameworks {
@@ -221,7 +224,11 @@ private:
     Json searchCache_;
     std::chrono::steady_clock::time_point searchAt_{};
     std::map<std::filesystem::path, Json> buildDatabases_;
-    std::map<std::filesystem::path, std::vector<Json>> listings_;   // project_listing
+    struct Listing {
+        std::vector<Json> records;
+        bool current = true;   // false once the project changed
+    };
+    std::map<std::filesystem::path, Listing> listings_;   // project_listing
     std::map<std::filesystem::path, Frameworks> frameworks_;        // frameworks_of
     // THE TEST SESSIONS (mcpp test spec O9): one per project whose framework states one, and the
     // runs through them, each answered to the editor as a job of its own.
@@ -454,7 +461,7 @@ void Session::on_changed(const std::filesystem::path& root, std::string_view wha
     {
         std::lock_guard lock(mutex_);
         buildDatabases_.erase(root);
-        listings_.erase(root);
+        if (auto it = listings_.find(root); it != listings_.end()) it->second.current = false;
         if (what != "result") frameworks_.erase(root);
         if (what != "result") probes_.erase(root);   // a manifest may state another mcpp floor or pin
         if (what != "result") programs_.erase(root); // and other tests
@@ -855,8 +862,8 @@ std::expected<Json, rpc::Error> Session::job_start(const Json& p, std::function<
 }
 
 // The mcpp command that builds a program and describes its launch: `mcpp run --print-launch`, or
-// `mcpp test <name> --print-launch` for a test (mcpp's `test-launch`), with its framework's filter
-// after `--` when cases are asked for. `stream` asks a run for the build's events before the
+// `mcpp test <name> --print-launch` for a test (mcpp's `test-launch`); the cases asked for are
+// selected by the protocol's variables (debug_configuration). `stream` asks a run for the build's events before the
 // envelope (mcpp's `launch-stream`), and `programArgs` are the program's own arguments, after `--`.
 std::vector<std::string> Session::launch_args(const Json& p, bool stream, bool programArgs) {
     const auto test = p.value("test", "");
@@ -1673,8 +1680,10 @@ std::expected<Json, rpc::Error> Session::test_cases(const Json& p) {
     // THE CASES ARE THE PROGRAM'S (mcpp test spec B2, B3): a program that implements the test
     // protocol lists them (`mcpp test --cases`), whatever framework or language wrote it, and its
     // cases run by `--case`. A program that implements none is one case, judged by its exit status.
-    if (!p.value("list", false) || !trusted || !has_feature(root, "test-protocol")) return out;
-    auto listed = listed_cases(root, test, p);
+    // `list` asks for a listing when the project changed since the last; without it the last one
+    // answers, or none.
+    if (!trusted || !has_feature(root, "test-protocol")) return out;
+    auto listed = listed_cases(root, test, p, p.value("list", false));
     if (!listed) return out;
     out["protocol"] = 1;
     out["framework"] = framework_name(root, p);
@@ -1686,11 +1695,12 @@ std::expected<Json, rpc::Error> Session::test_cases(const Json& p) {
 // The project's listing (mcpp test spec B3): one `mcpp test --cases` for every program, kept until
 // the project changes. A listing per program planned the project once for each; the test fast path
 // (mcpp 2026.11.10.1) answers an unchanged project without planning.
-std::optional<std::vector<Json>> Session::project_listing(const std::filesystem::path& root, const Json& p) {
+std::optional<std::vector<Json>> Session::project_listing(const std::filesystem::path& root, const Json& p, bool ask) {
     {
         std::lock_guard lock(mutex_);
-        if (auto it = listings_.find(root); it != listings_.end()) return it->second;
+        if (auto it = listings_.find(root); it != listings_.end() && (it->second.current || !ask)) return it->second.records;
     }
+    if (!ask) return std::nullopt;
     mcpp::Client client;
     {
         std::lock_guard lock(mutex_);
@@ -1709,7 +1719,7 @@ std::optional<std::vector<Json>> Session::project_listing(const std::filesystem:
     for (const auto& rec : r->records)
         if (rec.is_object() && rec.contains("test")) records.push_back(rec);
     std::lock_guard lock(mutex_);
-    listings_[root] = records;
+    listings_[root] = Listing{records, true};
     return records;
 }
 
@@ -1749,8 +1759,8 @@ Session::Frameworks Session::frameworks_of(const std::filesystem::path& root, co
 }
 
 std::optional<std::vector<testing::Case>> Session::listed_cases(const std::filesystem::path& root, const std::string& test,
-                                                                const Json& p) {
-    auto records = project_listing(root, p);
+                                                                const Json& p, bool ask) {
+    auto records = project_listing(root, p, ask);
     if (!records) return std::nullopt;
     for (const auto& rec : *records) {
         if (rec.value("test", "") != test || !rec.contains("listed") || !rec["protocol"].is_number()) continue;

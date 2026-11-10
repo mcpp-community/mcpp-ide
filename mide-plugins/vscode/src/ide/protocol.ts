@@ -180,7 +180,6 @@ export interface SourceEntries {
   test?: string;
   /** A file of a program of several files: the part of the program it is (`unit/a`); `test` is the program. */
   part?: string;
-  framework?: string;
   main?: { line: number; approximate?: boolean };
 }
 
