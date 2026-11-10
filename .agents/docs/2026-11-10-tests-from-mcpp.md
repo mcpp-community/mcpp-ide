@@ -151,7 +151,7 @@ insights are empty and say so.
 - A failure's `expected` and `actual` appear as two lines under it, and in its quickfix text.
 - A case's line carries its sign (✓, ✗) and, as virtual text, its duration and its metrics against
   their bounds.
-- `:Mcpp testInsights` opens the insights as text in a floating window. A metric's trend is drawn with
+- `:Mcpp test.insights` opens the insights as text in a floating window. A metric's trend is drawn with
   block characters (▁▂▃▅▇), and the schedule as bars.
 
 ## Performance
@@ -178,6 +178,6 @@ insights are empty and say so.
   directory's `.mock-mcpp-tests` selects them, as `.mock-mcpp-features` selects the features.
 - VS Code: the tree of a directory program; part results attributed to it; the diff message; the
   decorations' text.
-- Neovim: the smoke test covers live results, the virtual text and `:Mcpp testInsights`.
+- Neovim: the smoke test covers live results, the virtual text and `:Mcpp test.insights`.
 - CLion: the comparison failure and the nested suites, in the plugin's unit tests.
 - The insights page is rendered by a Chromium test, as the graph page is.

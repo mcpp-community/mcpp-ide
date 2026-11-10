@@ -323,7 +323,7 @@ function M.said_of(root, test, case)
   return said[(root or '') .. '\0' .. test .. '\0' .. case]
 end
 
--- ── the insights as text (`:Mcpp testInsights`) ──────────────────────────────────────────────
+-- ── the insights as text (`:Mcpp test.insights`) ──────────────────────────────────────────────
 
 local BLOCKS = { '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█' }
 
