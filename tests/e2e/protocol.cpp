@@ -121,6 +121,16 @@ E2E protocol{"protocol", [] {
     check(!targets["rows"].empty());
     auto cmds = result_of("mcpp-ide/commands/list", Json{{"editor", "jetbrains"}});
     for (const auto& c : cmds["commands"]) check(c["action"]["kind"] != "forward");
+    // A cleanup states its scope and its level, from its plan: a view places it by them.
+    std::map<std::string, Json> cleanups;
+    for (const auto& c : cmds["commands"])
+        if (c["action"]["kind"] == "cache") cleanups[c["id"].get<std::string>()] = c["action"];
+    check(cleanups.size() == 7);
+    check(cleanups["mcpp.clean"]["scope"] == "project" && cleanups["mcpp.clean"]["level"] == 1);
+    check(cleanups["mcpp.cleanStaleArtifacts"]["scope"] == "project" && cleanups["mcpp.cleanStaleArtifacts"]["level"] == 2);
+    check(cleanups["mcpp.verifyGlobalCache"]["scope"] == "shared" && cleanups["mcpp.verifyGlobalCache"]["level"] == 0);
+    check(cleanups["mcpp.gcGlobalCache"]["scope"] == "shared" && cleanups["mcpp.cleanLegacyCache"]["level"] == 1);
+    check(conforms(cmds, protocol["methods"]["mcpp-ide/commands/list"]["result"], protocol, "commands/list (jetbrains)"));
     // Neovim's table: no forward to mcppls's commands (mcppls-nvim has its own), no panel it has no
     // text for, its own quickfix command, and each row's subcommand (`:Mcpp <subcommand>`).
     const Json nvimInit{{"clientInfo", {{"name", "Neovim"}}}, {"workspaceFolders", Json::array({Json{{"uri", testsupport::file_uri(root)}}})},

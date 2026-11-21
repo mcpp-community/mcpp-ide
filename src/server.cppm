@@ -1450,6 +1450,13 @@ std::expected<Json, rpc::Error> Session::commands(const Json& p) {
             row["action"]["command"] = (*it)[editor];
             if (editor == "vscode" && it->contains("vscodeArguments")) row["action"]["arguments"] = (*it)["vscodeArguments"];
         }
+        // A cleanup says what it acts on and how much it asks first, from its plan: a view places it
+        // with the project's build or with the shared cache, and invents no grouping of its own.
+        if (c.contains("action") && c["action"].value("kind", "") == "cache")
+            if (const auto plan = policy::plan(c["action"].value("plan", ""), {})) {
+                row["action"]["scope"] = plan->group == "clean" ? "project" : "shared";
+                row["action"]["level"] = plan->level;
+            }
         const auto id = c.value("id", "");
         row["title"] = spec::manifest_string(std::format("command.{}.title", id), locale);
         row["subcommand"] = spec::subcommand_of(c);
