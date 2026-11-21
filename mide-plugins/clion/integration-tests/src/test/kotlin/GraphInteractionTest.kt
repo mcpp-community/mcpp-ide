@@ -123,8 +123,16 @@ class GraphInteractionTest {
         val context = Starter.newContext("mcpp-graphs-$version-${System.currentTimeMillis()}", TestCase(ide, LocalProjectInfo(fixture)))
         PluginConfigurator(context).installPluginFromPath(Path.of(System.getProperty("mcpp.clion.mcpplsZip") ?: error("mcpplsZip is required")))
         PluginConfigurator(context).installPluginFromPath(Path.of(System.getProperty("mcpp.clion.pluginZip") ?: error("pluginZip is required")))
-        // The JCEF plugin is built for each system; an installation can lack it or disable it.
-        if (jcef == Jcef.PLUGIN_DISABLED) PluginConfigurator(context).disablePlugins("com.intellij.modules.jcef")
+        // The JCEF plugin is built for each system; an installation can lack it or disable it. CLion
+        // 2026.1 has no such plugin: JCEF is in the platform's core there, and cannot be absent.
+        if (jcef == Jcef.PLUGIN_DISABLED) {
+            val bundled = context.ide.bundledPluginsDir
+            val jcefPlugin = bundled != null && Files.isDirectory(bundled) && Files.list(bundled).use { dirs ->
+                dirs.anyMatch { it.fileName.toString().contains("jcef", ignoreCase = true) && Files.isDirectory(it.resolve("lib")) }
+            }
+            org.junit.jupiter.api.Assumptions.assumeTrue(jcefPlugin, "CLion $version carries JCEF in its core, not as a plugin")
+            PluginConfigurator(context).disablePlugins("com.intellij.modules.jcef")
+        }
         context.applyVMOptionsPatch {
             withXmx(2048)
             addSystemProperty("idea.trust.all.projects", true)
