@@ -141,6 +141,17 @@ class GraphInteractionTest {
             addSystemProperty("idea.system.path", output.resolve("ide-system").toString())
             if (jcef == Jcef.SWITCHED_OFF) addSystemProperty("ide.browser.jcef.enabled", false)
         }
+        // The driver reaches each IDE on fixed ports (JMX 7777, RPC 11111). An IDE that has just closed, or a
+        // process it started, can hold them for a while; the next IDE could not take them, and its driver
+        // never connected (macOS aarch64). The run starts when both are free.
+        for (port in listOf(7777, 11111)) {
+            val free = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60)
+            while (System.nanoTime() < free) {
+                val bound = runCatching { java.net.ServerSocket().use { it.bind(java.net.InetSocketAddress("127.0.0.1", port)) } }.isSuccess
+                if (bound) break
+                Thread.sleep(500)
+            }
+        }
         context.runIdeWithDriver().useDriverAndCloseIde {
             // An action is invoked on the project's frame: the driver otherwise reads the data context of
             // the focused window, which a macOS runner need not give the IDE, and finds no project there.

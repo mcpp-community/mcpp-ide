@@ -218,9 +218,11 @@ jobs:
         if: always()
         with:
           name: clion-stable-macos-${{ matrix.version }}
-          # The JUnit results name an assertion's message; the IDE's own logs stay on the runner.
+          # The JUnit results name an assertion's message; the IDE's own log, of a runner's IDE on a
+          # generated project, names why an IDE did not start.
           path: |
             mide-plugins/clion/integration-tests/build/test-results/test/*.xml
+            out/ide-tests/tests/*/*/log/idea.log
             ${{ runner.temp }}/clion-stable-result/graphs/result.json
             ${{ runner.temp }}/clion-stable-result/graphs/checks.json
             ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/result.json
