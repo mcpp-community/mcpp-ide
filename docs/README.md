@@ -1,6 +1,7 @@
 # mcpp-ide documentation
 
 - [architecture.md](architecture.md) -- the three layers, what each holds, and how a request travels
+- [versions.md](versions.md) -- series and tags, the project's mcpp and what each of its features adds
 - [rules.md](rules.md) -- mcpp.toml and build.mcpp: completion, hover, jumps and diagnostics over LSP
 - [../protocol/protocol.schema.json](../protocol/protocol.schema.json) -- the backend's protocol
 - [../agents/README.md](../agents/README.md) -- driving the backend from an agent

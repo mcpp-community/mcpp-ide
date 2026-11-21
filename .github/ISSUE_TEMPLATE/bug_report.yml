@@ -1,0 +1,64 @@
+name: Bug report
+description: mcpp-ide or one of its editor plugins behaves wrongly
+title: "fix(<component>): "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Triage first ([AGENTS.md §3](https://github.com/mcpp-community/mcpp-ide/blob/main/AGENTS.md)):
+        reproduce without the editor where you can, and report problems of mcpp or mcppls in their own repositories.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [backend, vscode, clion, nvim, packaging / install, docs]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest project and the actions that show the problem.
+      placeholder: |
+        1. mcpp new demo && cd demo
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: selfcheck
+    attributes:
+      label: mcpp-ide self-check --json
+      description: The backend, mcpp and its contract, mcppls, xlings and trust.
+      render: json
+    validations:
+      required: true
+  - type: input
+    id: editor
+    attributes:
+      label: Editor and OS
+      placeholder: VS Code 1.95 / CLion 2026.1 / Neovim 0.11 on Ubuntu 24.04 x86_64
+    validations:
+      required: true
+  - type: dropdown
+    id: party
+    attributes:
+      label: Whose problem is it?
+      description: Where does it still reproduce once the editor is taken away?
+      options:
+        - The backend (every editor shows it)
+        - One editor plugin only
+        - Not sure yet
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or IDE report
+      description: "mcpp: Export IDE Report (Neovim :Mcpp exportReport), or the backend's log."
