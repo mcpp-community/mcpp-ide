@@ -45,6 +45,7 @@ interface SettingsTextRemote {
     fun getText(): String
     fun setText(value: String)
     fun requestFocusInWindow(): Boolean
+    fun isFocusOwner(): Boolean
 }
 
 @Remote("com.intellij.openapi.application.PathManager")
@@ -129,6 +130,10 @@ class SettingsInteractionTest {
                     val apply = dialog.x("//div[@visible_text='Apply' or @text='Apply']")
                     fun typeValue(target: SettingsTextRemote, value: String) {
                         assertTrue(withContext(OnDispatcher.EDT) { target.requestFocusInWindow() })
+                        // Keys go to the focus owner, which the request makes it only once the EDT has run it.
+                        val focused = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
+                        while (!withContext(OnDispatcher.EDT) { target.isFocusOwner() } && System.nanoTime() < focused) Thread.sleep(50)
+                        assertTrue(withContext(OnDispatcher.EDT) { target.isFocusOwner() }, "the input owns the keyboard before it is typed into")
                         label.keyboard {
                             // This check exercises actual text-input events, which
                             // notify the native Settings editor of modifications.
@@ -137,7 +142,11 @@ class SettingsInteractionTest {
                             backspace()
                             if (value.isNotEmpty()) typeText(value)
                         }
-                        assertEquals(value, target.getText(), "the real input receives the typed value")
+                        // The typed keys are events the EDT handles after they are posted: the text is read once it
+                        // has settled, not as the last key is posted.
+                        val typed = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
+                        while (withContext(OnDispatcher.EDT) { target.getText() } != value && System.nanoTime() < typed) Thread.sleep(50)
+                        assertEquals(value, withContext(OnDispatcher.EDT) { target.getText() }, "the real input receives the typed value")
                     }
                     fun setAndApply(value: String) {
                         typeValue(field, value)
