@@ -26,10 +26,27 @@ result means, how dangerous a cleanup is. If each editor makes them separately, 
 apart. mcpp-ide makes them once. Its backend, `mcpp-ide serve`, reads only mcpp's machine contract
 and answers every editor as an LSP server. Each plugin then shows those answers in its editor's own UI.
 
-```
-mcpp ──contract──▶ mcpp-ide serve ──LSP / JSON-RPC──▶ mcpp-vscode · mcpp-clion · mcpp-nvim · agents
-                   (every decision)                   (native UI, no decisions)
-mcppls ──────────────────────────────────────────────▶ C++ language features in every editor
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#94a3b8", "edgeLabelBackground": "#f8fafc", "clusterBkg": "#f0fdfa", "clusterBorder": "#99f6e4", "titleColor": "#0f766e"}}}%%
+flowchart LR
+    mcpp("<b>mcpp</b><br/>machine contract"):::mcpp
+    serve("<b>mcpp-ide serve</b><br/>every decision"):::core
+    mcppls("<b>mcppls</b><br/>C++ language features"):::ls
+    subgraph clients ["native UI · no decisions"]
+        direction LR
+        vscode("mcpp-vscode"):::ide
+        clion("mcpp-clion"):::ide
+        nvim("mcpp-nvim"):::ide
+        agent("agents"):::agent
+    end
+    mcpp -- "events · records · queries" --> serve
+    serve -- "LSP / JSON-RPC" --> clients
+    mcppls -. "C++ files" .-> clients
+    classDef mcpp fill:#e0e7ff,stroke:#818cf8,color:#312e81
+    classDef core fill:#4f46e5,stroke:#4338ca,color:#ffffff
+    classDef ide fill:#ccfbf1,stroke:#2dd4bf,color:#134e4a
+    classDef agent fill:#f1f5f9,stroke:#cbd5e1,color:#334155
+    classDef ls fill:#fef3c7,stroke:#fbbf24,color:#78350f
 ```
 
 ## Highlights
@@ -66,17 +83,30 @@ install. Versions and compatibility with mcpp are described in [docs/versions.md
 
 ## With an agent
 
-A good prompt names **the repository**, **the document to read first**, **the task** and **the check
-that ends it**. The documents below are written for agents, so the prompt can stay short.
+A prompt names **the repository**, **the document to read first**, **the task** and **the check that
+ends it**. The documents are written for agents, so the prompt stays short. Copy one and fill in `<...>`.
 
-| Goal | Prompt |
-|---|---|
-| Install | `Read agents/README.md of https://github.com/mcpp-community/mcpp-ide, install mcpp-ide for my editor from the latest release, and verify it with mcpp-ide self-check on my project.` |
-| Understand | `Read AGENTS.md and docs/architecture.md of mcpp-ide, then explain how a build travels from my editor through the backend to mcpp, and which layer owns <feature>.` |
-| Contribute | `Read AGENTS.md and .agents/skills/mcpp-ide-contributing of mcpp-ide. Triage <issue>: core or plugin, fix or workaround. Then propose the change and the tests that prove it, and wait for my go-ahead before opening a pull request.` |
+**Install** · [agents/README.md](agents/README.md), the [mcpp-ide skill](agents/skills/mcpp-ide/SKILL.md)
 
-- Using mcpp-ide from an agent: [agents/README.md](agents/README.md) and the [mcpp-ide skill](agents/skills/mcpp-ide/SKILL.md)
-- Working on mcpp-ide: [AGENTS.md](AGENTS.md), the [contributing](.agents/skills/mcpp-ide-contributing/SKILL.md) and [development](.agents/skills/mcpp-ide-development/SKILL.md) skills
+```text
+Read agents/README.md of https://github.com/mcpp-community/mcpp-ide, install mcpp-ide for <my editor>
+from the latest release, and verify it with `mcpp-ide self-check` on my project.
+```
+
+**Understand** · [AGENTS.md](AGENTS.md), [docs/architecture.md](docs/architecture.md)
+
+```text
+Read AGENTS.md and docs/architecture.md of https://github.com/mcpp-community/mcpp-ide, then explain
+how a build travels from the editor through the backend to mcpp, and which layer owns <feature>.
+```
+
+**Contribute** · the [contributing](.agents/skills/mcpp-ide-contributing/SKILL.md) and [development](.agents/skills/mcpp-ide-development/SKILL.md) skills
+
+```text
+Read AGENTS.md and .agents/skills/mcpp-ide-contributing of https://github.com/mcpp-community/mcpp-ide.
+Triage <issue>: core or plugin, fix or workaround. Propose the change and the tests that prove it,
+and wait for my go-ahead before opening a pull request.
+```
 
 ## Development
 

@@ -25,10 +25,27 @@ VS Code · CLion · Neovim 的构建、运行、测试、调试、打包行为�
 这些决定就会分歧。mcpp-ide 只做一次：后端 `mcpp-ide serve` 只读取 mcpp 的机器契约，以 LSP 服务器回答所有编辑器，
 各插件再用编辑器自己的界面呈现这些回答。
 
-```
-mcpp ──契约──▶ mcpp-ide serve ──LSP / JSON-RPC──▶ mcpp-vscode · mcpp-clion · mcpp-nvim · agents
-               （所有决定）                        （原生界面，不做决定）
-mcppls ───────────────────────────────────────────▶ 各编辑器中 C++ 文件的语言功能
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#94a3b8", "edgeLabelBackground": "#f8fafc", "clusterBkg": "#f0fdfa", "clusterBorder": "#99f6e4", "titleColor": "#0f766e"}}}%%
+flowchart LR
+    mcpp("<b>mcpp</b><br/>机器契约"):::mcpp
+    serve("<b>mcpp-ide serve</b><br/>所有决定"):::core
+    mcppls("<b>mcppls</b><br/>C++ 语言功能"):::ls
+    subgraph clients ["原生界面 · 不做决定"]
+        direction LR
+        vscode("mcpp-vscode"):::ide
+        clion("mcpp-clion"):::ide
+        nvim("mcpp-nvim"):::ide
+        agent("agents"):::agent
+    end
+    mcpp -- "事件 · 记录 · 查询" --> serve
+    serve -- "LSP / JSON-RPC" --> clients
+    mcppls -. "C++ 文件" .-> clients
+    classDef mcpp fill:#e0e7ff,stroke:#818cf8,color:#312e81
+    classDef core fill:#4f46e5,stroke:#4338ca,color:#ffffff
+    classDef ide fill:#ccfbf1,stroke:#2dd4bf,color:#134e4a
+    classDef agent fill:#f1f5f9,stroke:#cbd5e1,color:#334155
+    classDef ls fill:#fef3c7,stroke:#fbbf24,color:#78350f
 ```
 
 ## 特性
@@ -65,17 +82,29 @@ VS Code 与 CLion 的包自带后端，覆盖 Linux x64/arm64、macOS arm64 与 
 
 ## 使用 Agent
 
-一条好的提示词写清四件事：**仓库**、**先读哪份文档**、**要做的任务**，以及**以什么检查作为结束**。
-下面这些文档都是为 Agent 写的，所以提示词本身可以很短。
+一条提示词写清四件事：**仓库**、**先读哪份文档**、**要做的任务**、**以什么检查结束**。文档本身面向 Agent 编写，
+所以提示词可以很短。复制一条，填入 `<...>` 即可。
 
-| 目的 | 提示词 |
-|---|---|
-| 安装 | `阅读 https://github.com/mcpp-community/mcpp-ide 的 agents/README.md，为我的编辑器从最新发布安装 mcpp-ide，并在我的工程上用 mcpp-ide self-check 验证。` |
-| 了解项目 | `阅读 mcpp-ide 的 AGENTS.md 与 docs/architecture.md，说明一次构建如何从编辑器经后端到达 mcpp，以及 <功能> 属于哪一层。` |
-| 参与贡献 | `阅读 mcpp-ide 的 AGENTS.md 与 .agents/skills/mcpp-ide-contributing，对 <issue> 做分诊（core 还是插件，修复还是 workaround），提出改动方案及能证明它的测试；开 PR 前先等我确认。` |
+**安装** · [agents/README.md](agents/README.md)、[mcpp-ide skill](agents/skills/mcpp-ide/SKILL.md)
 
-- 从 Agent 使用 mcpp-ide：[agents/README.md](agents/README.md) 与 [mcpp-ide skill](agents/skills/mcpp-ide/SKILL.md)
-- 开发 mcpp-ide：[AGENTS.md](AGENTS.md)，以及[贡献](.agents/skills/mcpp-ide-contributing/SKILL.md)与[开发](.agents/skills/mcpp-ide-development/SKILL.md) skill
+```text
+阅读 https://github.com/mcpp-community/mcpp-ide 的 agents/README.md，为 <我的编辑器> 从最新发布安装
+mcpp-ide，并在我的工程上用 `mcpp-ide self-check` 验证。
+```
+
+**了解项目** · [AGENTS.md](AGENTS.md)、[docs/architecture.md](docs/architecture.md)
+
+```text
+阅读 https://github.com/mcpp-community/mcpp-ide 的 AGENTS.md 与 docs/architecture.md，说明一次构建如何
+从编辑器经后端到达 mcpp，以及 <功能> 属于哪一层。
+```
+
+**参与贡献** · [贡献](.agents/skills/mcpp-ide-contributing/SKILL.md)与[开发](.agents/skills/mcpp-ide-development/SKILL.md) skill
+
+```text
+阅读 https://github.com/mcpp-community/mcpp-ide 的 AGENTS.md 与 .agents/skills/mcpp-ide-contributing，
+对 <issue> 做分诊（core 还是插件，修复还是 workaround），提出改动方案及能证明它的测试；开 PR 前先等我确认。
+```
 
 ## 开发
 
