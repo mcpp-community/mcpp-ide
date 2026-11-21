@@ -67,16 +67,70 @@ class UiTest {
     }
 
     @Test
-    fun theCacheRowsFromTheInventory() {
+    fun theCacheInTheSectionsOfVsCodesPage() {
         val inventory = json("""{"root": "/home/u/.mcpp", "totalBytes": 3, "totalEntries": 2, "totalText": "1.5 GiB",
             "byKind": [{"kind": "bmi", "entries": 2, "bytes": 3, "bytesText": "1.5 GiB"}],
             "topLabels": [{"label": "std", "entries": 1, "bytes": 2, "bytesText": "1.0 GiB"}],
             "ageBuckets": [{"fromDays": 0, "toDays": 7, "entries": 2, "bytes": 3, "bytesText": "1.5 GiB"}, {"fromDays": 7, "entries": 0, "bytes": 0, "bytesText": "0 B"}],
             "incomplete": []}""")
-        val rows = CacheModel.rows(inventory, t)
-        assertEquals(listOf("1.5 GiB in 2 entries", "By kind", "Largest", "By last use"), rows.map { it.row.text })
-        assertEquals("0–7 days", (rows[3].getChildAt(0) as RowNode).row.text)
-        assertEquals(1, rows[3].childCount)   // an empty bucket is not a row
+        // The cleanups as commands/list gives them: each with its plan's scope and level.
+        fun command(id: String, group: String, plan: String, scope: String, level: Int, title: String) =
+            json("""{"id": "$id", "group": "$group", "title": "$title", "action": {"kind": "cache", "plan": "$plan", "scope": "$scope", "level": $level}}""")
+        val commands = listOf(
+            command("mcpp.clean", "project", "project", "project", 1, "Clean target"),
+            json("""{"id": "mcpp.build", "group": "project", "title": "Build", "action": {"kind": "job", "job": "build"}}"""),
+            command("mcpp.cleanStaleArtifacts", "cache", "stale", "project", 2, "Clean Stale Artifacts"),
+            command("mcpp.cleanProjectArtifacts", "cache", "project", "project", 1, "Clean Project Artifacts"),
+            command("mcpp.gcGlobalCache", "cache", "cacheGc", "shared", 2, "Collect the Shared Cache to a Budget"),
+            command("mcpp.verifyGlobalCache", "cache", "cacheVerify", "shared", 0, "Verify the Shared Cache"))
+        val sections = CacheModel.sections(inventory, null, commands, t)
+        assertEquals(listOf("Project cache", "Global build cache"), sections.map { it.row.text })
+        // The project's section: its two cleanups, the one plan of mcpp.clean and mcpp.cleanProjectArtifacts once.
+        val project = sections[0].row
+        assertEquals("target/", project.detail)
+        assertEquals(listOf("Clean Stale Artifacts…", "Clean Project Artifacts…"), project.actions.map { it.label })
+        assertEquals(listOf("stale", "project"), project.actions.map { it.plan })
+        // The shared cache's: its total, its cleanups, and what the inventory says of it.
+        val shared = sections[1]
+        assertEquals("1.5 GiB in 2 entries", shared.row.detail)
+        assertEquals(listOf("Collect the Shared Cache to a Budget…", "Verify the Shared Cache"), shared.row.actions.map { it.label })
+        assertEquals(listOf("/home/u/.mcpp", "By kind", "Largest", "By last use"), texts(shared))
+        val ages = shared.getChildAt(3) as RowNode
+        assertEquals("0–7 days", (ages.getChildAt(0) as RowNode).row.text)
+        assertEquals(1, ages.childCount)   // an empty bucket is not a row
+        // An inventory mcpp could not give is the shared cache's error; the project's section stays.
+        val failed = CacheModel.sections(null, "no mcpp", commands, t)
+        assertEquals(2, failed.size)
+        assertTrue((failed[1].getChildAt(0) as RowNode).row.error)
+        assertEquals("", failed[1].row.detail)
+    }
+
+    @Test
+    fun aToolbarsTextIsReadWhenItIsShown() {
+        // The view is built before the session's strings arrive; the next time the toolbar is shown
+        // the action reads them (#13: an English tooltip beside Chinese rows).
+        val strings = mutableMapOf<String, String>()
+        val action = io.github.mcppcommunity.mcppclion.ui.SessionAction({ strings["Refresh"] ?: "Refresh" }, com.intellij.icons.AllIcons.Actions.Refresh) {}
+        val event = com.intellij.testFramework.TestActionEvent.createTestEvent(action)
+        action.update(event)
+        assertEquals("Refresh", event.presentation.text)
+        strings["Refresh"] = "刷新"
+        action.update(event)
+        assertEquals("刷新", event.presentation.text)
+    }
+
+    @Test
+    fun noClassOutsideUiJcefNamesJcef() {
+        // The JCEF plugin can be absent or disabled; a class of the core that names JCEF's fails to load
+        // there (#13). Only ui/jcef, which mcpp-jcef.xml registers, may.
+        val sources = java.io.File("src/main/kotlin")
+        assertTrue(sources.isDirectory)
+        val offending = sources.walk().filter { it.isFile && it.extension == "kt" && !it.path.replace('\\', '/').contains("/ui/jcef/") }
+            .filter { f -> f.readLines().any { it.startsWith("import com.intellij.ui.jcef") || it.startsWith("import org.cef") || it.contains("JBCef") } }
+            .map { it.name }.toList()
+        assertEquals(emptyList<String>(), offending)
+        val optional = java.io.File("src/main/resources/META-INF/mcpp-jcef.xml").readText()
+        assertTrue(optional.contains("ui.jcef.JcefPageHost\$Factory"))
     }
 
     @Test

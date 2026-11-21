@@ -15,3 +15,6 @@ compile_commands.json
 dist-upload/
 .xlings/
 out/ide-tests
+
+# Local reviews and analyses, not design records.
+.agents/reviews/

@@ -11,7 +11,7 @@ import com.intellij.ui.JBColor
 import io.github.mcppcommunity.mcppclion.McppSession
 
 class TestsPage(project: Project) :
-    JcefPage(project, "tests.html", McppSession.get(project).t("This IDE runs without JCEF, which draws the test insights.")) {
+    WebPage(project, "tests.html", "This IDE runs without JCEF, which draws the test insights.") {
     override val id = "tests"
     private val unsubscribe = session.on("job/finished") { p ->
         if (p.isJsonObject && p.asJsonObject["kind"]?.asString == "test") refresh()
@@ -37,7 +37,7 @@ class TestsPage(project: Project) :
         addProperty("noMetrics", session.t("Metrics appear when the project's mcpp states them (test-metrics, mcpp#917)."))
     }
 
-    override fun refresh() {
+    override fun draw() {
         val root = session.root ?: return
         session.request("test/insights", JsonObject().apply { addProperty("root", root) }).whenComplete { insights, _ ->
             if (insights == null || !insights.isJsonObject) return@whenComplete

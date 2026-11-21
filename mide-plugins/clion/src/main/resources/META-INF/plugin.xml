@@ -21,13 +21,21 @@
     <depends>com.intellij.modules.clion</depends>
     <depends>com.intellij.modules.cidr.debugger</depends>
     <depends>io.github.sunrisepeak.mcppls</depends>
-    <!-- The graph page's browser is a module of its own (com.intellij.modules.jcef). The test tree is the
-         platform's in CLion 2026.1 and a plugin of its own from 2026.2 on (intellij.testRunner.plugin);
-         optional, so the classes are found either way. -->
+    <!-- The pages' browser is a plugin of its own, built for each system (com.intellij.modules.jcef),
+         which an installation can lack or disable: its host is registered by mcpp-jcef.xml alone, and no
+         class outside ui/jcef names JCEF's (ui/PageHost.kt). The test tree is the platform's in CLion
+         2026.1 and a plugin of its own from 2026.2 on (intellij.testRunner.plugin); optional, so the
+         classes are found either way. -->
     <depends optional="true" config-file="mcpp-jcef.xml">com.intellij.modules.jcef</depends>
     <depends optional="true" config-file="mcpp-testrunner.xml">intellij.testRunner.plugin</depends>
 
     <xi:include href="/META-INF/mcpp-actions.xml" xpointer="xpointer(/idea-plugin/*)"/>
+
+    <extensionPoints>
+        <!-- The browser a page of webui/ is drawn in (ui/PageHost.kt); JCEF's, from mcpp-jcef.xml. -->
+        <extensionPoint qualifiedName="io.github.mcpp-community.mcpp-clion.pageHost"
+                        interface="io.github.mcppcommunity.mcppclion.ui.PageHostFactory" dynamic="true"/>
+    </extensionPoints>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="io.github.mcppcommunity.mcppclion.settings.McppSettings"/>

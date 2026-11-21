@@ -72,23 +72,50 @@ class GraphInteractionTest {
             bindSingleton<CIServer>(overrides = true) {
                 object : CIServer by NoCIServer {
                     override fun reportTestFailure(testName: String, message: String, details: String, linkToLogs: String?, kind: SyntheticTestKind, generifyTestName: Boolean) {
-                        throw AssertionError("IDE failure: $testName: $message")
+                        recordIdeFailure("ide-errors-graphs.ndjson", testName, message, details)
                     }
                 }
             }
         }
     }
 
-    @Test
-    fun graphRendersNavigatesAndRecoversInJcef() = runGraphScenario(false)
+    /** JCEF as the IDE has it: on; switched off (`ide.browser.jcef.enabled=false`); or its plugin
+     *  disabled, so that its classes are absent (#13: `NoClassDefFoundError: JBCefApp`). */
+    enum class Jcef(val output: String) { ON("graphs"), SWITCHED_OFF("graphs-no-jcef"), PLUGIN_DISABLED("graphs-no-jcef-plugin") }
 
     @Test
-    fun graphExplainsUnavailableJcef() = runGraphScenario(true)
+    fun graphRendersNavigatesAndRecoversInJcef() = startingOnce(Jcef.ON)
 
-    private fun runGraphScenario(disableJcef: Boolean) {
+    @Test
+    fun graphExplainsUnavailableJcef() = startingOnce(Jcef.SWITCHED_OFF)
+
+    @Test
+    fun graphExplainsAbsentJcefPlugin() = startingOnce(Jcef.PLUGIN_DISABLED)
+
+    /**
+     * On a macOS runner an IDE can stop at its start, before any plugin loads (its log ends at "CPU cores"),
+     * and its driver never connects; it met one run in three, whichever IDE it was. Such a run starts a new
+     * IDE once, and says so (`ide-start-retried`); a run whose IDE started is never repeated, so a defect of
+     * this plugin fails it.
+     */
+    private fun startingOnce(jcef: Jcef) {
+        try {
+            runGraphScenario(jcef)
+        } catch (e: Exception) {
+            val notConnected = generateSequence<Throwable>(e) { it.cause }.any { it.message?.contains("Couldn't wait for the driver to connect") == true }
+            if (!notConnected) throw e
+            val output = Path.of(System.getProperty("mcpp.clion.output") ?: "build/stable-smoke").toAbsolutePath().resolve(jcef.output)
+            Files.createDirectories(output)
+            Files.writeString(output.resolve("ide-start-retried"), "the first IDE's driver never connected\n")
+            runGraphScenario(jcef)
+        }
+    }
+
+    private fun runGraphScenario(jcef: Jcef) {
+        val disableJcef = jcef != Jcef.ON
         val version = System.getProperty("mcpp.clion.ideVersion") ?: error("ideVersion is required")
         val output = Path.of(System.getProperty("mcpp.clion.output") ?: "build/stable-smoke").toAbsolutePath()
-            .resolve(if (disableJcef) "graphs-no-jcef" else "graphs")
+            .resolve(jcef.output)
         Files.createDirectories(output)
         val observations = mutableListOf<String>()
         fun record(name: String) {
@@ -115,15 +142,42 @@ class GraphInteractionTest {
         val context = Starter.newContext("mcpp-graphs-$version-${System.currentTimeMillis()}", TestCase(ide, LocalProjectInfo(fixture)))
         PluginConfigurator(context).installPluginFromPath(Path.of(System.getProperty("mcpp.clion.mcpplsZip") ?: error("mcpplsZip is required")))
         PluginConfigurator(context).installPluginFromPath(Path.of(System.getProperty("mcpp.clion.pluginZip") ?: error("pluginZip is required")))
+        // The JCEF plugin is built for each system; an installation can lack it or disable it. CLion
+        // 2026.1 has no such plugin: JCEF is in the platform's core there, and cannot be absent.
+        if (jcef == Jcef.PLUGIN_DISABLED) {
+            val bundled = context.ide.bundledPluginsDir
+            val jcefPlugin = bundled != null && Files.isDirectory(bundled) && Files.list(bundled).use { dirs ->
+                dirs.anyMatch { it.fileName.toString().contains("jcef", ignoreCase = true) && Files.isDirectory(it.resolve("lib")) }
+            }
+            org.junit.jupiter.api.Assumptions.assumeTrue(jcefPlugin, "CLion $version carries JCEF in its core, not as a plugin")
+            PluginConfigurator(context).disablePlugins("com.intellij.modules.jcef")
+        }
         context.applyVMOptionsPatch {
             withXmx(2048)
             addSystemProperty("idea.trust.all.projects", true)
             addSystemProperty("ide.show.tips.on.startup.default.value", false)
             // Keep the large generated VFS cache with this isolated test's output.
             addSystemProperty("idea.system.path", output.resolve("ide-system").toString())
-            if (disableJcef) addSystemProperty("ide.browser.jcef.enabled", false)
+            if (jcef == Jcef.SWITCHED_OFF) addSystemProperty("ide.browser.jcef.enabled", false)
+        }
+        // The driver reaches each IDE on fixed ports (JMX 7777, RPC 11111). An IDE that has just closed, or a
+        // process it started, can hold them for a while; the next IDE could not take them, and its driver
+        // never connected (macOS aarch64). The run starts when both are free.
+        for (port in listOf(7777, 11111)) {
+            val free = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60)
+            while (System.nanoTime() < free) {
+                val bound = runCatching { java.net.ServerSocket().use { it.bind(java.net.InetSocketAddress("127.0.0.1", port)) } }.isSuccess
+                if (bound) break
+                Thread.sleep(500)
+            }
         }
         context.runIdeWithDriver().useDriverAndCloseIde {
+            // An action is invoked on the project's frame: the driver otherwise reads the data context of
+            // the focused window, which a macOS runner need not give the IDE, and finds no project there.
+            fun act(id: String) {
+                val frame = ui.x("//div[@class='IdeFrameImpl']")
+                invokeAction(id, component = if (frame.present()) frame.component else null)
+            }
             waitForProjectOpen()
             // The IDE settles after the project opens (its layout restored, its startup activities run): a tool
             // window shown before then can be hidden again by them, on 2026.1 and 2026.2 alike.
@@ -156,7 +210,7 @@ class GraphInteractionTest {
                     while (windows.getToolWindow("Project")?.isVisible() != true && System.nanoTime() < restored) Thread.sleep(100)
                     val before = "before the action: project=" + (windows.getToolWindow("Project")?.isVisible() ?: "absent") +
                         " after " + "%.1fs".format((System.nanoTime() - restored) / 1e9 + 60) + "\n"
-                    invokeAction("mcpp.project.showModuleDependencyGraph")
+                    act("mcpp.project.showModuleDependencyGraph")
                     // The sentence wraps in the narrow tool window; its accessible name is whole.
                     val explanation = ui.x("//div[contains(@accessiblename,'This IDE runs without JCEF')]")
                     // Which window is on screen, each time that changes, for the report: the mcpp window
@@ -194,7 +248,18 @@ class GraphInteractionTest {
                 } else {
                     val runs = utility<RunContentManagerFactory>().getInstance(singleProject())
                     val before = runs.getAllDescriptors().map { it.getExecutionId() }.toSet()
-                    invokeAction("mcpp.build")
+                    // The action is enabled once the session knows the project's root; it is invoked on the
+                    // project's frame, which on macOS CI need not hold the focus the driver would read.
+                    val session = service<McppSessionRemote>(singleProject())
+                    val rooted = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+                    while (session.getRoot() == null && System.nanoTime() < rooted) Thread.sleep(100)
+                    val diagnosis = { "root=${session.getRoot()} commands=${session.getCommands().size} frame=${ui.x("//div[@class='IdeFrameImpl']").present()}" }
+                    assertNotNull(session.getRoot(), "the session knows the project's root: ${diagnosis()}")
+                    try {
+                        act("mcpp.build")
+                    } catch (e: Exception) {
+                        throw AssertionError("mcpp.build was not run: ${diagnosis()}", e)
+                    }
                     val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(180)
                     var finished: RunDescriptorRemote? = null
                     while (System.nanoTime() < deadline) {
@@ -210,7 +275,7 @@ class GraphInteractionTest {
                     record("module-project-built")
                     val window = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("mcpp")!!
                     fun graph(kind: String): GraphCefRemote {
-                        invokeAction(if (kind == "modules") "mcpp.project.showModuleDependencyGraph" else "mcpp.project.showDependencyGraph")
+                        act(if (kind == "modules") "mcpp.project.showModuleDependencyGraph" else "mcpp.project.showDependencyGraph")
                         val expected = if (kind == "modules") "Module Graph" else "Dependency Graph"
                         val ready = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
                         while (!window.isVisible() && System.nanoTime() < ready) Thread.sleep(100)
@@ -275,6 +340,6 @@ class GraphInteractionTest {
         val plugin = Path.of(System.getProperty("mcpp.clion.pluginZip"))
         val sha = java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(plugin)).joinToString("") { "%02x".format(it) }
         val backendControl = System.getProperty("mcpp.clion.backendPath") != null
-        Files.writeString(output.resolve("result.json"), "{\"ideVersion\":\"$version\",\"pluginSha256\":\"$sha\",\"jcefDisabled\":$disableJcef,\"backendControl\":$backendControl,\"passed\":true}\n")
+        Files.writeString(output.resolve("result.json"), "{\"ideVersion\":\"$version\",\"pluginSha256\":\"$sha\",\"jcef\":\"${jcef.name.lowercase()}\",\"jcefDisabled\":$disableJcef,\"backendControl\":$backendControl,\"passed\":true}\n")
     }
 }

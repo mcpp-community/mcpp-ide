@@ -415,13 +415,14 @@ test("restoring other C++ services is offered only on a row that says it can be"
   assert.ok(!matches.test("mcppOtherCppFeatures"));
 });
 
-test("ships TOML highlighting for the exact mcpp.toml filename", () => {
+test("ships TOML highlighting and its pairs for the exact mcpp.toml filename", () => {
   const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as PackageManifest;
   const language = manifest.contributes?.languages?.find((item) => item.id === "mcpp-toml");
   assert.deepEqual(language, {
     id: "mcpp-toml",
     aliases: ["mcpp TOML", "mcpp.toml"],
     filenames: ["mcpp.toml"],
+    configuration: "./syntaxes/mcpp-toml.language-configuration.json",
   });
 
   const grammar = manifest.contributes?.grammars?.find((item) => item.language === "mcpp-toml");

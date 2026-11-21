@@ -22,6 +22,17 @@ namespace {
 
 int failures = 0;
 
+// The answers inside inline tables (and of nested keys) that 0.9 did not give: an inline table is read
+// as the table of its name from 1.6.0 on (docs/rules.md). They are kept in golden/inline-tables.json,
+// apart from 0.9's goldens, which give no answer at those positions; MCPP_IDE_WRITE_GOLDEN=1 writes
+// the file again from this implementation, for review.
+Json inlineSeen = Json::object();
+
+bool inside_inline_table(const toml::Context& c) {
+    return (c.kind == toml::Context::Kind::key && !c.containerPath.empty()) ||
+           (c.kind == toml::Context::Kind::value && c.keyPath.size() > 1);
+}
+
 void expect(const Json& got, const Json& want, const std::string& where) {
     if (got == want) return;
     if (++failures > 25) return;
@@ -194,8 +205,13 @@ void check_manifest(const std::filesystem::path& file, const Json& golden) {
                     list.push_back(j);
                 }
                 const auto& want = golden["completion"][at];
-                expect(list, golden["lists"][want[0].get<std::size_t>()], where + " completion");
-                if (!items.empty()) expect(Json{items[0].start, items[0].end}, Json{want[1], want[2]}, where + " completion range");
+                const auto& wantList = golden["lists"][want[0].get<std::size_t>()];
+                if (list != wantList && wantList.empty() && inside_inline_table(toml::context_at(upTo, l, c))) {
+                    inlineSeen[where] = Json{{"items", list}, {"range", {items[0].start, items[0].end}}};
+                } else {
+                    expect(list, wantList, where + " completion");
+                    if (!items.empty()) expect(Json{items[0].start, items[0].end}, Json{want[1], want[2]}, where + " completion range");
+                }
                 const auto v = manifest::dependency_version_context(upTo, l, c);
                 const Json wantV = golden.contains("versionContext") && golden["versionContext"].contains(at) ? golden["versionContext"][at] : Json();
                 expect(v ? Json{{"name", v->name}, {"insideString", v->insideString},
@@ -290,6 +306,16 @@ CTS rules{"rules", [] {
         else check_buildscript(f, golden);
     }
     check_catalogue(Json::parse(testsupport::read(root / "golden" / "catalogue.json")));
+    const auto inlineGolden = root / "golden" / "inline-tables.json";
+    if (std::getenv("MCPP_IDE_WRITE_GOLDEN")) {
+        std::ofstream(inlineGolden, std::ios::binary) << inlineSeen.dump(1) << "\n";
+    } else {
+        const auto want = Json::parse(testsupport::read(inlineGolden));
+        for (const auto& e : inlineSeen.items())
+            expect(e.value(), want.contains(e.key()) ? want[e.key()] : Json(), e.key() + " completion (inline table)");
+        for (const auto& e : want.items())
+            if (!inlineSeen.contains(e.key())) expect(Json(), e.value(), e.key() + " completion (inline table)");
+    }
     // The documents mcpp-vscode 0.9's parser tests read: their structure and every cursor's context.
     int k = 0;
     for (const auto& snippet : Json::parse(testsupport::read(root / "golden" / "snippets.json")))
@@ -308,6 +334,61 @@ CTS rules{"rules", [] {
     check(at && at->name == "zlib" && at->insideString);
     const auto suggestions = manifest::version_suggestions(*at, versions);
     check(suggestions.size() == 3 && suggestions[0].insertSnippet == "1.3.1" && suggestions[0].kind == "version");
+    // An inline table is read as the table of its name (1.6.0): `app = { ... }` under [targets] has the
+    // keys of [targets.app], less those it has; its enum keys have their values; a dependency's inline
+    // table is its specification, which the schema does not list.
+    auto labels = [](std::string_view text, int line, int character) {
+        std::set<std::string> out;
+        for (const auto& s : manifest::completions(text::lines_of(text), line, character)) out.insert(s.label);
+        return out;
+    };
+    const auto targetKeys = labels("[targets]\napp = { kind = \"bin\", ", 1, 26);
+    check(targetKeys.contains("main") && targetKeys.contains("linkage") && !targetKeys.contains("kind"));
+    check(labels("[targets]\napp = { ", 1, 8).contains("kind"));
+    const auto kinds = labels("[targets]\napp = { kind = \"", 1, 15);
+    check(kinds.contains("bin") && kinds.contains("lib") && kinds.contains("entry"));
+    check(labels("[targets]\napp = { kind = ", 1, 14).contains("shared"));
+    check(labels("[features]\nsimd = { defines = [\"A\"], ", 1, 26).contains("sources"));
+    check(labels("[dependencies]\nfmt = { ", 1, 8).empty());
+    check(labels("[dependencies]\nfmt = { version = \"1\", ", 1, 22).empty());
+    check(labels("[targets]\napp = { kind = \"bin\" ", 1, 21).empty());
+    check(labels("[package]\nmetadata = { ", 1, 13).empty());
+    // A manifest's features in their three shapes; none when it declares no [features].
+    const auto declared = manifest::declared_features(text::lines_of(
+        "[features]\ndefault = [\"a\"]\na = []\nb = [\"a\"]\nc = { defines = [\"C\"], implies = [\"b\"] }\n[features.d]\nimplies = [\"c\"]\n"));
+    // `default` is a key mcpp accepts as a name too.
+    check(declared && declared->size() == 5);
+    check((*declared)[0].name == "default" && (*declared)[0].implies == std::vector<std::string>{"a"});
+    check((*declared)[1].name == "a" && (*declared)[1].isDefault && !(*declared)[2].isDefault);
+    check((*declared)[2].implies == std::vector<std::string>{"a"} && (*declared)[3].implies == std::vector<std::string>{"b"});
+    check((*declared)[4].name == "d" && (*declared)[4].implies == std::vector<std::string>{"c"});
+    check(!manifest::declared_features(text::lines_of("[package]\nname = \"x\"\n")));
+    // An empty [features] declares none, which mcpp reads as accepting any name.
+    check(!manifest::declared_features(text::lines_of("[features]\n")));
+    // The tables mcpp registers a feature by besides [features].
+    const auto others = manifest::declared_features(text::lines_of(
+        "[feature-deps.ssl]\nopenssl = \"3\"\n[target.'cfg(os = \"linux\")'.feature-xlings.gtk]\nx = \"1\"\n[feature-deps]\nzip = { zlib = \"1\" }\n"));
+    check(others && others->size() == 3 && (*others)[0].name == "ssl" && (*others)[1].name == "gtk" && (*others)[2].name == "zip");
+    check(manifest::workspace_dependency_path(text::lines_of("[workspace.dependencies]\ncore = { path = \"libs/core\" }\n"), "core") == "libs/core");
+    // An index dependency has nothing to read: no resolver is asked.
+    bool asked = false;
+    const manifest::FeatureResolver none = [&](const manifest::DependencyEdge&) { asked = true; return std::nullopt; };
+    check(manifest::feature_completions(text::lines_of("[dependencies]\nfmt = { version = \"1\", features = [] }\n"), 1, 37, none).empty() && !asked);
+    // Between elements a quoted name is separated by commas; an array left open is its own line only.
+    const manifest::FeatureResolver ab = [](const manifest::DependencyEdge&) {
+        return std::optional(std::vector<manifest::Feature>{{"a", false, {}}, {"b", false, {}}});
+    };
+    const auto edge = text::lines_of("[dependencies]\nlib = { path = \"../lib\", features = [\"a\"] }\n");
+    const auto first = manifest::feature_completions(edge, 1, 37, ab);
+    check(first.size() == 1 && first[0].insertSnippet == "\"b\", ");
+    const auto last = manifest::feature_completions(edge, 1, 40, ab);
+    check(last.size() == 1 && last[0].insertSnippet == ", \"b\"");
+    check(manifest::feature_completions(text::lines_of("[dependencies]\nlib = { path = \"../lib\", features = [\n[package]\nname = \"x\"\n"), 2, 0, ab).empty());
+    // A key the inline table has after the cursor is not offered again; nor is an inline entry of
+    // [targets] an unknown key, since mcpp reads it as [targets.app].
+    check(!labels("[targets]\napp = { kind = \"lib\", , main = \"x\" }", 1, 22).contains("main"));
+    check(labels("[targets]\napp = { kind = \"lib\", , main = \"x\" }", 1, 22).contains("linkage"));
+    for (const auto& d : manifest::analyse(text::lines_of("[targets]\napp = { kind = \"bin\" }\n"), {})) check(d.code != "mcpp.manifest.unknownKey");
     // A suggestion's detail in the user's language.
     const auto zh = manifest::completions(text::lines_of("[dependencies]\n"), 1, 0, "zh-cn");
     check(!zh.empty() && zh[0].detail != "SemVer version dependency");

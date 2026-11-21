@@ -9,13 +9,12 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
-import io.github.mcppcommunity.mcppclion.McppSession
 
 class GraphPage(project: Project, private val kind: String) :
-    JcefPage(project, "graph.html", McppSession.get(project).t("This IDE runs without JCEF, which draws the graph.")) {
+    WebPage(project, "graph.html", "This IDE runs without JCEF, which draws the graph.") {
     override val id = "graph:$kind"
 
-    override fun refresh() {
+    override fun draw() {
         val root = session.root ?: return
         session.request("graph/$kind", JsonObject().apply { addProperty("root", root) }).whenComplete { graph, error ->
             show(JsonObject().apply {

@@ -1,16 +1,16 @@
-// The cache: what mcpp keeps (`cache/inventory` over `mcpp cache list`) -- the total, each kind and
-// its size, the largest labels, the ages -- and the cleanups of the command table, each planned,
-// confirmed at its danger level and applied as a job (Dispatch.cleanup).
+// The cache, in the two sections of VS Code's page (design 2026-11-21, "The cache view"): the
+// project's build (`target/`) with its cleanups, and the shared cache mcpp keeps (`cache/inventory`
+// over `mcpp cache list`) -- the total, each kind and its size, the largest labels, the ages -- with
+// its own. A cleanup sits on the section it acts on, by the scope the command table states, and is
+// planned, confirmed at its danger level and applied as a job (Dispatch.cleanup).
 package io.github.mcppcommunity.mcppclion.ui
 
 import com.google.gson.JsonObject
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.Disposer
@@ -23,13 +23,46 @@ import javax.swing.JComponent
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 
-/** The cache's rows, from the inventory. Pure: the tests build it. */
+/** The cache's sections, from the command table and the inventory. Pure: the tests build it. */
 object CacheModel {
+    /**
+     * The cleanups the command table states for a scope (`project`, `shared`), in its order, one per
+     * plan: two commands of one plan (mcpp.clean, mcpp.cleanProjectArtifacts) are one action, the
+     * cache group's, in its place.
+     */
+    fun actions(commands: List<JsonObject>, scope: String): List<RowAction> {
+        val byPlan = linkedMapOf<String, JsonObject>()
+        for (c in commands) {
+            val action = c["action"]?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
+            if (action["kind"]?.asString != "cache" || action["scope"]?.asString != scope) continue
+            val plan = action["plan"]?.asString ?: continue
+            val kept = byPlan[plan]
+            if (kept == null || (kept["group"]?.asString != "cache" && c["group"]?.asString == "cache")) byPlan[plan] = c
+        }
+        return byPlan.entries.sortedBy { (_, c) -> commands.indexOf(c) }.map { (plan, c) ->
+            RowAction(c["id"].asString, plan, c["title"]?.asString ?: plan, (c["action"].asJsonObject["level"]?.asInt ?: 0) > 0)
+        }
+    }
+
+    fun sections(inventory: JsonObject?, error: String?, commands: List<JsonObject>, t: (String, Array<out Any?>) -> String): List<RowNode> {
+        fun tr(key: String, vararg a: Any?) = t(key, a)
+        val project = RowNode(Row(tr("Project cache"), "target/", AllIcons.Nodes.Module, actions = actions(commands, "project")))
+        val shared = mutableListOf<RowNode>()
+        var total = ""
+        if (error != null) shared += RowNode(Row(tr("mcpp: {0}", error), icon = AllIcons.General.Error, error = true))
+        else if (inventory != null) {
+            total = tr("{0} in {1} entries", inventory["totalText"]?.asString ?: "", inventory["totalEntries"]?.asString ?: "0")
+            shared += rows(inventory, t)
+        }
+        val cache = RowNode(Row(tr("Global build cache"), total, AllIcons.Nodes.Folder, actions = actions(commands, "shared")), shared)
+        return listOf(project, cache)
+    }
+
+    /** What the inventory says of the shared cache: where it is, each kind, the largest, the ages. */
     fun rows(inventory: JsonObject, t: (String, Array<out Any?>) -> String): List<RowNode> {
         fun tr(key: String, vararg a: Any?) = t(key, a)
         val out = mutableListOf<RowNode>()
-        out += RowNode(Row(tr("{0} in {1} entries", inventory["totalText"]?.asString ?: "", inventory["totalEntries"]?.asString ?: "0"),
-            inventory["root"]?.asString ?: "", AllIcons.Nodes.Folder))
+        inventory["root"]?.asString?.takeIf { it.isNotEmpty() }?.let { out += RowNode(Row(it, icon = AllIcons.Nodes.Folder)) }
         val kinds = inventory["byKind"].objects()
         if (kinds.isNotEmpty())
             out += RowNode(Row(tr("By kind"), icon = AllIcons.Nodes.Folder), kinds.map { k ->
@@ -59,7 +92,6 @@ class CacheView(private val project: Project, parent: Disposable) : McppView, Di
     private val session = McppSession.get(project)
     private val tree = Tree(DefaultTreeModel(DefaultMutableTreeNode()))
     private val panel = SimpleToolWindowPanel(true, true)
-    private val cleanups = DefaultActionGroup()
     val component: JComponent get() = panel
     private var unsubscribe: () -> Unit = {}
 
@@ -68,12 +100,10 @@ class CacheView(private val project: Project, parent: Disposable) : McppView, Di
         tree.isRootVisible = false
         tree.showsRootHandles = true
         tree.cellRenderer = RowRenderer()
+        installRowActions(tree) { a -> Dispatch.cleanup(project, a.plan) }
+        // The toolbar holds what acts on the whole view; each cleanup is its section's.
         val group = DefaultActionGroup().apply {
-            add(object : DumbAwareAction(session.t("Refresh"), null, AllIcons.Actions.Refresh) {
-                override fun actionPerformed(e: AnActionEvent) = refresh()
-            })
-            addSeparator()
-            add(cleanups)
+            add(SessionAction({ session.t("Refresh") }, AllIcons.Actions.Refresh) { refresh() })
         }
         val toolbar = ActionManager.getInstance().createActionToolbar("McppCacheView", group, true)
         toolbar.targetComponent = panel
@@ -82,30 +112,17 @@ class CacheView(private val project: Project, parent: Disposable) : McppView, Di
         unsubscribe = session.on("job/finished") { p -> if (p.asJsonObject["kind"]?.asString in setOf("cache", "clean", "command")) refresh() }
     }
 
-    /** The cleanups the command table offers here, under their titles. */
-    private fun fillCleanups() {
-        cleanups.removeAll()
-        for (c in session.commands) {
-            val action = c["action"]?.asJsonObject ?: continue
-            if (action["kind"]?.asString != "cache") continue
-            val plan = action["plan"]?.asString ?: continue
-            cleanups.add(object : DumbAwareAction(c["title"]?.asString ?: plan, null, AllIcons.Actions.GC) {
-                override fun actionPerformed(e: AnActionEvent) = Dispatch.cleanup(project, plan)
-            })
-        }
-    }
-
     override fun refresh() {
         if (!session.running) return
         session.request("cache/inventory", JsonObject().apply { session.root?.let { addProperty("root", it) } }).whenComplete { r, error ->
             ApplicationManager.getApplication().invokeLater {
                 if (project.isDisposed) return@invokeLater
-                fillCleanups()
                 val root = DefaultMutableTreeNode()
-                if (error != null) root.add(RowNode(Row(session.t("mcpp: {0}", (error.cause ?: error).message ?: ""), icon = AllIcons.General.Error, error = true)))
-                else CacheModel.rows(r.asJsonObject) { key, args -> session.t(key, *args) }.forEach { root.add(it) }
+                val failed = error?.let { (it.cause ?: it).message ?: "" }
+                CacheModel.sections(r?.takeIf { it.isJsonObject }?.asJsonObject, failed, session.commands) { key, args -> session.t(key, *args) }
+                    .forEach { root.add(it) }
                 tree.model = DefaultTreeModel(root)
-                TreeUtil.expand(tree, 1)
+                TreeUtil.expand(tree, 2)
             }
         }
     }

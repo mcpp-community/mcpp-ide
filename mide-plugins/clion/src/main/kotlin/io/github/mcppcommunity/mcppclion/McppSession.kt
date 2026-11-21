@@ -168,7 +168,10 @@ class McppSession(private val project: Project) : Disposable {
         }
         log.info("mcpp-ide: starting ${located.command.joinToString(" ")} (${located.source})")
         val b = try {
-            Backend(located.command + "serve") { line -> log.info("[backend] $line") }
+            // Notifications and answers in order on one pooled thread (Backend: the reading thread runs
+            // no listener).
+            Backend(located.command + "serve", { line -> log.info("[backend] $line") },
+                com.intellij.util.concurrency.AppExecutorUtil.createBoundedApplicationPoolExecutor("mcpp-ide events", 1))
         } catch (error: Exception) {
             log.warn("mcpp-ide: startup failed (source=${located.source}, protocol=unknown)", error)
             future.completeExceptionally(error)

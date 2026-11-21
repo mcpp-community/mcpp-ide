@@ -9,9 +9,13 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Published plugin release to install without rebuilding the backend
+        description: Published plugin release to install without rebuilding the backend (empty, the latest)
         type: string
-        default: v0.2.0
+        default: ''
+  # A new CLion is met by CI before a user meets it: the latest published plugin on the stable
+  # releases named below, every week.
+  schedule:
+    - cron: '17 4 * * 1'
 
 permissions:
   contents: read
@@ -57,10 +61,14 @@ jobs:
         if: inputs.plugin_artifact == ''
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag || 'v0.2.0' }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          # Unnamed (the weekly run): the newest release that carries the CLion plugin.
+          if [ -z "$RELEASE_TAG" ]; then
+            RELEASE_TAG="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[] | select((.draft | not) and (.tag_name | test("^(clion-)?v[0-9]+\\.[0-9]+\\.[0-9]+$")))][0].tag_name')"
+          fi
+          [[ "$RELEASE_TAG" =~ ^(clion-)?v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           mkdir -p stable-plugin
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'mcpp-clion-*.zip' --dir stable-plugin
@@ -125,7 +133,7 @@ jobs:
           path: |
             ${{ runner.temp }}/clion-stable-result/result.json
             ${{ runner.temp }}/clion-stable-result/checks.json
-            ${{ runner.temp }}/clion-stable-result/ide-errors.ndjson
+            ${{ runner.temp }}/clion-stable-result/ide-errors*.ndjson
             ${{ runner.temp }}/clion-stable-result/settings/result.json
             ${{ runner.temp }}/clion-stable-result/settings/observations.json
             ${{ runner.temp }}/clion-stable-result/graphs/result.json
@@ -133,4 +141,100 @@ jobs:
             ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/result.json
             ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/checks.json
             ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/no-jcef-window.txt
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef-plugin/result.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef-plugin/checks.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef-plugin/no-jcef-window.txt
+          if-no-files-found: warn
+
+  # The report of #13 came from macOS on Apple silicon, where the JCEF plugin is a build of its own:
+  # the startup chain and the graphs (JCEF on, switched off, its plugin disabled) on the newest stable
+  # CLion there.
+  # One IDE per runner: on macOS a second IDE started on the same runner could stop at its start, before
+  # any plugin loads (its log ends at "CPU cores"), and its driver never connected.
+  runtime-macos:
+    name: packaged plugin on CLion ${{ matrix.version }} (macOS aarch64, ${{ matrix.scenario }})
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['2026.2.4.1']
+        scenario: [graphRendersNavigatesAndRecoversInJcef, graphExplainsAbsentJcefPlugin, graphExplainsUnavailableJcef]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mcpp
+        with:
+          llvm: 'true'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '9.7.1'
+      - name: The candidate ZIP built once by CI
+        if: inputs.plugin_artifact != ''
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ inputs.plugin_artifact }}
+          path: stable-plugin
+      - name: The published ZIP for an isolated release check
+        if: inputs.plugin_artifact == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_TAG" ]; then
+            RELEASE_TAG="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[] | select((.draft | not) and (.tag_name | test("^(clion-)?v[0-9]+\\.[0-9]+\\.[0-9]+$")))][0].tag_name')"
+          fi
+          [[ "$RELEASE_TAG" =~ ^(clion-)?v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          mkdir -p stable-plugin
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'mcpp-clion-*.zip' --dir stable-plugin
+      - name: The pinned language-service plugin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^mcpplsPluginVersion *= *//p' mide-plugins/clion/gradle.properties)"
+          gh release download "v$version" --repo Sunrisepeak/mcpp-language-server \
+            --pattern "mcppls-clion-$version.zip" --dir stable-plugin
+      - name: Start the real IDE, complete the startup chain and open the graphs
+        env:
+          IDE_VERSION: ${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          plugin="$(find stable-plugin -maxdepth 1 -name 'mcpp-clion-*.zip' -print)"
+          language="$(find stable-plugin -maxdepth 1 -name 'mcppls-clion-*.zip' -print)"
+          test -n "$plugin" && test -n "$language"
+          gradle --no-daemon --max-workers=4 \
+            -p mide-plugins/clion/integration-tests test --tests "GraphInteractionTest.${{ matrix.scenario }}" \
+            -PpluginZip="$GITHUB_WORKSPACE/$plugin" \
+            -PmcpplsZip="$GITHUB_WORKSPACE/$language" \
+            -PideVersion="$IDE_VERSION" \
+            -Poutput="$RUNNER_TEMP/clion-stable-result"
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: clion-stable-macos-${{ matrix.version }}-${{ matrix.scenario }}
+          # The JUnit results name an assertion's message; the IDE's own log, of a runner's IDE on a
+          # generated project, names why an IDE did not start.
+          path: |
+            ${{ runner.temp }}/clion-stable-result/ide-errors*.ndjson
+            mide-plugins/clion/integration-tests/build/test-results/test/*.xml
+            out/ide-tests/tests/*/*/log/idea.log
+            out/ide-tests/tests/*/*/log/monitoring-thread-dumps-ide/*.txt
+            ${{ runner.temp }}/clion-stable-result/*/ide-start-retried
+            ${{ runner.temp }}/clion-stable-result/graphs/result.json
+            ${{ runner.temp }}/clion-stable-result/graphs/checks.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/result.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/checks.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/no-jcef-window.txt
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef-plugin/result.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef-plugin/checks.json
+            ${{ runner.temp }}/clion-stable-result/graphs-no-jcef-plugin/no-jcef-window.txt
           if-no-files-found: warn

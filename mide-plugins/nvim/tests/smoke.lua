@@ -321,7 +321,16 @@ vim.cmd('Mcpp showTargets')
 local targets = float_text()
 check(':Mcpp showTargets lists the targets in a float', targets:find('linux', 1, true) ~= nil, targets:sub(1, 120))
 vim.cmd('Mcpp showCachePanel')
-check(':Mcpp showCachePanel shows the cache by kind', float_text():find('By kind', 1, true) ~= nil)
+local cache = float_text()
+check(':Mcpp showCachePanel shows the cache by kind', cache:find('By kind', 1, true) ~= nil)
+-- The two sections of VS Code's page, each with its cleanups, one per plan.
+check(':Mcpp showCachePanel shows the project cache and the global build cache',
+  cache:find('Project cache', 1, true) ~= nil and cache:find('Global build cache', 1, true) ~= nil, cache:sub(1, 200))
+local project_part = cache:sub(1, (cache:find('Global build cache', 1, true) or 1) - 1)
+check('the project cleanups sit on the project section',
+  project_part:find(':Mcpp cleanStaleArtifacts', 1, true) ~= nil and project_part:find('cleanProjectArtifacts', 1, true) ~= nil
+    and project_part:find('gcGlobalCache', 1, true) == nil, project_part)
+check('one action per plan, the cache group\'s', cache:find(':Mcpp clean ', 1, true) == nil, cache)
 vim.cmd('Mcpp project.showDependencyGraph')
 check(':Mcpp project.showDependencyGraph shows the packages', float_text() ~= '')
 

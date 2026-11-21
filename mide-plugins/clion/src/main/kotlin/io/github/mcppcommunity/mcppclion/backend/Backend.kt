@@ -3,6 +3,11 @@
 // are named; mcpp-ide's own are under `mcpp-ide/`, which this class adds to a request and takes off
 // a notification. Requests answer futures; notifications go to the listeners of their method ("*"
 // receives every one).
+//
+// The thread that reads the backend's output only decodes frames: a notification's listeners and a
+// request's answer run on `events`, one at a time and in the order the backend wrote them, so what
+// continues after an answer (a listener it registers, the output it buffered) runs before the next
+// message. A listener that reads the IDE's model therefore never runs on the reading thread (#13).
 package io.github.mcppcommunity.mcppclion.backend
 
 import com.google.gson.JsonElement
@@ -16,6 +21,8 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -73,7 +80,14 @@ fun wireName(method: String): String =
         method.startsWith(NAMESPACE)) method
     else NAMESPACE + method
 
-class Backend(command: List<String>, private val log: (String) -> Unit = {}) : AutoCloseable {
+/** One daemon thread, for the notifications of a backend run without the IDE's executors (the tests). */
+fun sequentialExecutor(name: String): Executor = Executors.newSingleThreadExecutor { r -> Thread(r, name).apply { isDaemon = true } }
+
+class Backend(
+    command: List<String>,
+    private val log: (String) -> Unit = {},
+    private val events: Executor = sequentialExecutor("mcpp-ide events"),
+) : AutoCloseable {
     private val process: Process = ProcessBuilder(command).redirectErrorStream(false).start()
     private val input: OutputStream = process.outputStream
     private val pending = ConcurrentHashMap<Int, Pair<String, CompletableFuture<JsonElement>>>()
@@ -92,9 +106,13 @@ class Backend(command: List<String>, private val log: (String) -> Unit = {}) : A
         thread("mcpp-ide exit") {
             process.waitFor()
             val ended = BackendError("", -32099, "the mcpp-ide backend ended", null)
-            pending.values.forEach { it.second.completeExceptionally(ended) }
+            val waiting = pending.values.toList()
             pending.clear()
-            exited.complete(process.exitValue())
+            val code = process.exitValue()
+            events.execute {
+                waiting.forEach { it.second.completeExceptionally(ended) }
+                exited.complete(code)
+            }
         }
     }
 
@@ -117,14 +135,20 @@ class Backend(command: List<String>, private val log: (String) -> Unit = {}) : A
             val (method, future) = pending.remove(id.asInt) ?: return
             if (message.has("error")) {
                 val e = message.getAsJsonObject("error")
-                future.completeExceptionally(BackendError(method, e.get("code")?.asInt ?: -32603, e.get("message")?.asString ?: "failed", e.get("data")))
-            } else future.complete(message.get("result") ?: JsonNull.INSTANCE)
+                val error = BackendError(method, e.get("code")?.asInt ?: -32603, e.get("message")?.asString ?: "failed", e.get("data"))
+                events.execute { future.completeExceptionally(error) }
+            } else {
+                val result = message.get("result") ?: JsonNull.INSTANCE
+                events.execute { future.complete(result) }
+            }
             return
         }
         val method = message.get("method")?.asString?.removePrefix(NAMESPACE) ?: return
         val params = message.get("params") ?: JsonObject()
-        listeners[method]?.forEach { runCatching { it(method, params) }.onFailure { e -> log("$method: ${e.message}") } }
-        listeners["*"]?.forEach { runCatching { it(method, params) } }
+        events.execute {
+            listeners[method]?.forEach { runCatching { it(method, params) }.onFailure { e -> log("$method: ${e.message}") } }
+            listeners["*"]?.forEach { runCatching { it(method, params) } }
+        }
     }
 
     fun request(method: String, params: JsonElement = JsonObject()): CompletableFuture<JsonElement> {

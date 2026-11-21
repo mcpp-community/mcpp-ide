@@ -32,7 +32,9 @@ the order the messages arrive, so an answer sees the document the notifications 
 | On a key of a table with a closed vocabulary | its keys, less those already written in the table's group; a key's detail names its type, values and default |
 | On a key of a dependency table | the five dependency forms |
 | On a key of `[features]`, `[generated_files]`, `[capabilities]`, `[xlings.workspace]`, `[tools.overrides]` | that table's forms |
-| On an enum key's value | its values (inside a string only the content is replaced) |
+| Inside an inline table, after `{` or `,` (1.6.0) | the keys of the table of its name, less those the inline table has on either side of the cursor: `app = { ... }` under `[targets]` lists what `[targets.app]` does, and is not an unknown key of `[targets]`. A dependency's inline table is its specification, whose keys the snapshot does not list, and gets nothing |
+| On an enum key's value | its values (inside a string only the content is replaced); a key of an inline table or a dotted key has its own table's |
+| Inside `features = [...]` of a dependency given by `path` or `workspace = true` (1.6.0) | the features its own manifest declares and the edge does not name yet, each with whether it is a default and what it implies |
 | On a dependency's version, with `mcpp.toml.indexCompletion` on and the workspace trusted | the versions mcpp's catalogue (`mcpp search --format json`) lists for that package, newest first; the catalogue is read once in the background (the answer is incomplete until then) and kept for ten minutes |
 
 A table is read as the snapshot's section its name denotes: the whole name when the snapshot has
@@ -46,11 +48,29 @@ it, its note) and an enum value. Definition jumps from `workspace = true` to the
 `[workspace.dependencies]`, from an element of `features = [...]` to `[features.<name>]`, and from
 `path = "../x"` to that manifest's `[package]`.
 
+### A dependency's features
+
+A dependency's features are read from the text of its own manifest, the rules layer's ground: the
+directory its `path` names, or for `workspace = true` the one the nearest enclosing workspace's
+`[workspace.dependencies]` entry names. Its features are the names mcpp registers: the keys of
+`[features]` (`default` among them) and `[features.<name>]`, and the names of `[feature-deps.<name>]`
+and, under a target selector, of `feature-deps`, `feature-requires-abi` and `feature-xlings`. Its
+`default` names the ones on without being named, an array or `implies` what each turns on. A
+dependency whose manifest declares none accepts any name, as mcpp does. Between two elements a
+suggestion brings its commas; an array left open is read on its own line only.
+
+An index package's features are not answered: mcpp states none
+([mcpp#992](https://github.com/mcpp-community/mcpp/issues/992) asks for them), and an index's
+descriptors are mcpp's to read. `capabilities/explain` reports this as `manifest.packageFeatures`.
+Hover on an element of the edge's `features = [...]` names the dependency, the default and what the
+feature implies.
+
 | Code | Default severity | Setting | What it reports |
 |---|---|---|---|
 | `mcpp.manifest.syntax` | error | `mcpp.toml.diagnostics.syntax` | a line that is neither a table header nor `key = value`; an invalid key; a key without a value |
 | `mcpp.manifest.unknownSection` | warning | `mcpp.toml.diagnostics.unknownSection` | a table no section of the snapshot names, nor a prefix of it |
 | `mcpp.manifest.unknownKey` | warning | `mcpp.toml.diagnostics.unknownKey` | a key a table with a closed vocabulary does not have |
+| `mcpp.manifest.unknownFeature` | warning | `mcpp.toml.diagnostics.unknownKey` | a name in a `path` or workspace dependency's `features = [...]` that its manifest's `[features]` does not declare (1.6.0) |
 | `mcpp.manifest.planeSeparation` | warning | `mcpp.toml.diagnostics.planeSeparation` | a tool payload (`xim:`, `xpm:`, `xlings:`, `xvm:`) as a dependency; an mcpp package with a version under `[xlings]` |
 | `mcpp.manifest.legacyKey` | info | `mcpp.toml.diagnostics.legacyKeys` | a deprecated table or key, with its replacement |
 | `mcpp.manifest.mcppFloor` | error | -- | `[package] mcpp` that is not a release floor (`">=2026.9.28.3"`) |
@@ -95,3 +115,6 @@ implementation's answers over `tests/cts/rules/corpus` -- the scanner's structur
 at every position of every line, completion, hover, the jumps, the version contexts and the
 diagnostics under two sets of severities -- and over the documents of its parser tests
 (`golden/snippets.json`); the conformance case `rules` (tests/cts/rules.cpp) compares the backend's answers with them.
+The answers inside inline tables that 1.6.0 added are where 0.9 answered nothing; they are kept apart,
+in `golden/inline-tables.json` (`MCPP_IDE_WRITE_GOLDEN=1 mcpp test cts` writes it again for review),
+and every other position still equals 0.9's.

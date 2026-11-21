@@ -35,13 +35,13 @@ export namespace mcppide::server {
 
 using Json = nlohmann::json;
 
-inline constexpr std::string_view kVersion = "1.5.0";
+inline constexpr std::string_view kVersion = "1.6.0";
 // THE SERIES (mcpp design 2026-11-07, D15): `X.Y` of `X.Y.Z`, shared by the backend and every editor
 // plugin; components of one series work together. A plugin refuses a backend of another series,
 // naming both versions. The backend is always `X.Y.0`: the VS Code and CLion packages carry it, so a
 // change of the backend is a change of every package, and it begins a series (1.3.0). `Z` is an
 // editor plugin's own patch.
-inline constexpr std::string_view kSeries = "1.5";
+inline constexpr std::string_view kSeries = "1.6";
 static_assert(kVersion.starts_with(kSeries) && kVersion.size() == kSeries.size() + 2 && kVersion.ends_with(".0"));
 inline constexpr int kProtocol = 2;
 
@@ -223,7 +223,13 @@ private:
     // catalogue for minutes: kept until an index changes or the user asks.
     Json searchCache_;
     std::chrono::steady_clock::time_point searchAt_{};
+    // A project's build database, with the time its manifest was written when it was asked: an entry
+    // is used only while the manifest is that one, so a graph asked right after the manifest changed
+    // does not wait for the watcher's next poll to be current.
     std::map<std::filesystem::path, Json> buildDatabases_;
+    std::map<std::filesystem::path, std::optional<std::filesystem::file_time_type>> buildDatabaseStamps_;
+    std::optional<Json> cached_database(const std::filesystem::path& root);
+    void keep_database(const std::filesystem::path& root, Json envelope, std::optional<std::filesystem::file_time_type> stamp);
     struct Listing {
         std::vector<Json> records;
         bool current = true;   // false once the project changed
@@ -461,6 +467,7 @@ void Session::on_changed(const std::filesystem::path& root, std::string_view wha
     {
         std::lock_guard lock(mutex_);
         buildDatabases_.erase(root);
+        buildDatabaseStamps_.erase(root);
         if (auto it = listings_.find(root); it != listings_.end()) it->second.current = false;
         if (what != "result") frameworks_.erase(root);
         if (what != "result") probes_.erase(root);   // a manifest may state another mcpp floor or pin
@@ -616,11 +623,39 @@ std::expected<Json, rpc::Error> Session::language_service_exec(const Json& p) {
                 {"truncated", r->out_truncated || r->err_truncated}};
 }
 
-std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::path& root) {
-    {
-        std::lock_guard lock(mutex_);
-        if (auto it = buildDatabases_.find(root); it != buildDatabases_.end()) return it->second;
+namespace {
+std::optional<std::filesystem::file_time_type> manifest_stamp(const std::filesystem::path& root) {
+    std::error_code ec;
+    const auto t = std::filesystem::last_write_time(root / "mcpp.toml", ec);
+    if (ec) return std::nullopt;
+    return t;
+}
+}  // namespace
+
+// The caller holds no lock.
+std::optional<Json> Session::cached_database(const std::filesystem::path& root) {
+    const auto now = manifest_stamp(root);
+    std::lock_guard lock(mutex_);
+    const auto it = buildDatabases_.find(root);
+    if (it == buildDatabases_.end()) return std::nullopt;
+    if (const auto s = buildDatabaseStamps_.find(root); s == buildDatabaseStamps_.end() || s->second != now) {
+        buildDatabases_.erase(it);
+        buildDatabaseStamps_.erase(root);
+        return std::nullopt;
     }
+    return it->second;
+}
+
+void Session::keep_database(const std::filesystem::path& root, Json envelope, std::optional<std::filesystem::file_time_type> stamp) {
+    std::lock_guard lock(mutex_);
+    buildDatabases_[root] = std::move(envelope);
+    buildDatabaseStamps_[root] = stamp;
+}
+
+std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::path& root) {
+    if (auto cached = cached_database(root)) return *cached;
+    // The manifest's time before mcpp reads it: a change during the query leaves the entry stale.
+    const auto stamp = manifest_stamp(root);
     auto r = query(root, {"emit", "build-database", "--format", "json"});
     if (!r) return std::unexpected(r.error());
     if (r->exitCode != 0) {
@@ -633,8 +668,7 @@ std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::p
     }
     if (r->envelope.is_null())
         return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcpp emit build-database printed no document")});
-    std::lock_guard lock(mutex_);
-    buildDatabases_[root] = r->envelope;
+    keep_database(root, r->envelope, stamp);
     return r->envelope;
 }
 
@@ -1144,6 +1178,7 @@ std::expected<Json, rpc::Error> Session::project_new(const Json& p) {
 std::expected<Json, rpc::Error> Session::manifest_check(const Json& p) {
     const auto root = root_of(p);
     if (root.empty()) return std::unexpected(invalid("manifest/check names its project's root"));
+    const auto stamp = manifest_stamp(root);
     auto r = query(root, {"emit", "build-database", "--format", "json"});
     if (!r) return std::unexpected(r.error());
     Json diags = Json::array();
@@ -1155,10 +1190,7 @@ std::expected<Json, rpc::Error> Session::manifest_check(const Json& p) {
         else if (!std::filesystem::path(path).is_absolute()) d["path"] = (root / path).generic_string();
         diags.push_back(std::move(d));
     }
-    if (r->exitCode == 0) {
-        std::lock_guard lock(mutex_);
-        buildDatabases_[root] = r->envelope;
-    }
+    if (r->exitCode == 0) keep_database(root, r->envelope, stamp);
     return Json{{"root", root.generic_string()}, {"diagnostics", diags}};
 }
 
@@ -1359,6 +1391,12 @@ std::expected<Json, rpc::Error> Session::capabilities_explain(const Json& p) {
         }
         features.push_back(std::move(f));
     }
+    // An index package's features in mcpp.toml: mcpp states none in any release, and no capability is
+    // named yet (mcpp#992 asks for them); a `path` or workspace dependency's are read from its own
+    // manifest meanwhile (1.6.0).
+    features.push_back(Json{{"id", "manifest.packageFeatures"}, {"available", false},
+                            {"reason", Json{{"source", "mcpp"}, {"capability", ""}, {"need", "mcpp#992"}, {"have", probe.version},
+                                            {"message", t("mcpp states no features of an index package, which {0} asks for", {"mcpp#992"})}}}});
     return Json{{"root", root.generic_string()}, {"mcpp", probe_json(root, probe)}, {"features", features}};
 }
 
@@ -1450,6 +1488,13 @@ std::expected<Json, rpc::Error> Session::commands(const Json& p) {
             row["action"]["command"] = (*it)[editor];
             if (editor == "vscode" && it->contains("vscodeArguments")) row["action"]["arguments"] = (*it)["vscodeArguments"];
         }
+        // A cleanup says what it acts on and how much it asks first, from its plan: a view places it
+        // with the project's build or with the shared cache, and invents no grouping of its own.
+        if (c.contains("action") && c["action"].value("kind", "") == "cache")
+            if (const auto plan = policy::plan(c["action"].value("plan", ""), {})) {
+                row["action"]["scope"] = plan->group == "clean" ? "project" : "shared";
+                row["action"]["level"] = plan->level;
+            }
         const auto id = c.value("id", "");
         row["title"] = spec::manifest_string(std::format("command.{}.title", id), locale);
         row["subcommand"] = spec::subcommand_of(c);
@@ -1511,10 +1556,7 @@ std::expected<Json, rpc::Error> Session::test_list(const Json& p) {
 
 std::vector<std::string> Session::plan_packages(const std::filesystem::path& root, bool read) {
     Json db;
-    {
-        std::lock_guard lock(mutex_);
-        if (auto it = buildDatabases_.find(root); it != buildDatabases_.end()) db = it->second;
-    }
+    if (auto cached = cached_database(root)) db = *cached;
     if (db.is_null() && read)
         if (auto r = build_database(root)) db = *r;
     std::vector<std::string> out;

@@ -134,6 +134,8 @@ class LibraryView(private val project: Project, parent: Disposable) : McppView, 
     }
 
     override fun refresh() {
+        // Read when shown: the view is built before the session's strings arrive (#13).
+        add.text = session.t("Add to the project")
         if (!session.running) return
         val params = JsonObject().apply {
             addProperty("keyword", search.text.trim())

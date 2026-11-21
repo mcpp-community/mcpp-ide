@@ -561,7 +561,7 @@
         "when": { "type": "string" },
         "quickMenu": { "type": "boolean" },
         "subcommand": { "type": "string", "description": "The name a command line types (`:Mcpp <subcommand>` in Neovim): the row's own, else the id after `mcpp.`" },
-        "action": { "type": "object", "required": ["kind"], "properties": { "kind": { "enum": ["job", "run", "debug", "cache", "panel", "cancel", "selectTarget", "installToolchain", "selectDefaultToolchain", "newProject", "quickMenu", "selfCheck", "rpc", "languageService", "forward", "editor", "problems", "report"] } } }
+        "action": { "type": "object", "required": ["kind"], "properties": { "kind": { "enum": ["job", "run", "debug", "cache", "panel", "cancel", "selectTarget", "installToolchain", "selectDefaultToolchain", "newProject", "quickMenu", "selfCheck", "rpc", "languageService", "forward", "editor", "problems", "report"] }, "scope": { "enum": ["project", "shared"], "description": "A cache action: what its plan acts on, the project's build (`target/`) or the shared cache (1.6.0 and later)" }, "level": { "type": "integer", "minimum": 0, "maximum": 3, "description": "A cache action: its plan's danger level, which decides what is asked before it runs (1.6.0 and later)" } } }
       }
     },
     "launchParams": { "type": "object", "required": ["root"], "properties": { "root": { "type": "string" }, "target": { "type": "string" }, "profile": { "type": "string" }, "runner": { "type": "string", "description": "Explicit named runner; empty selects the default and disables automatic debuggee selection." }, "bin": { "type": "string" }, "test": { "type": "string" }, "cases": { "type": "array", "items": { "type": "string" } }, "args": { "type": "array", "items": { "type": "string" } } } },
