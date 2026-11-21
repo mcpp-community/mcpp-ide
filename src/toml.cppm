@@ -109,6 +109,11 @@ struct Context {
     std::optional<ValueKind> valueKind;
     bool insideString = false, stringOpen = false;
     ReplaceRange replace;
+    // key and value: the table the key belongs to when an inline table or a dotted key is read as
+    // the table of its name (`app = { kind = ... }` under `[targets]` is `[targets.app]`); for a key
+    // inside an inline table, the keys that table already has.
+    Resolution table;
+    std::vector<std::string> siblings;
 };
 
 // The document's structure. `lines` as text::lines_of gives them.
@@ -266,6 +271,8 @@ private:
     int line_ = 0, col_ = 0;
     std::optional<Pos> cursor_;
     std::optional<std::vector<std::string>> currentSection_;
+    // The keys of each inline table being scanned, innermost last.
+    std::vector<std::vector<std::string>> inlineKeys_;
 
     Pos pos() const { return {line_, col_}; }
     bool eof() const { return line_ >= static_cast<int>(lines_.size()); }
@@ -364,6 +371,13 @@ private:
         if (!currentSection_) return Resolution{};
         return resolve_section(*currentSection_);
     }
+    // The table named by the current section's segments followed by `path`.
+    Resolution table_resolution(std::span<const std::string> path) const {
+        if (path.empty()) return section_resolution();
+        auto segments = currentSection_.value_or(std::vector<std::string>{});
+        segments.insert(segments.end(), path.begin(), path.end());
+        return resolve_section(segments);
+    }
 
     static std::vector<std::string> names(const std::vector<KeySegment>& segments) {
         std::vector<std::string> out;
@@ -382,6 +396,8 @@ private:
         c.section = section_resolution();
         c.containerPath = std::move(containerPath);
         c.keyPrefix = std::move(keyPrefix);
+        c.table = table_resolution(c.containerPath);
+        if (!c.containerPath.empty() && !inlineKeys_.empty()) c.siblings = inlineKeys_.back();
         c.replace = token ? token_replace(*token) : empty_replace();
         capture(std::move(c));
     }
@@ -392,6 +408,7 @@ private:
         c.kind = Context::Kind::value;
         c.section = section_resolution();
         c.keyPath = std::move(keyPath);
+        if (!c.keyPath.empty()) c.table = table_resolution(std::span(c.keyPath).first(c.keyPath.size() - 1));
         c.valueKind = kind;
         c.insideString = insideString;
         c.stringOpen = stringOpen;
@@ -634,6 +651,7 @@ private:
         Value node;
         node.kind = ValueKind::inlineTable;
         node.open = true;
+        inlineKeys_.emplace_back();
         for (;;) {
             skip_trivia();
             if (cursor_reached()) capture_key(keyPath, {});
@@ -649,9 +667,13 @@ private:
                 continue;
             }
             const auto entryStart = pos();
-            if (auto entry = scan_key_value(keyPath)) node.entries.push_back(std::move(*entry));
+            if (auto entry = scan_key_value(keyPath)) {
+                if (!entry->keyPath.empty()) inlineKeys_.back().push_back(entry->keyPath.front().name);
+                node.entries.push_back(std::move(*entry));
+            }
             if (same(pos(), entryStart)) advance();
         }
+        inlineKeys_.pop_back();
         node.range = range_from(start);
         return node;
     }

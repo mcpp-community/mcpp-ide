@@ -22,6 +22,17 @@ namespace {
 
 int failures = 0;
 
+// The answers inside inline tables (and of nested keys) that 0.9 did not give: an inline table is read
+// as the table of its name from 1.6.0 on (docs/rules.md). They are kept in golden/inline-tables.json,
+// apart from 0.9's goldens, which give no answer at those positions; MCPP_IDE_WRITE_GOLDEN=1 writes
+// the file again from this implementation, for review.
+Json inlineSeen = Json::object();
+
+bool inside_inline_table(const toml::Context& c) {
+    return (c.kind == toml::Context::Kind::key && !c.containerPath.empty()) ||
+           (c.kind == toml::Context::Kind::value && c.keyPath.size() > 1);
+}
+
 void expect(const Json& got, const Json& want, const std::string& where) {
     if (got == want) return;
     if (++failures > 25) return;
@@ -194,8 +205,13 @@ void check_manifest(const std::filesystem::path& file, const Json& golden) {
                     list.push_back(j);
                 }
                 const auto& want = golden["completion"][at];
-                expect(list, golden["lists"][want[0].get<std::size_t>()], where + " completion");
-                if (!items.empty()) expect(Json{items[0].start, items[0].end}, Json{want[1], want[2]}, where + " completion range");
+                const auto& wantList = golden["lists"][want[0].get<std::size_t>()];
+                if (list != wantList && wantList.empty() && inside_inline_table(toml::context_at(upTo, l, c))) {
+                    inlineSeen[where] = Json{{"items", list}, {"range", {items[0].start, items[0].end}}};
+                } else {
+                    expect(list, wantList, where + " completion");
+                    if (!items.empty()) expect(Json{items[0].start, items[0].end}, Json{want[1], want[2]}, where + " completion range");
+                }
                 const auto v = manifest::dependency_version_context(upTo, l, c);
                 const Json wantV = golden.contains("versionContext") && golden["versionContext"].contains(at) ? golden["versionContext"][at] : Json();
                 expect(v ? Json{{"name", v->name}, {"insideString", v->insideString},
@@ -290,6 +306,16 @@ CTS rules{"rules", [] {
         else check_buildscript(f, golden);
     }
     check_catalogue(Json::parse(testsupport::read(root / "golden" / "catalogue.json")));
+    const auto inlineGolden = root / "golden" / "inline-tables.json";
+    if (std::getenv("MCPP_IDE_WRITE_GOLDEN")) {
+        std::ofstream(inlineGolden, std::ios::binary) << inlineSeen.dump(1) << "\n";
+    } else {
+        const auto want = Json::parse(testsupport::read(inlineGolden));
+        for (const auto& e : inlineSeen.items())
+            expect(e.value(), want.contains(e.key()) ? want[e.key()] : Json(), e.key() + " completion (inline table)");
+        for (const auto& e : want.items())
+            if (!inlineSeen.contains(e.key())) expect(Json(), e.value(), e.key() + " completion (inline table)");
+    }
     // The documents mcpp-vscode 0.9's parser tests read: their structure and every cursor's context.
     int k = 0;
     for (const auto& snippet : Json::parse(testsupport::read(root / "golden" / "snippets.json")))

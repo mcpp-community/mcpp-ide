@@ -1,0 +1,830 @@
+{
+ "complete.toml 33:11": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   11,
+   11
+  ]
+ },
+ "complete.toml 33:12": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   12,
+   12
+  ]
+ },
+ "complete.toml 33:13": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   12,
+   19
+  ]
+ },
+ "complete.toml 33:14": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   12,
+   19
+  ]
+ },
+ "complete.toml 33:15": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   12,
+   19
+  ]
+ },
+ "complete.toml 33:16": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   12,
+   19
+  ]
+ },
+ "complete.toml 33:17": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   12,
+   19
+  ]
+ },
+ "complete.toml 33:18": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   12,
+   19
+  ]
+ },
+ "complete.toml 33:19": {
+  "items": [
+   {
+    "detail": "array",
+    "documentation": "the features a consumer gets unless it opts out Since 0.0.47.",
+    "insertSnippet": "default = []",
+    "kind": "template",
+    "label": "default"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: defines the active feature adds to the package's units Since 0.0.69.",
+    "insertSnippet": "defines = []",
+    "kind": "template",
+    "label": "defines"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the source extensions of a device language this rule package compiles Since 2026.9.7.1.",
+    "insertSnippet": "device_extensions = []",
+    "kind": "template",
+    "label": "device_extensions"
+   },
+   {
+    "detail": "array",
+    "documentation": "[[features.<name>.flags]]: { glob, cflags, cxxflags, defines } tables for the feature's sources Since 0.0.101.",
+    "insertSnippet": "flags = []",
+    "kind": "template",
+    "label": "flags"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: \"<dependency>/<feature>\" entries activated with this feature Since 0.0.99.",
+    "insertSnippet": "forward = []",
+    "kind": "template",
+    "label": "forward"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the features this one activates Since 0.0.69.",
+    "insertSnippet": "implies = []",
+    "kind": "template",
+    "label": "implies"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature provides Since 0.0.69.",
+    "insertSnippet": "provides = []",
+    "kind": "template",
+    "label": "provides"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the capabilities the feature requires Since 0.0.69.",
+    "insertSnippet": "requires = []",
+    "kind": "template",
+    "label": "requires"
+   },
+   {
+    "detail": "table",
+    "documentation": "[features.<name>]: { threads, exceptions } the artefact's ABI switch must have when the feature is active Since 2026.9.12.2.",
+    "insertSnippet": "requires_abi = { }",
+    "kind": "template",
+    "label": "requires_abi"
+   },
+   {
+    "detail": "string",
+    "documentation": "[features.<name>]: the module of the build rule this feature contributes Since 2026.9.7.1.",
+    "insertSnippet": "rule_module = \"\"",
+    "kind": "template",
+    "label": "rule_module"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: sources compiled only when the feature is active Since 0.0.95.",
+    "insertSnippet": "sources = []",
+    "kind": "template",
+    "label": "sources"
+   },
+   {
+    "detail": "array",
+    "documentation": "[features.<name>]: the host tools the feature makes available Since 2026.9.27.1.",
+    "insertSnippet": "tools = []",
+    "kind": "template",
+    "label": "tools"
+   }
+  ],
+  "range": [
+   12,
+   19
+  ]
+ }
+}

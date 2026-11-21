@@ -396,6 +396,28 @@ std::size_t first_non_space(std::string_view line) {
     return std::string_view::npos;
 }
 
+// The keys inside an inline table: those of the table of its name (`app = { | }` under `[targets]`
+// lists what `[targets.app]` does), less the ones the inline table has. A dependency's inline table is
+// its specification, whose keys the schema does not list, and a table whose keys the user names has
+// none to offer. A key is offered where one can begin: after the table's `{` or a `,`.
+std::vector<Suggestion> inline_table_keys(const Context& context, std::string_view lineText) {
+    if (context.table.kind != Resolution::Kind::known || kDependencyGroups.contains(context.table.group)) return {};
+    if (!context.keyPrefix.empty()) return {};
+    auto before = std::min<std::size_t>(static_cast<std::size_t>(std::max(0, context.replace.start)), lineText.size());
+    while (before > 0 && (lineText[before - 1] == ' ' || lineText[before - 1] == '\t')) --before;
+    if (before > 0 && lineText[before - 1] != '{' && lineText[before - 1] != ',') return {};
+    const auto* schemaSection = section_by_name(context.table.group);
+    if (!schemaSection || schemaSection->value("openKeys", false) || !keys_of(schemaSection)) return {};
+    std::vector<Suggestion> v;
+    for (const auto& key : *keys_of(schemaSection)) {
+        const auto name = str(key, "key");
+        if (std::ranges::find(context.siblings, name) != context.siblings.end()) continue;
+        v.push_back({name, "template", key_detail(key), key_documentation(key), name + " = " + key_placeholder(key),
+                     context.replace.start, context.replace.end});
+    }
+    return v;
+}
+
 }  // namespace
 
 std::vector<Suggestion> completions(const std::vector<std::string>& lines, int line, int character, std::string_view locale) {
@@ -421,7 +443,10 @@ std::vector<Suggestion> completions(const std::vector<std::string>& lines, int l
     if (context.kind == Context::Kind::key) {
         const auto& section = context.section;
         if (section.kind == Resolution::Kind::top) return out(header_suggestions(context.replace.start, context.replace.end, locale));
-        if (section.kind != Resolution::Kind::known || !context.containerPath.empty()) return {};
+        // Inside an inline table: the keys of the table of its name, as its own header would list them.
+        if (!context.containerPath.empty())
+            return out(inline_table_keys(context, line >= 0 && line < static_cast<int>(lines.size()) ? std::string_view(lines[line]) : std::string_view()));
+        if (section.kind != Resolution::Kind::known) return {};
         if (kDependencyGroups.contains(section.group))
             return out(template_suggestions(kDependencyTemplates, context.replace.start, context.replace.end, locale));
         const auto* schemaSection = section_by_name(section.group);
@@ -440,8 +465,11 @@ std::vector<Suggestion> completions(const std::vector<std::string>& lines, int l
         return out(template_suggestions(templates_of(section.group), context.replace.start, context.replace.end, locale));
     }
     // A value: only an enum key's values; a free value is not guessed.
-    if (context.section.kind == Resolution::Kind::known) {
-        const auto* key = enum_key_of(section_by_name(context.section.group), context.keyPath);
+    if (context.section.kind == Resolution::Kind::known || context.table.kind == Resolution::Kind::known) {
+        const auto* key = context.section.kind == Resolution::Kind::known ? enum_key_of(section_by_name(context.section.group), context.keyPath) : nullptr;
+        // A key of an inline table or a dotted key: its own table's.
+        if (!key && context.keyPath.size() > 1 && context.table.kind == Resolution::Kind::known)
+            key = enum_key_of(section_by_name(context.table.group), {context.keyPath.back()});
         if (key) {
             std::vector<Suggestion> v;
             for (const auto& value : (*key)["values"]) {
