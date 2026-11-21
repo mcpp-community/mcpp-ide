@@ -149,14 +149,17 @@ jobs:
   # The report of #13 came from macOS on Apple silicon, where the JCEF plugin is a build of its own:
   # the startup chain and the graphs (JCEF on, switched off, its plugin disabled) on the newest stable
   # CLion there.
+  # One IDE per runner: on macOS a second IDE started on the same runner could stop at its start, before
+  # any plugin loads (its log ends at "CPU cores"), and its driver never connected.
   runtime-macos:
-    name: packaged plugin on CLion ${{ matrix.version }} (macOS aarch64)
+    name: packaged plugin on CLion ${{ matrix.version }} (macOS aarch64, ${{ matrix.scenario }})
     runs-on: macos-15
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         version: ['2026.2.4.1']
+        scenario: [graphRendersNavigatesAndRecoversInJcef, graphExplainsAbsentJcefPlugin, graphExplainsUnavailableJcef]
     defaults:
       run:
         shell: bash
@@ -209,7 +212,7 @@ jobs:
           language="$(find stable-plugin -maxdepth 1 -name 'mcppls-clion-*.zip' -print)"
           test -n "$plugin" && test -n "$language"
           gradle --no-daemon --max-workers=4 \
-            -p mide-plugins/clion/integration-tests test --tests GraphInteractionTest \
+            -p mide-plugins/clion/integration-tests test --tests "GraphInteractionTest.${{ matrix.scenario }}" \
             -PpluginZip="$GITHUB_WORKSPACE/$plugin" \
             -PmcpplsZip="$GITHUB_WORKSPACE/$language" \
             -PideVersion="$IDE_VERSION" \
@@ -217,7 +220,7 @@ jobs:
       - uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: clion-stable-macos-${{ matrix.version }}
+          name: clion-stable-macos-${{ matrix.version }}-${{ matrix.scenario }}
           # The JUnit results name an assertion's message; the IDE's own log, of a runner's IDE on a
           # generated project, names why an IDE did not start.
           path: |
