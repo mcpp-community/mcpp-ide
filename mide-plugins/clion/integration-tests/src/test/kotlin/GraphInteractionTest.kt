@@ -142,6 +142,12 @@ class GraphInteractionTest {
             if (jcef == Jcef.SWITCHED_OFF) addSystemProperty("ide.browser.jcef.enabled", false)
         }
         context.runIdeWithDriver().useDriverAndCloseIde {
+            // An action is invoked on the project's frame: the driver otherwise reads the data context of
+            // the focused window, which a macOS runner need not give the IDE, and finds no project there.
+            fun act(id: String) {
+                val frame = ui.x("//div[@class='IdeFrameImpl']")
+                invokeAction(id, component = if (frame.present()) frame.component else null)
+            }
             waitForProjectOpen()
             // The IDE settles after the project opens (its layout restored, its startup activities run): a tool
             // window shown before then can be hidden again by them, on 2026.1 and 2026.2 alike.
@@ -174,7 +180,7 @@ class GraphInteractionTest {
                     while (windows.getToolWindow("Project")?.isVisible() != true && System.nanoTime() < restored) Thread.sleep(100)
                     val before = "before the action: project=" + (windows.getToolWindow("Project")?.isVisible() ?: "absent") +
                         " after " + "%.1fs".format((System.nanoTime() - restored) / 1e9 + 60) + "\n"
-                    invokeAction("mcpp.project.showModuleDependencyGraph")
+                    act("mcpp.project.showModuleDependencyGraph")
                     // The sentence wraps in the narrow tool window; its accessible name is whole.
                     val explanation = ui.x("//div[contains(@accessiblename,'This IDE runs without JCEF')]")
                     // Which window is on screen, each time that changes, for the report: the mcpp window
@@ -217,11 +223,10 @@ class GraphInteractionTest {
                     val session = service<McppSessionRemote>(singleProject())
                     val rooted = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
                     while (session.getRoot() == null && System.nanoTime() < rooted) Thread.sleep(100)
-                    val frame = ui.x("//div[@class='IdeFrameImpl']")
-                    val diagnosis = { "root=${session.getRoot()} commands=${session.getCommands().size} frame=${frame.present()}" }
+                    val diagnosis = { "root=${session.getRoot()} commands=${session.getCommands().size} frame=${ui.x("//div[@class='IdeFrameImpl']").present()}" }
                     assertNotNull(session.getRoot(), "the session knows the project's root: ${diagnosis()}")
                     try {
-                        invokeAction("mcpp.build", component = if (frame.present()) frame.component else null)
+                        act("mcpp.build")
                     } catch (e: Exception) {
                         throw AssertionError("mcpp.build was not run: ${diagnosis()}", e)
                     }
@@ -240,7 +245,7 @@ class GraphInteractionTest {
                     record("module-project-built")
                     val window = utility<ToolWindowManagerFactory>().getInstance(singleProject()).getToolWindow("mcpp")!!
                     fun graph(kind: String): GraphCefRemote {
-                        invokeAction(if (kind == "modules") "mcpp.project.showModuleDependencyGraph" else "mcpp.project.showDependencyGraph")
+                        act(if (kind == "modules") "mcpp.project.showModuleDependencyGraph" else "mcpp.project.showDependencyGraph")
                         val expected = if (kind == "modules") "Module Graph" else "Dependency Graph"
                         val ready = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
                         while (!window.isVisible() && System.nanoTime() < ready) Thread.sleep(100)
