@@ -1,0 +1,34 @@
+name: Feature request
+description: A new capability or a change of behaviour
+title: "feat(<component>): "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: The problem it solves, and for whom.
+    validations:
+      required: true
+  - type: dropdown
+    id: party
+    attributes:
+      label: Where does it belong?
+      description: A decision every editor shares belongs to the backend; plugins only map it onto their UI.
+      options:
+        - Backend (protocol / spec), shown by every editor
+        - One editor plugin's presentation
+        - Needs mcpp or mcppls to state something new first
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Design
+      description: The protocol or spec/ change, what each editor shows, and the mcpp feature it relies on. A change larger than one pull request starts with a record in .agents/docs/.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

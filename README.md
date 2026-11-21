@@ -1,153 +1,114 @@
-# mcpp-ide - the IDE layer of mcpp
+<div align="center">
 
-> One backend for every editor of [mcpp](https://github.com/mcpp-community/mcpp) projects: VS Code
-> (mcpp-vscode), CLion (mcpp-clion) and Neovim (mcpp-nvim) build, run, test, debug and pack alike
+# mcpp-ide
+
+**One backend for every editor of [mcpp](https://github.com/mcpp-community/mcpp) projects**
+
+VS Code · CLion · Neovim build, run, test, debug and pack alike
+
+[![Release](https://img.shields.io/github/v/release/mcpp-community/mcpp-ide)](https://github.com/mcpp-community/mcpp-ide/releases)
+[![CI](https://github.com/mcpp-community/mcpp-ide/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcpp-community/mcpp-ide/actions/workflows/ci.yml)
+[![VS Code](https://img.shields.io/badge/VS_Code-mcpp--vscode-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode)
+[![Open VSX](https://img.shields.io/open-vsx/v/mcpp-community/mcpp-vscode?label=Open%20VSX)](https://open-vsx.org/extension/mcpp-community/mcpp-vscode)
+[![JetBrains](https://img.shields.io/jetbrains/plugin/v/io.github.mcpp-community.mcpp-clion?label=CLion)](https://plugins.jetbrains.com/plugin/35632-mcpp)
+[![C++23](https://img.shields.io/badge/C%2B%2B-23_modules-blue.svg)](https://en.cppreference.com/w/cpp/23)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 
 **English** | [简体中文](README.zh-CN.md)
 
-[Documentation](docs/README.md) · [Protocol](protocol/protocol.schema.json) · [Settings](spec/settings.json) ·
-[For agents](agents/README.md) · [Releases](https://github.com/mcpp-community/mcpp-ide/releases)
+[Documentation](docs/README.md) · [Architecture](docs/architecture.md) · [Protocol](protocol/protocol.schema.json) ·
+[For agents](agents/README.md) · [Contributing](AGENTS.md) · [Releases](https://github.com/mcpp-community/mcpp-ide/releases)
 
-An editor integration of a build tool decides a great deal: which command a build runs, what a
-test result means, how dangerous a cleanup is, which target a project builds for. Written once per
-editor, those decisions drift apart, and a person who moves from one editor to another meets a
-different tool.
+</div>
 
-mcpp-ide makes them once. Its backend, `mcpp-ide serve`, is a C++ program that reads only mcpp's
-machine contract (event streams, result records, launch descriptors, JSON queries) and answers the
-editors as an LSP server (JSON-RPC, protocol 2). The VS Code extension's views and pages are
-mcpp-vscode 0.9.0's; the CLion plugin shows the same information in CLion's own trees, lists and
-settings form (a graph in JCEF), and the Neovim plugin maps the answers onto buffers, floating
-windows and the quickfix list. The editor plugins are `mide-plugins/` of this repository. Language
-features of C++ files come from [mcppls](https://github.com/Sunrisepeak/mcpp-language-server);
-those of mcpp.toml and build.mcpp come from the backend ([docs/rules.md](docs/rules.md)).
+An editor integration of a build tool makes many decisions: which command a build runs, what a test
+result means, how dangerous a cleanup is. If each editor makes them separately, the editors drift
+apart. mcpp-ide makes them once. Its backend, `mcpp-ide serve`, reads only mcpp's machine contract
+and answers every editor as an LSP server. Each plugin then shows those answers in its editor's own UI.
 
-## Features
+```mermaid
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 56, "padding": 14}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#54aeff", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart TB
+    vscode("<b>VS Code</b><br/>mcpp-vscode"):::client
+    clion("<b>CLion</b><br/>mcpp-clion"):::client
+    nvim("<b>Neovim</b><br/>mcpp-nvim"):::client
+    agent("<b>Agents</b><br/>mcpp-ide skill"):::client
+    serve("<b>mcpp-ide serve</b><br/>LSP · every decision"):::core
+    mcppls("<b>mcppls</b><br/>C++ language server"):::ls
+    mcpp("<b>mcpp</b><br/>build · test · pack"):::tool
+    vscode & clion & nvim & agent --> serve
+    serve -- contract --> mcpp
+    serve -. status .-> mcppls
+    classDef client fill:#ffffff,stroke:#54aeff,color:#0550ae
+    classDef core fill:#0969da,stroke:#0550ae,color:#ffffff
+    classDef ls fill:#fbefff,stroke:#c297ff,color:#6639ba
+    classDef tool fill:#f6f8fa,stroke:#8c959f,color:#24292f
+    linkStyle 5 stroke:#c297ff
+```
 
-| | VS Code (mcpp-vscode) | CLion (mcpp-clion) | Neovim (mcpp-nvim) |
+## Highlights
+
+- **One answer everywhere**: what a build runs, how a test is reported and what a cleanup costs are decided by the backend
+- **Only mcpp's contract**: no manifest parsing and no dependency resolution of its own
+- **Tests as mcpp states them**: programs, cases, live results, diffs, metrics and Test Insights
+- **Jobs in order**: one build at a time per project, a newer build replaces a waiting one, and cancelling ends cleanly
+- **Safe cleanups**: each plan has a danger level, a preview and the confirmation that level requires
+
+## Editors
+
+| | VS Code 1.91+ | CLion 2026.1+ | Neovim 0.10+ |
 |---|---|---|---|
-| Build, run, test | Tasks in a pseudoterminal showing mcpp's output | "mcpp" run configurations, PTY console, ▶ beside `main` | `:Mcpp build`, `test`: jobs streamed into a buffer; `:Mcpp run` in a terminal buffer |
-| Test tree, re-run one test | Testing view: program, file, case; `@kind:bench` and a case's tags filter it | IDE test runner: a suite per program and per file | `:Mcpp test <filter>`: `mcpp://tests`, signs, the quickfix list |
-| Test results | Live per case; a failure with both sides opens VS Code's diff; a case's line ends with its duration and metrics | Live per case; a comparison failure opens the IDE's diff; metrics in the case's output | Live per case; both sides in the buffer and the quickfix list; duration and metrics as virtual text |
-| Test insights (the runs mcpp keeps) | "mcpp: Show Test Insights", a webview | The mcpp tool window's Test Insights tab (JCEF) | `:Mcpp test.insights`, a floating window |
-| Debug | CodeLLDB, C/C++ (gdb, lldb), lldb-dap | CLion's GDB or LLDB | nvim-dap (codelldb, lldb-dap, cppdbg, gdb) |
-| Diagnostics | Problems, from mcpp's located diagnostics | Console links to the reported location | `vim.diagnostic`, `:Mcpp problems` in the quickfix list |
-| mcpp.toml, build.mcpp | Completion, hover, jumps and the rules' diagnostics from the backend (language client); Problems from mcpp | The same, through CLion's completion, documentation, annotations and go-to | The same, through `vim.lsp`; mcpp's problems in `vim.diagnostic` |
-| Libraries, a package's page, graphs, cache, settings | mcpp-vscode's views and pages | Native trees and lists, a settings form from the registry, the graphs in JCEF | Text in floating windows, `vim.ui.select`; settings in `setup()` |
-| Targets (target sets among them), pack | Quick picks | Popups | `vim.ui.select` |
-| Language features | mcppls (installed with the extension) | mcppls CLion plugin (a dependency) | mcppls-nvim (`xlings install mcppls-nvim`) |
+| **Install** | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) | [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35632-mcpp) | `xlings install mcpp-ide-nvim` |
+| **Build · run · test** | tasks, Testing view | run configurations, test runner | `:Mcpp`, quickfix |
+| **Debug** | CodeLLDB · C/C++ · lldb-dap | GDB · LLDB | nvim-dap |
+| **Views** | libraries, graphs, cache, settings | native trees, forms, JCEF graphs | floating windows |
+| **C++ (mcppls)** | [installed with it](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) | [mcppls plugin](https://plugins.jetbrains.com/plugin/35609) | `xlings install mcppls-nvim` |
+| **Guide** | [mcpp-vscode](mide-plugins/vscode/README.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) |
 
-CLion's **Settings | Tools | mcpp** validates finite numbers and their allowed ranges before
-saving the form. Invalid input displays an error and leaves every stored value unchanged.
-Entering a setting's default removes its stored override.
+mcpp.toml and build.mcpp get completion, hover, jumps and diagnostics in every editor. The VS Code and
+CLion packages carry the backend for Linux x64/arm64, macOS arm64 and Windows x64; offline, install the
+`.vsix` or `.zip` from [Releases](https://github.com/mcpp-community/mcpp-ide/releases). Agents and other clients use `xlings install mcpp-ide`, then
+`mcpp-ide serve`. Verify any install with `mcpp-ide self-check`; versions: [docs/versions.md](docs/versions.md).
 
-Graph queries report build-database errors instead of showing an empty graph. After correcting
-the reported problem, reopen the graph to retry.
+## With an agent
 
-**Tests.** The editors show tests as `mcpp test` states them ([docs/architecture.md](docs/architecture.md),
-"A test run, end to end"). A program of several files (`[test] programs = "directory"`) has its files as
-children, each the part of the program a run gives a process. A case of the mtest test protocol carries its
-kind, tags and the bounds on its metrics. Test Insights reads the runs mcpp keeps in `target/mtest`: the last
-run, its failures and since when, each metric against its bound, the slowest and the flaky cases, and the
-schedule with its critical path. What an editor shows follows the project's mcpp:
+Paste this into any coding agent. It reads only what your task needs, and asks you first when the
+task is not clear.
 
-| The project's mcpp | Adds |
-|---|---|
-| any | programs and their results |
-| 2026.11.8.1 (`test-protocol`) | cases, their places and results, both sides of a failure |
-| 2026.11.9.1 | the files of a program of several files; Test Insights over the kept runs |
-| `test-parts`, `test-case-stream`, `test-metrics` ([mcpp#917](https://github.com/mcpp-community/mcpp/issues/917)) | the parts as mcpp states them, results as each case ends, metrics and their trends |
-
-A view that needs a feature the project's mcpp does not state is left out. The self-check
-(`capabilities/explain`) says which mcpp states it.
-
-- **One answer everywhere** -- what a build runs, how a test is reported, what a cleanup costs: the backend's
-- **Only mcpp's contract** -- no manifest parsing, no dependency resolution of its own
-- **Jobs in order** -- one at a time per project, a newer build replaces a waiting one, cancelling ends cleanly
-- **Platforms visible** -- each target with the platform that configures it and where every value came from
-- **Safe cleanups** -- a plan with a danger level, a preview and the confirmation that level requires
-
-## Install
-
-### From an agent
-
-```
-Read agents/README.md of https://github.com/mcpp-community/mcpp-ide, then install mcpp-ide for
-the editor I use (VS Code, CLion or Neovim) from its latest release, and check it with
-`mcpp-ide self-check` on my mcpp project.
+```text
+Work with mcpp-ide (https://github.com/mcpp-community/mcpp-ide), the IDE layer of mcpp.
+Read AGENTS.md first, then only what my task needs:
+- install or use it: agents/README.md, verified with `mcpp-ide self-check` on my project
+- understand it: docs/architecture.md, saying which layer owns what
+- report a bug or propose a feature: .agents/skills/mcpp-ide-contributing, triage first
+  (mcpp, mcppls, backend or one plugin; fix or workaround), then draft the issue from its template
+- change the code: that skill and .agents/skills/mcpp-ide-development, with tests that prove it
+My task: <describe it, or leave it empty>
+If it is empty or unclear, tell me in three lines what mcpp-ide is, then ask which of the above
+I want, with one suggested first step for each. Ask me before opening an issue or a pull request,
+pushing, or tagging.
 ```
 
-### From a release
-
-| Editor | Asset | Install |
-|---|---|---|
-| VS Code | the Marketplace (`mcpp-community.mcpp-vscode`), or `mcpp-vscode-<version>.vsix` | search *mcpp*, or `code --install-extension mcpp-vscode-<version>.vsix` |
-| VS Code-compatible editors | Open VSX, or the `.vsix` | install the `.vsix` from the extensions view |
-| CLion 2026.1+ | JetBrains Marketplace (`mcpp-clion`), or `mcpp-clion-<version>.zip` | Settings → Plugins → Install Plugin from Disk; the mcppls CLion plugin (its package for this system carries the server) first |
-| Neovim 0.10+ | `mide-plugins/nvim` of the release's source tree | `xlings install mcpp-ide-nvim` (the backend with it, set up at start); or the directory on the runtimepath and `require('mcpp').setup()` ([its README](mide-plugins/nvim/README.md)) |
-| Agents, other clients | `mcpp-ide-<version>-openkal-bundle-all.tar.gz` (both images; okrun for Linux x64/arm64, macOS arm64, Windows x64), `mcpp-ide-<version>.okb` with okrun, or `xlings install mcpp-ide` | run `bin/mcpp-ide serve` (`bin\mcpp-ide.exe` on Windows), or `okrun mcpp-ide-<version>.okb serve` |
-
-Each editor package serves every system: it carries the backend as one ok-image bundle
-(`backend/mcpp-ide.okb`, the x86_64 and aarch64 images on openkal-platform 0.24) and okrun for
-Linux x64/arm64, macOS arm64 and Windows x64. The Neovim plugin carries none: it starts the
-`mcpp-ide` command xlings installs (okrun on the same bundle).
-VS Code and CLion check for the local build tool only when a user starts an action that needs it.
-
-**Versions.** A version is `X.Y.Z`. `X.Y`, the series, is shared by the backend and every plugin: a
-plugin works with any backend of its series and refuses another, naming both versions and the
-install that matches. The VS Code and CLion packages carry the backend, so a change of the backend is a
-change of every package: it begins a series, every component at `X.Y.0`, tagged `vX.Y.0`, and the backend
-is always its series' `X.Y.0`. `Z` is an editor plugin's own patch, tagged `vscode-`, `clion-` or
-`nvim-vX.Y.Z`, which publishes that plugin alone over its series' backend: VS Code 1.3.2 and CLion 1.3.1
-both carry backend 1.3.0. A plugin's patch is refused when a path of the backend has changed since its
-series' tag. A pull request runs the jobs of
-the components it changes ([`.github/components.tsv`](.github/components.tsv)): a change of the backend runs
-everything, a change of one plugin runs that plugin's jobs over the backend main built from the same inputs,
-a change of the documentation its checks; `.github/` and any path the table does not name run everything.
-The one required check is `ci`.
-If `mcpp` is absent, they show one notification linking to the
-[mcpp repository](https://github.com/mcpp-community/mcpp).
-
-### From source
+## Development
 
 ```bash
-mcpp build                                     # the backend, the mock mcpp, mcpp-ide-dev
-mcpp test                                      # the backend's tests (mtest: tests/unit, e2e, cts, bench)
-cd mide-plugins/vscode && npm ci && npm test   # the extension's tests, the parity gates against 0.9.0 among them
-npm run test:webui                             # the graph and tests pages in Chromium, over the backend
-npm run package                                # dist/mcpp-vscode-<version>.vsix
-cd ../clion && gradle buildPlugin verifyPlugin # build/distributions/mcpp-clion-<version>.zip
-cd ../.. && nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua   # the Neovim plugin's tests
+mcpp build && mcpp test                                      # the backend, its mocks and mcpp-ide-dev
+(cd mide-plugins/vscode && npm ci && npm test)               # VS Code, the parity gates included
+(cd mide-plugins/clion && gradle buildPlugin verifyPlugin)   # CLion (xlings install gradle)
+nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua # Neovim
 ```
 
-`xlings install gradle` brings Gradle and its JDK.
-
-## Documentation
-
-- [docs/architecture.md](docs/architecture.md) -- the three layers and their boundaries
-- [protocol/protocol.schema.json](protocol/protocol.schema.json) -- the backend's methods and notifications
-- [protocol/mcpp-contract.schema.json](protocol/mcpp-contract.schema.json) -- the part of mcpp's contract it reads
-- [spec/](spec) -- settings, commands, translations: the source of the editors' declarations and command tables
-- [mide-plugins/vscode/README.md](mide-plugins/vscode/README.md),
-  [mide-plugins/clion/README.md](mide-plugins/clion/README.md),
-  [mide-plugins/nvim/README.md](mide-plugins/nvim/README.md)
+The environment, the tests for each component, common changes and the release procedure are in the
+[development skill](.agents/skills/mcpp-ide-development/SKILL.md).
 
 ## Contributing
 
-The backend is C++23 with modules, built by mcpp; the repository's tools are a program of it
-(`mcpp-ide-dev`: fixture capture, the editors' declarations, the translation check). Generated
-files are not committed. A change to what mcpp reports starts with `mcpp-ide-dev capture` and the
-diff in `protocol/fixtures`.
-
-A release runs the repository CI, publishes the checked archives of what its
-tag names (`.github/scripts/release-plan.sh`) and `SHA256SUMS` on GitHub, then
-independently submits the same VSIX to Open VSX and the same CLion ZIP to
-JetBrains Marketplace when the release carries them. The JetBrains job checks the
-archive digest, plugin XML ID and version before upload and retains a receipt;
-Marketplace availability follows JetBrains review. `OPENVSX_TOKEN` and
-`JETBRAINS_TOKEN` are repository secrets. The Visual Studio Marketplace upload
-remains manual.
+Every change starts with an issue ([templates](https://github.com/mcpp-community/mcpp-ide/issues/new/choose))
+and goes through a pull request. The rules are in [AGENTS.md](AGENTS.md): who owns what, how to
+triage (core or plugin, fix or workaround), versions and code. The procedure for people and agents
+is in the [contributing skill](.agents/skills/mcpp-ide-contributing/SKILL.md). Questions go to the
+[forum](https://forum.d2learn.org/category/20).
 
 ## License
 
-Apache-2.0
+[Apache-2.0](LICENSE)

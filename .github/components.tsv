@@ -25,5 +25,8 @@ docs	docs/*
 docs	agents/*
 docs	*.md
 docs	LICENSE
+# The forms of issues and pull requests are read by people too, although they live under .github/.
+docs	.github/ISSUE_TEMPLATE/*
+docs	.github/pull_request_template.md
 # The workflows, the scripts and the pins every job runs with.
 all	.github/*

@@ -62,6 +62,26 @@ mcppls what a compiler answers better.
 
 ## A build, end to end
 
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#ddf4ff", "actorBorder": "#54aeff", "actorTextColor": "#0550ae", "actorLineColor": "#b6e3ff", "signalColor": "#54aeff", "signalTextColor": "#57606a", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fbefff", "noteBorderColor": "#c297ff", "noteTextColor": "#6639ba", "labelBoxBkgColor": "#ddf4ff", "labelBoxBorderColor": "#54aeff", "labelTextColor": "#0550ae", "loopTextColor": "#57606a"}}}%%
+sequenceDiagram
+    autonumber
+    participant E as Editor plugin
+    participant B as mcpp-ide serve
+    participant M as mcpp
+    participant L as mcppls
+    E->>B: job/start {kind: "build", root}
+    Note over B: queued on the project's lane
+    B->>M: mcpp build --message-format json
+    M-->>B: narration and events
+    B-->>E: job/output, job/plan, job/progress, job/diagnostic, job/artifact
+    M-->>B: the closing envelope
+    B-->>E: job/finished
+    Note over M: writes the result record
+    B-->>E: result/changed (the watcher)
+    Note over L: reads the same record, refreshes
+```
+
 1. The user runs Build. The adapter sends `mcpp-ide/job/start {kind: "build", root}`.
 2. The backend queues it on the project's lane and runs `mcpp build --message-format json` with
    `MCPP_CLIENT`, colour for a terminal, and `MCPP_DENY_EFFECTS` in an untrusted workspace.
@@ -79,6 +99,35 @@ The editors show tests as `mcpp test` states them, by the mcpp test spec (mcpp d
 builds and runs the programs and states their cases and results; a framework is whatever library a
 program is written with, and the backend knows none by name. What a framework offers beyond the base,
 it states of itself (`mcpp test --guide`, B6).
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#ddf4ff", "actorBorder": "#54aeff", "actorTextColor": "#0550ae", "actorLineColor": "#b6e3ff", "signalColor": "#54aeff", "signalTextColor": "#57606a", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fbefff", "noteBorderColor": "#c297ff", "noteTextColor": "#6639ba", "labelBoxBkgColor": "#ddf4ff", "labelBoxBorderColor": "#54aeff", "labelTextColor": "#0550ae", "loopTextColor": "#57606a"}}}%%
+sequenceDiagram
+    autonumber
+    participant E as Editor plugin
+    participant B as mcpp-ide serve
+    participant M as mcpp
+    participant S as test session
+    E->>B: test/list
+    B->>M: mcpp test --list
+    B-->>E: programs, files, parts
+    E->>B: test/cases
+    B->>M: mcpp test --cases
+    B-->>E: the cases, kept until the project changes
+    alt a framework states a session and mcpp gives launches
+        E->>B: test/runCases
+        B->>S: started once per project (JSON-RPC)
+        S-->>B: build, cases, end
+        B-->>E: test/caseEvent ..., job/finished
+    else otherwise
+        E->>B: job/start {kind: "test"}
+        B->>M: mcpp test --message-format json
+        M-->>B: records
+        B-->>E: test/result, test/caseEvent ..., job/finished
+    end
+    E->>B: test/insights
+    B-->>E: the runs mcpp keeps (target/mtest)
+```
 
 1. `test/list` runs `mcpp test --list` and answers each program with its files, its `main` and its parts.
    A protocol program of several files (`[test] programs = "directory"`) runs as one process per file,
@@ -127,6 +176,19 @@ editor package carries that bundle and the runner that starts it on each system:
 |---|---|---|
 | `backend/mcpp-ide.okb` | the x86_64 and aarch64 images | |
 | `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`--mode self-contained --systems all`: each okrun built over the platform's hosted arrangement); one command packs both, `mcpp pack mcpp-ide --target openkal --mode self-contained --systems all --pkg-format tar,okb`, and the package's `runs_on.self` names the systems it runs on | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
+
+```mermaid
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 56, "padding": 14}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#54aeff", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart LR
+    cfg("<b>1</b> · mcpp.ide.backendPath"):::tool
+    pkg("<b>2</b> · the package's .okb<br/>run by okrun"):::core
+    inst("<b>3</b> · mcpp-ide<br/>from xlings or PATH"):::client
+    cfg -- unset --> pkg -- not carried --> inst
+    classDef client fill:#ffffff,stroke:#54aeff,color:#0550ae
+    classDef core fill:#0969da,stroke:#0550ae,color:#ffffff
+    classDef ls fill:#fbefff,stroke:#c297ff,color:#6639ba
+    classDef tool fill:#f6f8fa,stroke:#8c959f,color:#24292f
+```
 
 Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after it, an
 installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. The Neovim

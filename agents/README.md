@@ -22,13 +22,20 @@ and its contract, mcppls, xlings, trust.
 
 ## A session
 
-```
-→ initialize        {"editor": "cli", "workspaceFolders": ["/path/to/project"]}
-← result            {"projects": [...], "mcpp": {...}, "languageService": {...}, "checks": [...]}
-→ test/list         {"root": "/path/to/project"}
-→ job/start         {"kind": "test", "root": "/path/to/project", "color": false}
-← job/started, job/output, job/plan, test/result ..., test/summary, job/finished
-→ shutdown, then the notification exit
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#ddf4ff", "actorBorder": "#54aeff", "actorTextColor": "#0550ae", "actorLineColor": "#b6e3ff", "signalColor": "#54aeff", "signalTextColor": "#57606a", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fbefff", "noteBorderColor": "#c297ff", "noteTextColor": "#6639ba", "labelBoxBkgColor": "#ddf4ff", "labelBoxBorderColor": "#54aeff", "labelTextColor": "#0550ae", "loopTextColor": "#57606a"}}}%%
+sequenceDiagram
+    participant A as Agent
+    participant B as mcpp-ide serve
+    A->>B: initialize {editor: "cli", workspaceFolders: [dir]}
+    B-->>A: projects, mcpp, languageService, checks
+    A->>B: test/list {root}
+    B-->>A: programs, their files and parts
+    A->>B: job/start {kind: "test", root, color: false}
+    B-->>A: job/started, job/output, job/plan
+    B-->>A: test/result ..., test/summary
+    B-->>A: job/finished
+    A->>B: shutdown, then the notification exit
 ```
 
 Each message is framed as in LSP: `Content-Length: <n>\r\n\r\n<json>`.

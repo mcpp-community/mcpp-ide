@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://forum.d2learn.org/category/20
+    about: Usage questions and ideas go to the community forum.
+  - name: A problem of mcpp itself
+    url: https://github.com/mcpp-community/mcpp/issues/new/choose
+    about: Wrong output from mcpp (builds, tests, the machine contract) is reported to mcpp.
+  - name: A C++ language feature (mcppls)
+    url: https://github.com/Sunrisepeak/mcpp-language-server/issues
+    about: Completion, navigation and diagnostics of C++ files come from mcppls.

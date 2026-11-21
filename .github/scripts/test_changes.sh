@@ -26,6 +26,8 @@ check "its README is the plugin's" pull_request vscode=true docs=false backend=f
 check "documentation alone" pull_request docs=true backend=false vscode=false -- docs/x.md README.md
 check "the backend reaches every plugin" pull_request backend=true vscode=true clion=true nvim=true -- src/main.cpp
 check "spec/ is the backend's" pull_request backend=true vscode=true -- spec/test-frameworks.json
+check "the issue and pull-request forms are documentation" pull_request docs=true backend=false full=false -- .github/ISSUE_TEMPLATE/bug_report.yml .github/pull_request_template.md
+check "a skill is documentation" pull_request docs=true backend=false full=false -- .agents/skills/mcpp-ide-development/SKILL.md AGENTS.md
 check "a workflow reaches everything" pull_request full=true backend=true -- .github/workflows/ci.yml
 check "a path of no component reaches everything" pull_request full=true -- newdir/x
 check "a push reaches everything" push full=true backend=true -- docs/x.md
