@@ -18,7 +18,8 @@ import javax.swing.JComponent
 
 class JcefPageHost private constructor(received: (String) -> Unit, loaded: () -> Unit) : PageHost {
     private val browser = JBCefBrowser()
-    private val query = JBCefJSQuery.create(browser as JBCefBrowserBase)
+    private val query = runCatching { JBCefJSQuery.create(browser as JBCefBrowserBase) }
+        .onFailure { Disposer.dispose(browser) }.getOrThrow()
     override val component: JComponent get() = browser.component
 
     init {

@@ -46,10 +46,13 @@ abstract class WebPage(protected val project: Project, private val file: String,
     /** Asks the backend for what the page draws and hands it to [show]. */
     protected abstract fun draw()
 
+    /** Called on any thread (a job's end refreshes the tests' page). */
     final override fun refresh() {
         explanation?.let {
-            it.text = session.t(withoutBrowser)
-            it.accessibleContext.accessibleName = it.text
+            ApplicationManager.getApplication().invokeLater {
+                it.text = session.t(withoutBrowser)
+                it.accessibleContext.accessibleName = it.text
+            }
         }
         if (host != null) draw()
     }

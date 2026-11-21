@@ -35,8 +35,7 @@ class BackendTest {
     @Test
     fun theReadingThreadRunsNoListener() {
         // A listener reads the IDE's model; on the thread that reads the backend's output it ran outside
-        // any read action (#13). Notifications reach their listeners on `events`, in order; answers
-        // complete on `answers`.
+        // any read action (#13). Notifications reach their listeners on `events`, in order.
         assumeTrue(!System.getProperty("os.name").startsWith("Windows"))
         val frames = (1..3).joinToString("") { n ->
             val body = """{"jsonrpc":"2.0","method":"mcpp-ide/job/progress","params":{"n":$n}}"""
@@ -48,8 +47,7 @@ class BackendTest {
         val threads = java.util.Collections.synchronizedList(mutableListOf<String>())
         val order = java.util.Collections.synchronizedList(mutableListOf<Int>())
         val done = CompletableFuture<Unit>()
-        Backend(listOf("sh", script.path), {}, io.github.mcppcommunity.mcppclion.backend.sequentialExecutor("test events"),
-            java.util.concurrent.Executors.newCachedThreadPool()).use { backend ->
+        Backend(listOf("sh", script.path), {}, io.github.mcppcommunity.mcppclion.backend.sequentialExecutor("test events")).use { backend ->
             backend.on("job/progress") { _, p ->
                 threads += Thread.currentThread().name
                 order += p.asJsonObject["n"].asInt

@@ -4,10 +4,10 @@
 // a notification. Requests answer futures; notifications go to the listeners of their method ("*"
 // receives every one).
 //
-// The thread that reads the backend's output only decodes frames: a notification's listeners run on
-// `events`, one at a time and in the order they arrived, and a request's future is completed on
-// `answers`, where whatever waits on it continues. A listener that reads the IDE's model therefore
-// never runs on the reading thread, and a slow one never holds up the next answer (#13).
+// The thread that reads the backend's output only decodes frames: a notification's listeners and a
+// request's answer run on `events`, one at a time and in the order the backend wrote them, so what
+// continues after an answer (a listener it registers, the output it buffered) runs before the next
+// message. A listener that reads the IDE's model therefore never runs on the reading thread (#13).
 package io.github.mcppcommunity.mcppclion.backend
 
 import com.google.gson.JsonElement
@@ -23,7 +23,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
-import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -88,7 +87,6 @@ class Backend(
     command: List<String>,
     private val log: (String) -> Unit = {},
     private val events: Executor = sequentialExecutor("mcpp-ide events"),
-    private val answers: Executor = ForkJoinPool.commonPool(),
 ) : AutoCloseable {
     private val process: Process = ProcessBuilder(command).redirectErrorStream(false).start()
     private val input: OutputStream = process.outputStream
@@ -111,8 +109,10 @@ class Backend(
             val waiting = pending.values.toList()
             pending.clear()
             val code = process.exitValue()
-            answers.execute { waiting.forEach { it.second.completeExceptionally(ended) } }
-            events.execute { exited.complete(code) }
+            events.execute {
+                waiting.forEach { it.second.completeExceptionally(ended) }
+                exited.complete(code)
+            }
         }
     }
 
@@ -136,10 +136,10 @@ class Backend(
             if (message.has("error")) {
                 val e = message.getAsJsonObject("error")
                 val error = BackendError(method, e.get("code")?.asInt ?: -32603, e.get("message")?.asString ?: "failed", e.get("data"))
-                answers.execute { future.completeExceptionally(error) }
+                events.execute { future.completeExceptionally(error) }
             } else {
                 val result = message.get("result") ?: JsonNull.INSTANCE
-                answers.execute { future.complete(result) }
+                events.execute { future.complete(result) }
             }
             return
         }
