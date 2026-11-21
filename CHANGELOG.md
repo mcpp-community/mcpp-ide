@@ -38,6 +38,9 @@ are the fixes of the issue review of 2026-11-21
   `mcpp.manifest.unknownFeature` for a name it does not declare. An index package's features are not
   answered: mcpp states none, and `capabilities/explain` names
   [mcpp#992](https://github.com/mcpp-community/mcpp/issues/992) (`manifest.packageFeatures`).
+- **A graph right after the manifest changed is the new manifest's.** The kept build database was
+  dropped by the watcher's next poll (every 500 ms), so a graph asked before it was the old manifest's,
+  and the page kept it. An entry is now used only while the manifest is the one it was read from.
 - **Protocol.** A cache command of `commands/list` states `scope` (`project`, `shared`) and `level`.
 
 ## 1.5

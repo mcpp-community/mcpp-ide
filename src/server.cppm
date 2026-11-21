@@ -223,7 +223,13 @@ private:
     // catalogue for minutes: kept until an index changes or the user asks.
     Json searchCache_;
     std::chrono::steady_clock::time_point searchAt_{};
+    // A project's build database, with the time its manifest was written when it was asked: an entry
+    // is used only while the manifest is that one, so a graph asked right after the manifest changed
+    // does not wait for the watcher's next poll to be current.
     std::map<std::filesystem::path, Json> buildDatabases_;
+    std::map<std::filesystem::path, std::optional<std::filesystem::file_time_type>> buildDatabaseStamps_;
+    std::optional<Json> cached_database(const std::filesystem::path& root);
+    void keep_database(const std::filesystem::path& root, Json envelope, std::optional<std::filesystem::file_time_type> stamp);
     struct Listing {
         std::vector<Json> records;
         bool current = true;   // false once the project changed
@@ -461,6 +467,7 @@ void Session::on_changed(const std::filesystem::path& root, std::string_view wha
     {
         std::lock_guard lock(mutex_);
         buildDatabases_.erase(root);
+        buildDatabaseStamps_.erase(root);
         if (auto it = listings_.find(root); it != listings_.end()) it->second.current = false;
         if (what != "result") frameworks_.erase(root);
         if (what != "result") probes_.erase(root);   // a manifest may state another mcpp floor or pin
@@ -616,11 +623,39 @@ std::expected<Json, rpc::Error> Session::language_service_exec(const Json& p) {
                 {"truncated", r->out_truncated || r->err_truncated}};
 }
 
-std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::path& root) {
-    {
-        std::lock_guard lock(mutex_);
-        if (auto it = buildDatabases_.find(root); it != buildDatabases_.end()) return it->second;
+namespace {
+std::optional<std::filesystem::file_time_type> manifest_stamp(const std::filesystem::path& root) {
+    std::error_code ec;
+    const auto t = std::filesystem::last_write_time(root / "mcpp.toml", ec);
+    if (ec) return std::nullopt;
+    return t;
+}
+}  // namespace
+
+// The caller holds no lock.
+std::optional<Json> Session::cached_database(const std::filesystem::path& root) {
+    const auto now = manifest_stamp(root);
+    std::lock_guard lock(mutex_);
+    const auto it = buildDatabases_.find(root);
+    if (it == buildDatabases_.end()) return std::nullopt;
+    if (const auto s = buildDatabaseStamps_.find(root); s == buildDatabaseStamps_.end() || s->second != now) {
+        buildDatabases_.erase(it);
+        buildDatabaseStamps_.erase(root);
+        return std::nullopt;
     }
+    return it->second;
+}
+
+void Session::keep_database(const std::filesystem::path& root, Json envelope, std::optional<std::filesystem::file_time_type> stamp) {
+    std::lock_guard lock(mutex_);
+    buildDatabases_[root] = std::move(envelope);
+    buildDatabaseStamps_[root] = stamp;
+}
+
+std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::path& root) {
+    if (auto cached = cached_database(root)) return *cached;
+    // The manifest's time before mcpp reads it: a change during the query leaves the entry stale.
+    const auto stamp = manifest_stamp(root);
     auto r = query(root, {"emit", "build-database", "--format", "json"});
     if (!r) return std::unexpected(r.error());
     if (r->exitCode != 0) {
@@ -633,8 +668,7 @@ std::expected<Json, rpc::Error> Session::build_database(const std::filesystem::p
     }
     if (r->envelope.is_null())
         return std::unexpected(rpc::Error{rpc::REQUEST_FAILED, t("mcpp emit build-database printed no document")});
-    std::lock_guard lock(mutex_);
-    buildDatabases_[root] = r->envelope;
+    keep_database(root, r->envelope, stamp);
     return r->envelope;
 }
 
@@ -1144,6 +1178,7 @@ std::expected<Json, rpc::Error> Session::project_new(const Json& p) {
 std::expected<Json, rpc::Error> Session::manifest_check(const Json& p) {
     const auto root = root_of(p);
     if (root.empty()) return std::unexpected(invalid("manifest/check names its project's root"));
+    const auto stamp = manifest_stamp(root);
     auto r = query(root, {"emit", "build-database", "--format", "json"});
     if (!r) return std::unexpected(r.error());
     Json diags = Json::array();
@@ -1155,10 +1190,7 @@ std::expected<Json, rpc::Error> Session::manifest_check(const Json& p) {
         else if (!std::filesystem::path(path).is_absolute()) d["path"] = (root / path).generic_string();
         diags.push_back(std::move(d));
     }
-    if (r->exitCode == 0) {
-        std::lock_guard lock(mutex_);
-        buildDatabases_[root] = r->envelope;
-    }
+    if (r->exitCode == 0) keep_database(root, r->envelope, stamp);
     return Json{{"root", root.generic_string()}, {"diagnostics", diags}};
 }
 
@@ -1524,10 +1556,7 @@ std::expected<Json, rpc::Error> Session::test_list(const Json& p) {
 
 std::vector<std::string> Session::plan_packages(const std::filesystem::path& root, bool read) {
     Json db;
-    {
-        std::lock_guard lock(mutex_);
-        if (auto it = buildDatabases_.find(root); it != buildDatabases_.end()) db = it->second;
-    }
+    if (auto cached = cached_database(root)) db = *cached;
     if (db.is_null() && read)
         if (auto r = build_database(root)) db = *r;
     std::vector<std::string> out;

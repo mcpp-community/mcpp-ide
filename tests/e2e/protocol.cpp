@@ -235,6 +235,13 @@ E2E protocol{"protocol", [] {
     std::filesystem::remove(badDatabase / ".mock-mcpp-fail");
     check(!result_of("mcpp-ide/graph/packages", badRoot)["nodes"].empty());
     check(!result_of("mcpp-ide/graph/modules", badRoot)["nodes"].empty());
+    // A graph asked right after the manifest changed is the new manifest's, whatever the watcher has
+    // seen: the kept build database is used only while the manifest is the one it was read from.
+    std::ofstream(badDatabase / ".mock-mcpp-fail") << "manifest\n";
+    std::ofstream(badDatabase / "mcpp.toml") << "[package]\nname = \"app\"\nversion = \"0.2.0\"\n";
+    std::filesystem::last_write_time(badDatabase / "mcpp.toml", std::filesystem::last_write_time(badDatabase / "mcpp.toml") + std::chrono::seconds(2));
+    check(wire.call("mcpp-ide/graph/modules", badRoot).contains("error"));
+    std::filesystem::remove(badDatabase / ".mock-mcpp-fail");
     result_of("mcpp-ide/manifest/check", rooted);
     result_of("mcpp-ide/settings/registry", Json::object());
     result_of("mcpp-ide/selfCheck", Json::object());
