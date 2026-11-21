@@ -649,7 +649,7 @@ test("a release publishes the VSIX CI built, with its checksum", () => {
   const workflow = readFileSync(path.join(workflows, "release.yml"), "utf8");
   // A series release (vX.Y.0) and each editor plugin's patch tag (D15); vscode-vX.Y.Z publishes the VSIX alone.
   // The backend has no patch tag: the packages carry it, so a change of it is a series release.
-  assert.match(workflow, /push:\s*\n\s+tags: \['v\*', 'vscode-v\*', 'clion-v\*', 'nvim-v\*'\]/);
+  assert.match(workflow, /push:\s*\n\s+tags: \['v\*', 'vscode-v\*', 'clion-v\*', 'nvim-v\*', 'zed-v\*'\]/);
   assert.doesNotMatch(workflow, /backend-v\*/);
   assert.match(workflow, /release-plan\.sh "\$GITHUB_REF_NAME"/);
   assert.match(workflow, /contents: write/);
