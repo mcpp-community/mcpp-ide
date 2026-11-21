@@ -10,7 +10,7 @@ VS Code · CLion · Neovim 的构建、运行、测试、调试、打包行为�
 [![CI](https://github.com/mcpp-community/mcpp-ide/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcpp-community/mcpp-ide/actions/workflows/ci.yml)
 [![VS Code](https://img.shields.io/badge/VS_Code-mcpp--vscode-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode)
 [![Open VSX](https://img.shields.io/open-vsx/v/mcpp-community/mcpp-vscode?label=Open%20VSX)](https://open-vsx.org/extension/mcpp-community/mcpp-vscode)
-[![JetBrains](https://img.shields.io/jetbrains/plugin/v/io.github.mcpp-community.mcpp-clion?label=CLion)](https://plugins.jetbrains.com/plugin/io.github.mcpp-community.mcpp-clion)
+[![JetBrains](https://img.shields.io/jetbrains/plugin/v/io.github.mcpp-community.mcpp-clion?label=CLion)](https://plugins.jetbrains.com/plugin/35632-mcpp)
 [![C++23](https://img.shields.io/badge/C%2B%2B-23_modules-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 
@@ -26,26 +26,18 @@ VS Code · CLion · Neovim 的构建、运行、测试、调试、打包行为�
 各插件再用编辑器自己的界面呈现这些回答。
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#94a3b8", "edgeLabelBackground": "#f8fafc", "clusterBkg": "#f0fdfa", "clusterBorder": "#99f6e4", "titleColor": "#0f766e"}}}%%
+%%{init: {"theme": "base", "flowchart": {"curve": "linear", "rankSpacing": 70}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#818cf8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart LR
-    mcpp("<b>mcpp</b><br/>机器契约"):::mcpp
+    mcpp("<b>mcpp</b><br/>机器契约"):::ext
     serve("<b>mcpp-ide serve</b><br/>所有决定"):::core
+    clients("<b>VS Code · CLion<br/>Neovim · agents</b><br/>原生界面，不做决定"):::ide
     mcppls("<b>mcppls</b><br/>C++ 语言功能"):::ls
-    subgraph clients ["原生界面 · 不做决定"]
-        direction LR
-        vscode("mcpp-vscode"):::ide
-        clion("mcpp-clion"):::ide
-        nvim("mcpp-nvim"):::ide
-        agent("agents"):::agent
-    end
-    mcpp -- "事件 · 记录 · 查询" --> serve
-    serve -- "LSP / JSON-RPC" --> clients
-    mcppls -. "C++ 文件" .-> clients
-    classDef mcpp fill:#e0e7ff,stroke:#818cf8,color:#312e81
+    mcpp -- 契约 --> serve <-- LSP --> clients <-. LSP .-> mcppls
+    classDef ext fill:#f8fafc,stroke:#94a3b8,color:#334155
     classDef core fill:#4f46e5,stroke:#4338ca,color:#ffffff
-    classDef ide fill:#ccfbf1,stroke:#2dd4bf,color:#134e4a
-    classDef agent fill:#f1f5f9,stroke:#cbd5e1,color:#334155
-    classDef ls fill:#fef3c7,stroke:#fbbf24,color:#78350f
+    classDef ide fill:#eef2ff,stroke:#818cf8,color:#3730a3
+    classDef ls fill:#fffbeb,stroke:#f59e0b,color:#92400e
+    linkStyle 2 stroke:#f59e0b
 ```
 
 ## 特性
@@ -58,52 +50,35 @@ flowchart LR
 
 ## 编辑器
 
-| | VS Code | CLion | Neovim |
+| | VS Code 1.91+ | CLion 2026.1+ | Neovim 0.10+ |
 |---|---|---|---|
-| 构建、运行、测试 | 任务、测试视图 | 运行配置、测试运行器、`main` 旁的 ▶ | `:Mcpp`、缓冲区、quickfix |
-| 调试 | CodeLLDB、C/C++、lldb-dap | CLion 的 GDB / LLDB | nvim-dap |
-| mcpp.toml、build.mcpp | 补全、悬停、跳转、诊断 | 同上 | 同上，经 `vim.lsp` |
-| 库、依赖图、缓存、设置 | 视图与页面 | 原生树、表单、JCEF 中的图 | 浮动窗口、`vim.ui.select` |
-| C++ 语言功能 | mcppls（扩展包） | mcppls CLion 插件 | mcppls-nvim |
-| 详情 | [mcpp-vscode](mide-plugins/vscode/README.zh-CN.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) |
+| **安装** | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) | [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35632-mcpp) | `xlings install mcpp-ide-nvim` |
+| **构建 · 运行 · 测试** | 任务、测试视图 | 运行配置、测试运行器 | `:Mcpp`、quickfix |
+| **调试** | CodeLLDB · C/C++ · lldb-dap | GDB · LLDB | nvim-dap |
+| **视图** | 库、依赖图、缓存、设置 | 原生树、表单、JCEF 图 | 浮动窗口 |
+| **C++（mcppls）** | [随扩展安装](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) | [mcppls 插件](https://plugins.jetbrains.com/plugin/35609) | `xlings install mcppls-nvim` |
+| **指南** | [mcpp-vscode](mide-plugins/vscode/README.zh-CN.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) |
 
-## 安装
-
-| 编辑器 | 安装 |
-|---|---|
-| VS Code 1.91+ | Marketplace 或 Open VSX：`mcpp-community.mcpp-vscode`，或 `code --install-extension mcpp-vscode-<version>.vsix` |
-| CLion 2026.1+ | JetBrains Marketplace：`mcpp-clion`，依赖 mcppls CLion 插件；或从磁盘安装 ZIP |
-| Neovim 0.10+ | `xlings install mcpp-ide-nvim`（连同后端，启动时自动 setup）与 `xlings install mcppls-nvim` |
-| Agent、其他客户端 | `xlings install mcpp-ide`，然后运行 `mcpp-ide serve`；或 `okrun mcpp-ide-<version>.okb serve` |
-
-VS Code 与 CLion 的包自带后端，覆盖 Linux x64/arm64、macOS arm64 与 Windows x64
-（[分发方式](docs/architecture.md#distribution)）。在工程中运行 `mcpp-ide self-check` 即可验证安装。
-版本与 mcpp 的兼容性见 [docs/versions.md](docs/versions.md)。
+mcpp.toml 与 build.mcpp 在所有编辑器中都有补全、悬停、跳转与诊断。VS Code 与 CLion 的包自带后端，覆盖
+Linux x64/arm64、macOS arm64 与 Windows x64；离线时从[发布页](https://github.com/mcpp-community/mcpp-ide/releases)安装 `.vsix` 或 `.zip`。Agent 与其他
+客户端使用 `xlings install mcpp-ide`，然后运行 `mcpp-ide serve`。安装后用 `mcpp-ide self-check` 验证；版本见
+[docs/versions.md](docs/versions.md)。
 
 ## 使用 Agent
 
-一条提示词写清四件事：**仓库**、**先读哪份文档**、**要做的任务**、**以什么检查结束**。文档本身面向 Agent 编写，
-所以提示词可以很短。复制一条，填入 `<...>` 即可。
-
-**安装** · [agents/README.md](agents/README.md)、[mcpp-ide skill](agents/skills/mcpp-ide/SKILL.md)
+把下面这段粘贴给任意编程 Agent。它只读任务需要的文档；任务不明确时，会先询问你。
 
 ```text
-阅读 https://github.com/mcpp-community/mcpp-ide 的 agents/README.md，为 <我的编辑器> 从最新发布安装
-mcpp-ide，并在我的工程上用 `mcpp-ide self-check` 验证。
-```
-
-**了解项目** · [AGENTS.md](AGENTS.md)、[docs/architecture.md](docs/architecture.md)
-
-```text
-阅读 https://github.com/mcpp-community/mcpp-ide 的 AGENTS.md 与 docs/architecture.md，说明一次构建如何
-从编辑器经后端到达 mcpp，以及 <功能> 属于哪一层。
-```
-
-**参与贡献** · [贡献](.agents/skills/mcpp-ide-contributing/SKILL.md)与[开发](.agents/skills/mcpp-ide-development/SKILL.md) skill
-
-```text
-阅读 https://github.com/mcpp-community/mcpp-ide 的 AGENTS.md 与 .agents/skills/mcpp-ide-contributing，
-对 <issue> 做分诊（core 还是插件，修复还是 workaround），提出改动方案及能证明它的测试；开 PR 前先等我确认。
+协助我处理 mcpp-ide（https://github.com/mcpp-community/mcpp-ide），即 mcpp 的 IDE 层。
+先读 AGENTS.md，再只读我的任务需要的文档：
+- 安装或使用：agents/README.md，并在我的工程上用 `mcpp-ide self-check` 验证
+- 了解项目：docs/architecture.md，说明各层分别负责什么
+- 报告问题或提出功能：.agents/skills/mcpp-ide-contributing，先分诊（mcpp、mcppls、后端还是某个插件；
+  修复还是 workaround），再按模板起草 issue
+- 修改代码：上述 skill 与 .agents/skills/mcpp-ide-development，并给出能证明改动的测试
+我的任务：<在此描述，或留空>
+若留空或不明确，先用三行说明 mcpp-ide 是什么，再问我想做上面哪一项，并为每项给出建议的第一步。
+开 issue、PR，推送或打 tag 之前先征得我的同意。
 ```
 
 ## 开发

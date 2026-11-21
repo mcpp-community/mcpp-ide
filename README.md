@@ -10,7 +10,7 @@ VS Code · CLion · Neovim build, run, test, debug and pack alike
 [![CI](https://github.com/mcpp-community/mcpp-ide/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mcpp-community/mcpp-ide/actions/workflows/ci.yml)
 [![VS Code](https://img.shields.io/badge/VS_Code-mcpp--vscode-007ACC?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode)
 [![Open VSX](https://img.shields.io/open-vsx/v/mcpp-community/mcpp-vscode?label=Open%20VSX)](https://open-vsx.org/extension/mcpp-community/mcpp-vscode)
-[![JetBrains](https://img.shields.io/jetbrains/plugin/v/io.github.mcpp-community.mcpp-clion?label=CLion)](https://plugins.jetbrains.com/plugin/io.github.mcpp-community.mcpp-clion)
+[![JetBrains](https://img.shields.io/jetbrains/plugin/v/io.github.mcpp-community.mcpp-clion?label=CLion)](https://plugins.jetbrains.com/plugin/35632-mcpp)
 [![C++23](https://img.shields.io/badge/C%2B%2B-23_modules-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 
@@ -27,26 +27,18 @@ apart. mcpp-ide makes them once. Its backend, `mcpp-ide serve`, reads only mcpp'
 and answers every editor as an LSP server. Each plugin then shows those answers in its editor's own UI.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#94a3b8", "edgeLabelBackground": "#f8fafc", "clusterBkg": "#f0fdfa", "clusterBorder": "#99f6e4", "titleColor": "#0f766e"}}}%%
+%%{init: {"theme": "base", "flowchart": {"curve": "linear", "rankSpacing": 70}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#818cf8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart LR
-    mcpp("<b>mcpp</b><br/>machine contract"):::mcpp
+    mcpp("<b>mcpp</b><br/>machine contract"):::ext
     serve("<b>mcpp-ide serve</b><br/>every decision"):::core
+    clients("<b>VS Code · CLion<br/>Neovim · agents</b><br/>native UI, no decisions"):::ide
     mcppls("<b>mcppls</b><br/>C++ language features"):::ls
-    subgraph clients ["native UI · no decisions"]
-        direction LR
-        vscode("mcpp-vscode"):::ide
-        clion("mcpp-clion"):::ide
-        nvim("mcpp-nvim"):::ide
-        agent("agents"):::agent
-    end
-    mcpp -- "events · records · queries" --> serve
-    serve -- "LSP / JSON-RPC" --> clients
-    mcppls -. "C++ files" .-> clients
-    classDef mcpp fill:#e0e7ff,stroke:#818cf8,color:#312e81
+    mcpp -- contract --> serve <-- LSP --> clients <-. LSP .-> mcppls
+    classDef ext fill:#f8fafc,stroke:#94a3b8,color:#334155
     classDef core fill:#4f46e5,stroke:#4338ca,color:#ffffff
-    classDef ide fill:#ccfbf1,stroke:#2dd4bf,color:#134e4a
-    classDef agent fill:#f1f5f9,stroke:#cbd5e1,color:#334155
-    classDef ls fill:#fef3c7,stroke:#fbbf24,color:#78350f
+    classDef ide fill:#eef2ff,stroke:#818cf8,color:#3730a3
+    classDef ls fill:#fffbeb,stroke:#f59e0b,color:#92400e
+    linkStyle 2 stroke:#f59e0b
 ```
 
 ## Highlights
@@ -59,53 +51,37 @@ flowchart LR
 
 ## Editors
 
-| | VS Code | CLion | Neovim |
+| | VS Code 1.91+ | CLion 2026.1+ | Neovim 0.10+ |
 |---|---|---|---|
-| Build, run, test | tasks, Testing view | run configurations, test runner, ▶ beside `main` | `:Mcpp`, buffers, quickfix |
-| Debug | CodeLLDB, C/C++, lldb-dap | CLion's GDB / LLDB | nvim-dap |
-| mcpp.toml, build.mcpp | completion, hover, jumps, diagnostics | the same | the same, over `vim.lsp` |
-| Libraries, graphs, cache, settings | views and pages | native trees, forms, JCEF graphs | floating windows, `vim.ui.select` |
-| C++ language features | mcppls (extension pack) | mcppls CLion plugin | mcppls-nvim |
-| Details | [mcpp-vscode](mide-plugins/vscode/README.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) |
+| **Install** | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) | [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35632-mcpp) | `xlings install mcpp-ide-nvim` |
+| **Build · run · test** | tasks, Testing view | run configurations, test runner | `:Mcpp`, quickfix |
+| **Debug** | CodeLLDB · C/C++ · lldb-dap | GDB · LLDB | nvim-dap |
+| **Views** | libraries, graphs, cache, settings | native trees, forms, JCEF graphs | floating windows |
+| **C++ (mcppls)** | [installed with it](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) | [mcppls plugin](https://plugins.jetbrains.com/plugin/35609) | `xlings install mcppls-nvim` |
+| **Guide** | [mcpp-vscode](mide-plugins/vscode/README.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) |
 
-## Install
-
-| Editor | Install |
-|---|---|
-| VS Code 1.91+ | Marketplace or Open VSX: `mcpp-community.mcpp-vscode`, or `code --install-extension mcpp-vscode-<version>.vsix` |
-| CLion 2026.1+ | JetBrains Marketplace: `mcpp-clion`, which depends on the mcppls CLion plugin; or install the ZIP from disk |
-| Neovim 0.10+ | `xlings install mcpp-ide-nvim` (with the backend; it sets itself up at start) and `xlings install mcppls-nvim` |
-| Agents, other clients | `xlings install mcpp-ide`, then `mcpp-ide serve`; or `okrun mcpp-ide-<version>.okb serve` |
-
-The VS Code and CLion packages carry the backend for Linux x64/arm64, macOS arm64 and Windows x64
-([distribution](docs/architecture.md#distribution)). Run `mcpp-ide self-check` in a project to verify an
-install. Versions and compatibility with mcpp are described in [docs/versions.md](docs/versions.md).
+mcpp.toml and build.mcpp get completion, hover, jumps and diagnostics in every editor. The VS Code and
+CLion packages carry the backend for Linux x64/arm64, macOS arm64 and Windows x64; offline, install the
+`.vsix` or `.zip` from [Releases](https://github.com/mcpp-community/mcpp-ide/releases). Agents and other clients use `xlings install mcpp-ide`, then
+`mcpp-ide serve`. Verify any install with `mcpp-ide self-check`; versions: [docs/versions.md](docs/versions.md).
 
 ## With an agent
 
-A prompt names **the repository**, **the document to read first**, **the task** and **the check that
-ends it**. The documents are written for agents, so the prompt stays short. Copy one and fill in `<...>`.
-
-**Install** · [agents/README.md](agents/README.md), the [mcpp-ide skill](agents/skills/mcpp-ide/SKILL.md)
+Paste this into any coding agent. It reads only what your task needs, and asks you first when the
+task is not clear.
 
 ```text
-Read agents/README.md of https://github.com/mcpp-community/mcpp-ide, install mcpp-ide for <my editor>
-from the latest release, and verify it with `mcpp-ide self-check` on my project.
-```
-
-**Understand** · [AGENTS.md](AGENTS.md), [docs/architecture.md](docs/architecture.md)
-
-```text
-Read AGENTS.md and docs/architecture.md of https://github.com/mcpp-community/mcpp-ide, then explain
-how a build travels from the editor through the backend to mcpp, and which layer owns <feature>.
-```
-
-**Contribute** · the [contributing](.agents/skills/mcpp-ide-contributing/SKILL.md) and [development](.agents/skills/mcpp-ide-development/SKILL.md) skills
-
-```text
-Read AGENTS.md and .agents/skills/mcpp-ide-contributing of https://github.com/mcpp-community/mcpp-ide.
-Triage <issue>: core or plugin, fix or workaround. Propose the change and the tests that prove it,
-and wait for my go-ahead before opening a pull request.
+Work with mcpp-ide (https://github.com/mcpp-community/mcpp-ide), the IDE layer of mcpp.
+Read AGENTS.md first, then only what my task needs:
+- install or use it: agents/README.md, verified with `mcpp-ide self-check` on my project
+- understand it: docs/architecture.md, saying which layer owns what
+- report a bug or propose a feature: .agents/skills/mcpp-ide-contributing, triage first
+  (mcpp, mcppls, backend or one plugin; fix or workaround), then draft the issue from its template
+- change the code: that skill and .agents/skills/mcpp-ide-development, with tests that prove it
+My task: <describe it, or leave it empty>
+If it is empty or unclear, tell me in three lines what mcpp-ide is, then ask which of the above
+I want, with one suggested first step for each. Ask me before opening an issue or a pull request,
+pushing, or tagging.
 ```
 
 ## Development
