@@ -2,26 +2,32 @@
 
 The changelog is kept by series (`X.Y`); each section lists its components' releases.
 
+## 1.7
+
+### 1.7.0
+
+Every component is 1.7.0: the backend, mcpp-vscode, mcpp-clion and mcpp-nvim (from 1.6.0), and
+mcpp-zed, new. The backend's code is that of 1.6.0; the protocol names the new editor.
+
+- **mcpp-zed, the Zed extension** (#21): the backend as a language server of `mcpp.toml`, in Zed's
+  own UI. It is published through Zed's extension registry (zed-industries/extensions) as
+  `mcpp IDE` (`mcpp-ide-language-server`).
+  - **The backend of its own series.** `lsp.mcpp-ide.binary` in Zed's settings names one; otherwise
+    the extension downloads `mcpp-ide-1.7.0-openkal-bundle-all.tar.gz` of `v1.7.0` once into its work
+    directory (GitHub, else the GitCode mirror) and starts this system's runner on this
+    architecture's image. A `mcpp-ide` on PATH is not started: the extension cannot read the series a
+    backend answers.
+  - **Every TOML worktree, every mcpp project in it.** Zed starts the backend with a worktree's first
+    TOML file, once the worktree is trusted; the backend finds the projects below the worktree and
+    reads `mcpp.toml` and `build.mcpp` only, so a worktree without one shows nothing.
+  - **What Zed's registry requires.** The id's `-language-server` suffix, the license in
+    `mide-plugins/zed/`, Rust 1.90 for `wasm32-wasip2`: CI's Zed job builds it so and runs the
+    registry's checks of the manifest and the license. `extension.toml` (with its `Cargo.toml` and
+    `Cargo.lock`) is the seventh statement of the series, and `zed-vX.Y.Z` tags a patch.
+- **The protocol names `zed`** among the editors of `initialize`'s options and of
+  `mcpp-ide/commands/list`.
+
 ## 1.6
-
-### zed 1.6.0
-
-mcpp-zed, the Zed extension (#21): the backend of series 1.6 as a language server of `mcpp.toml`, in
-Zed's own UI. It is published through Zed's extension registry (zed-industries/extensions) as
-`mcpp IDE` (`mcpp-ide-language-server`).
-
-- **The backend of its own series.** `lsp.mcpp-ide.binary` in Zed's settings names one; otherwise
-  the extension downloads `mcpp-ide-1.6.0-openkal-bundle-all.tar.gz` of `v1.6.0` once into its work
-  directory (GitHub, else the GitCode mirror) and starts this system's runner on this
-  architecture's image. A `mcpp-ide` on PATH is not started: the extension cannot read the series a
-  backend answers.
-- **Every TOML worktree, every mcpp project in it.** Zed starts the backend with a worktree's first
-  TOML file, once the worktree is trusted; the backend finds the projects below the worktree and
-  reads `mcpp.toml` and `build.mcpp` only, so a worktree without one shows nothing.
-- **What Zed's registry requires.** The id's `-language-server` suffix, the license in
-  `mide-plugins/zed/`, Rust 1.90 for `wasm32-wasip2`: CI's Zed job builds it so and runs the
-  registry's checks of the manifest and the license. `extension.toml` is the seventh statement of
-  the series, and `zed-vX.Y.Z` tags a patch.
 
 ### 1.6.0
 

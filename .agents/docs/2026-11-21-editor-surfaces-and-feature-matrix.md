@@ -2,7 +2,7 @@
 
 Status, 2026-11-21: accepted. Stream F (the fixes) is implemented in series 1.6.0; the section
 "Stream F as implemented" records where the implementation differs from the plan. Zed's extension,
-its language server part only, is implemented as mcpp-zed 1.6.0 (2026-11-22, #21; section "Zed, as
+its language server part only, is implemented as mcpp-zed 1.7.0 (2026-11-22, #21; section "Zed, as
 implemented"). The rest of streams S and E (the surfaces, Zed's tasks and debug locator, Helix) is not
 implemented and follows in pull requests of their own. The facts about
 this repository were read from `main` (7c411fb) and from mcpp-ide 1.5.0 run over its protocol. The facts about Zed
@@ -365,7 +365,7 @@ in a real Zed in that repository's CI.
 
 ### Zed, as implemented (2026-11-22)
 
-mcpp-zed 1.6.0 is the language server part of the plan above, made to the rules of Zed's registry
+mcpp-zed 1.7.0 is the language server part of the plan above, made to the rules of Zed's registry
 (zed-industries/extensions) and run in a real Zed 1.29.3 (Linux x86_64, under Xvfb with lavapipe).
 Where it differs from the plan, and the facts the run settled:
 
@@ -376,6 +376,7 @@ Where it differs from the plan, and the facts the run settled:
 | Where it starts | with any TOML file of a worktree, not only where `mcpp.toml` is at its root | declining was shown in Zed's status bar of every TOML project ("Failed to run mcpp-ide"), and missed projects below the root; the backend reads `mcpp.toml` and `build.mcpp` only |
 | Trust | `trusted: true` | Zed starts no language server in a worktree it does not trust ("Waiting for worktree … to be trusted, before starting language server mcpp-ide", Zed.log) |
 | `lsp.<server>.binary` | Zed itself starts the named command with the `arguments` given and nothing else, and still asks the extension for the initialization options | measured: a wrapper named without `arguments` was started with none; the README says to include `serve` |
+| The series | 1.7.0: `protocol.schema.json` names `zed` among the editors, a backend path, so the extension begins a series | AGENTS.md §7: a change of behaviour updates the protocol schema in the same pull request |
 | Tasks, the debug locator, a C++ server for `build.mcpp` | not yet | they follow; mcppls's extension serves C++ |
 
 mcppls's extension was made to the same rules in its repository (Sunrisepeak/mcpp-language-server

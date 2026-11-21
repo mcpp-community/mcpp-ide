@@ -17,7 +17,8 @@ extension** → `mide-plugins/zed`. Zed compiles it, so Rust has to be installed
 The backend is the one of the extension's own series, from the first of these:
 
 1. the command `lsp.mcpp-ide.binary` names in Zed's settings. Zed starts it with the `arguments`
-   given there and nothing else, so they include `serve`:
+   given there and nothing else, so they include `serve`. It is started as it is: name a backend of
+   the extension's series, since nothing checks that one's series:
 
    ```json
    { "lsp": { "mcpp-ide": { "binary": { "path": "/path/to/mcpp-ide", "arguments": ["serve"] } } } }
@@ -25,7 +26,8 @@ The backend is the one of the extension's own series, from the first of these:
 
 2. the release's bundle, `mcpp-ide-X.Y.0-openkal-bundle-all.tar.gz` of the tag `vX.Y.0`, which the
    extension downloads once into the work directory Zed gives it (from GitHub, else from the GitCode
-   mirror `xlings-res/mcpp-ide`) and starts as this system's runner and this architecture's image.
+   mirror `xlings-res/mcpp-ide`, once the release's files are mirrored there) and starts as this
+   system's runner and this architecture's image.
    The bundle has them for Linux x86_64 and aarch64, macOS aarch64 and Windows x86_64.
 
 A `mcpp-ide` on PATH is not started. The extension cannot read the series a backend answers, so it

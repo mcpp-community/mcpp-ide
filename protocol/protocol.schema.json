@@ -19,7 +19,7 @@
           "initializationOptions": {
             "type": "object",
             "properties": {
-              "editor": { "enum": ["vscode", "jetbrains", "nvim", "cli"], "description": "The adapter: mcpp-vscode, mcpp-clion (the IntelliJ platform's id), mcpp-nvim, or an agent" },
+              "editor": { "enum": ["vscode", "jetbrains", "nvim", "zed", "cli"], "description": "The adapter: mcpp-vscode, mcpp-clion (the IntelliJ platform's id), mcpp-nvim, mcpp-zed, or an agent" },
               "locale": { "type": "string", "description": "The editor's display language, `auto` resolved by the adapter" },
               "trusted": { "type": "boolean" },
               "settings": { "$ref": "#/$defs/settingValues" },
@@ -74,7 +74,7 @@
     },
     "mcpp-ide/commands/list": {
       "description": "The command table (spec/commands.json) for one editor, with titles in the session's language and each command's subcommand.",
-      "params": { "type": "object", "properties": { "editor": { "enum": ["vscode", "jetbrains", "nvim", "cli"] } } },
+      "params": { "type": "object", "properties": { "editor": { "enum": ["vscode", "jetbrains", "nvim", "zed", "cli"] } } },
       "result": { "type": "object", "required": ["commands"], "properties": { "commands": { "type": "array", "items": { "$ref": "#/$defs/command" } } } }
     },
     "mcpp-ide/menu/quick": {

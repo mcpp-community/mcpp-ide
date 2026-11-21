@@ -1,6 +1,6 @@
 id = "mcpp-ide-language-server"
 name = "mcpp IDE"
-version = "1.6.0"
+version = "1.7.0"
 schema_version = 1
 description = "mcpp projects: completion, hover and diagnostics of mcpp.toml from mcpp-ide"
 repository = "https://github.com/mcpp-community/mcpp-ide"

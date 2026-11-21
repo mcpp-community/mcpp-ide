@@ -35,7 +35,8 @@ impl McppIde {
         let release = resolve::release();
         let bundle = resolve::bundle(&release, platform, arch)?;
         let present = |path: &str| fs::metadata(path).is_ok_and(|m| m.is_file());
-        if !(present(&bundle.runner) && present(&bundle.image)) {
+        let marker = resolve::marker(&release);
+        if !present(&marker) {
             zed::set_language_server_installation_status(id, &LanguageServerInstallationStatus::Downloading);
             let fetch = |url: &str| -> Result<()> {
                 // A directory an interrupted download left is not reused.
@@ -44,11 +45,10 @@ impl McppIde {
                 if platform != Platform::Windows {
                     zed::make_file_executable(&bundle.runner)?;
                 }
-                if present(&bundle.runner) && present(&bundle.image) {
-                    Ok(())
-                } else {
-                    Err(format!("the archive holds no {} and {}", bundle.runner, bundle.image))
+                if !(present(&bundle.runner) && present(&bundle.image)) {
+                    return Err(format!("the archive holds no {} and {}", bundle.runner, bundle.image));
                 }
+                fs::write(&marker, release.tag.as_bytes()).map_err(|e| format!("{marker}: {e}"))
             };
             let github = zed::github_release_by_tag_name(resolve::REPOSITORY, &release.tag).and_then(|found| {
                 let asset = found

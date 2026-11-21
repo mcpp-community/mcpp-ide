@@ -57,7 +57,7 @@ gives the rules in their shortest form and links to the full statement, which ho
   backend path ([components.tsv](.github/components.tsv)) begins a new series.
 - Seven statements: `mcpp.toml`, `src/server.cppm` (`kVersion`, `kSeries`), `vscode/package.json`,
   `clion/gradle.properties` (`pluginVersion`), `nvim/lua/mcpp/session.lua` (`M.version`),
-  `zed/extension.toml` (with its `Cargo.toml`). A series changes all of them in one commit, a patch
+  `zed/extension.toml` (with its `Cargo.toml` and `Cargo.lock`). A series changes all of them in one commit, a patch
   only its plugin's; CI checks that they agree.
 - Tags: `vX.Y.0` releases every component. `vscode-vX.Y.Z`, `clion-vX.Y.Z`, `nvim-vX.Y.Z` and
   `zed-vX.Y.Z` release one plugin's patch, and are refused if the backend changed after `vX.Y.0`.

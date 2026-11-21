@@ -20,6 +20,7 @@ version[clion]="$(sed -n 's/^pluginVersion *= *\(.*\)$/\1/p' "$root/mide-plugins
 version[nvim]="$(sed -n "s/^M.version = '\(.*\)'$/\1/p" "$root/mide-plugins/nvim/lua/mcpp/session.lua" | head -1)"
 version[zed]="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/mide-plugins/zed/extension.toml" | head -1)"
 zed_crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/mide-plugins/zed/Cargo.toml" | head -1)"
+zed_lock="$(sed -n '/^name = "zed-mcpp-ide"$/{n;s/^version = "\(.*\)"$/\1/p;}' "$root/mide-plugins/zed/Cargo.lock" | head -1)"
 backend_source="$(sed -n 's/^inline constexpr std::string_view kVersion = "\(.*\)";$/\1/p' "$root/src/server.cppm" | head -1)"
 series_source="$(sed -n 's/^inline constexpr std::string_view kSeries = "\(.*\)";$/\1/p' "$root/src/server.cppm" | head -1)"
 fail() { echo "release-plan: $*" >&2; exit 1; }
@@ -29,6 +30,7 @@ for c in backend vscode clion nvim zed; do
     [ -n "${version[$c]}" ] && [ -n "$(series "${version[$c]}")" ] || fail "$c states no X.Y.Z version (${version[$c]:-none})"
 done
 [ "$zed_crate" = "${version[zed]}" ] || fail "mide-plugins/zed/Cargo.toml says $zed_crate and its extension.toml ${version[zed]}"
+[ "$zed_lock" = "${version[zed]}" ] || fail "mide-plugins/zed/Cargo.lock says $zed_lock and its extension.toml ${version[zed]}"
 [ "$backend_source" = "${version[backend]}" ] || fail "src/server.cppm says $backend_source and mcpp.toml ${version[backend]}"
 the_series="$(series "${version[backend]}")"
 [ "${version[backend]}" = "$the_series.0" ] \

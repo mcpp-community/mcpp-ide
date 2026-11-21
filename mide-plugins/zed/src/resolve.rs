@@ -84,6 +84,12 @@ pub fn release() -> Release {
     }
 }
 
+/// The file written once a bundle is unpacked and checked; a directory without it is downloaded again
+/// (an unpacking cut short can leave a runner that exists but is not whole).
+pub fn marker(release: &Release) -> String {
+    format!("{}/.complete", release.directory)
+}
+
 pub fn mirror_url(release: &Release) -> String {
     format!("{MIRROR}/{}/{}", release.tag, release.asset)
 }
@@ -190,6 +196,7 @@ mod tests {
         assert_eq!(r.tag, format!("v{v}"));
         assert_eq!(r.asset, format!("mcpp-ide-{v}-openkal-bundle-all.tar.gz"));
         assert_eq!(r.directory, format!("mcpp-ide-{v}"));
+        assert_eq!(marker(&r), format!("mcpp-ide-{v}/.complete"));
         assert_eq!(mirror_url(&r), format!("https://gitcode.com/xlings-res/mcpp-ide/releases/download/v{v}/mcpp-ide-{v}-openkal-bundle-all.tar.gz"));
     }
 
