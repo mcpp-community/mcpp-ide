@@ -35,6 +35,7 @@ backend (`webui/tests`). The strings are the backend's (`i18n/bundle`), the ones
 | `mide-plugins/vscode` | mcpp-vscode | `vscode` | package.json's contributes, from `mcpp-ide-dev gen vscode` | the pages, tasks, the Testing view, debug configurations, Problems |
 | `mide-plugins/clion` | mcpp-clion | `jetbrains` (the IntelliJ platform) | actions and message bundles, from `mcpp-ide-dev gen jetbrains` | run configurations, the test tree, CLion's debugger, the tool window's native views, the settings form, the graph page in JCEF |
 | `mide-plugins/nvim` | mcpp-nvim | `nvim` | nothing: `:Mcpp` reads the command table from the backend | jobs in a buffer, a terminal for the program, `vim.diagnostic` and the quickfix list, the view models as text, nvim-dap |
+| `mide-plugins/zed` | mcpp-zed | `zed` | `extension.toml`: the backend as a language server of TOML | nothing beyond LSP: completion, hover and diagnostics of mcpp.toml in Zed's own UI |
 
 `spec/commands.json` says which editors offer a command (`editors`, every editor when absent; a
 forward to mcppls's commands only VS Code) and, where an editor is left out, why (`omitted`). The
@@ -194,7 +195,9 @@ Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used;
 installed `mcpp-ide` (xlings, whose command runs okrun on its bundle) or one on PATH. The Neovim
 plugin carries no package of the backend: it starts setup()'s `backend`, else `mcpp-ide` on PATH,
 and `xlings install mcpp-ide-nvim` installs it from the release's source tree, with the backend's
-package as its dependency. CI packs the
+package as its dependency. The Zed extension carries no backend either: it starts the one
+`lsp.mcpp-ide.binary` names, else downloads its series' bundle from the release `vX.Y.0` into its
+work directory, and never one from PATH, whose series it could not check. CI packs the
 bundle and the target set's tree (`mcpp-ide-<version>-openkal-bundle-all.tar.gz`, a release asset) in
 one pack on Linux, takes okrun from that tree, opens both editor packages and the tree on every
 system and starts what they carry for it (`.github/scripts/check-package.sh`).

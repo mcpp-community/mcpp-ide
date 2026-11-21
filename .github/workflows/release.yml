@@ -15,13 +15,15 @@ name: Release
 #   vscode-vX.Y.Z       the VSIX (Open VSX)
 #   clion-vX.Y.Z        the CLion ZIP (JetBrains Marketplace)
 #   nvim-vX.Y.Z         the Neovim plugin: the tag's source archive (xim's mcpp-ide-nvim)
+#   zed-vX.Y.Z          the Zed extension: the tagged commit, which a pull request to Zed's registry
+#                       (zed-industries/extensions) names; the release carries no file of its own
 #
 # The tag's version must be the component's own, and every component one series.
 
 on:
   workflow_dispatch:
   push:
-    tags: ['v*', 'vscode-v*', 'clion-v*', 'nvim-v*']
+    tags: ['v*', 'vscode-v*', 'clion-v*', 'nvim-v*', 'zed-v*']
 
 permissions:
   contents: read
@@ -83,6 +85,7 @@ jobs:
               vscode) cp artifacts/mcpp-vscode-vsix/*.vsix dist/ ;;
               clion) cp artifacts/mcpp-clion-zip/*.zip dist/ ;;
               nvim) ;;   # the tag's source archive is the plugin
+              zed) ;;    # Zed's registry builds the tagged commit
             esac
           done
           notes="$RUNNER_TEMP/notes.md"

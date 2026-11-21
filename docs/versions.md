@@ -9,7 +9,7 @@ install that matches.
 The VS Code and CLion packages carry the backend, so a change to the backend changes every package.
 It therefore begins a new series: every component moves to `X.Y.0`, tagged `vX.Y.0`, and the
 backend is always its series' `X.Y.0`. `Z` is an editor plugin's own patch, tagged
-`vscode-vX.Y.Z`, `clion-vX.Y.Z` or `nvim-vX.Y.Z`. Such a tag publishes that plugin alone over its
+`vscode-vX.Y.Z`, `clion-vX.Y.Z`, `nvim-vX.Y.Z` or `zed-vX.Y.Z`. Such a tag publishes that plugin alone over its
 series' backend; VS Code 1.3.2 and CLion 1.3.1, for example, both carry backend 1.3.0. A plugin
 patch is refused when any backend path has changed since its series' tag
 ([release-plan.sh](../.github/scripts/release-plan.sh)).

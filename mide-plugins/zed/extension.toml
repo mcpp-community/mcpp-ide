@@ -1,0 +1,17 @@
+id = "mcpp-ide-language-server"
+name = "mcpp IDE"
+version = "1.6.0"
+schema_version = 1
+description = "mcpp projects: completion, hover and diagnostics of mcpp.toml from mcpp-ide"
+repository = "https://github.com/mcpp-community/mcpp-ide"
+authors = ["mcpp-community"]
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
+
+# The backend for mcpp.toml, on the TOML language (Zed's TOML extension); it reads mcpp.toml and
+# build.mcpp only. C and C++ are mcppls's (its own Zed extension).
+[language_servers.mcpp-ide]
+name = "mcpp-ide"
+languages = ["TOML"]

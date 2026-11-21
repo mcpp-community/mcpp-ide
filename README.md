@@ -32,11 +32,12 @@ flowchart TB
     vscode("<b>VS Code</b><br/>mcpp-vscode"):::client
     clion("<b>CLion</b><br/>mcpp-clion"):::client
     nvim("<b>Neovim</b><br/>mcpp-nvim"):::client
+    zed("<b>Zed</b><br/>mcpp-zed"):::client
     agent("<b>Agents</b><br/>mcpp-ide skill"):::client
     serve("<b>mcpp-ide serve</b><br/>LSP · every decision"):::core
     mcppls("<b>mcppls</b><br/>C++ language server"):::ls
     mcpp("<b>mcpp</b><br/>build · test · pack"):::tool
-    vscode & clion & nvim & agent --> serve
+    vscode & clion & nvim & zed & agent --> serve
     serve -- contract --> mcpp
     serve -. status .-> mcppls
     classDef client fill:#ffffff,stroke:#54aeff,color:#0550ae
@@ -56,16 +57,16 @@ flowchart TB
 
 ## Editors
 
-| | VS Code 1.91+ | CLion 2026.1+ | Neovim 0.10+ |
-|---|---|---|---|
-| **Install** | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) | [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35632-mcpp) | `xlings install mcpp-ide-nvim` |
-| **Build · run · test** | tasks, Testing view | run configurations, test runner | `:Mcpp`, quickfix |
-| **Debug** | CodeLLDB · C/C++ · lldb-dap | GDB · LLDB | nvim-dap |
-| **Views** | libraries, graphs, cache, settings | native trees, forms, JCEF graphs | floating windows |
-| **C++ (mcppls)** | [installed with it](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) | [mcppls plugin](https://plugins.jetbrains.com/plugin/35609) | `xlings install mcppls-nvim` |
-| **Guide** | [mcpp-vscode](mide-plugins/vscode/README.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) |
+| | VS Code 1.91+ | CLion 2026.1+ | Neovim 0.10+ | Zed |
+|---|---|---|---|---|
+| **Install** | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) | [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35632-mcpp) | `xlings install mcpp-ide-nvim` | Zed's extensions: **mcpp IDE** |
+| **Build · run · test** | tasks, Testing view | run configurations, test runner | `:Mcpp`, quickfix | not yet |
+| **Debug** | CodeLLDB · C/C++ · lldb-dap | GDB · LLDB | nvim-dap | not yet |
+| **Views** | libraries, graphs, cache, settings | native trees, forms, JCEF graphs | floating windows | not yet |
+| **C++ (mcppls)** | [installed with it](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) | [mcppls plugin](https://plugins.jetbrains.com/plugin/35609) | `xlings install mcppls-nvim` | Zed's extensions: **C++ Modules Language Server** |
+| **Guide** | [mcpp-vscode](mide-plugins/vscode/README.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) | [mcpp-zed](mide-plugins/zed/README.md) |
 
-mcpp.toml and build.mcpp get completion, hover, jumps and diagnostics in every editor. The VS Code and
+mcpp.toml and build.mcpp get completion, hover, jumps and diagnostics in every editor (Zed: mcpp.toml). The VS Code and
 CLion packages carry the backend for Linux x64/arm64, macOS arm64 and Windows x64; offline, install the
 `.vsix` or `.zip` from [Releases](https://github.com/mcpp-community/mcpp-ide/releases). Agents and other clients use `xlings install mcpp-ide`, then
 `mcpp-ide serve`. Verify any install with `mcpp-ide self-check`; versions: [docs/versions.md](docs/versions.md).
@@ -96,6 +97,7 @@ mcpp build && mcpp test                                      # the backend, its 
 (cd mide-plugins/vscode && npm ci && npm test)               # VS Code, the parity gates included
 (cd mide-plugins/clion && gradle buildPlugin verifyPlugin)   # CLion (xlings install gradle)
 nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua # Neovim
+(cd mide-plugins/zed && cargo test)                          # Zed
 ```
 
 The environment, the tests for each component, common changes and the release procedure are in the

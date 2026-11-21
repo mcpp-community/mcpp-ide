@@ -1,7 +1,7 @@
 # AGENTS.md
 
 mcpp-ide is the IDE layer of [mcpp](https://github.com/mcpp-community/mcpp): one backend (`mcpp-ide serve`,
-C++23 modules) and the editor plugins that host it (`mide-plugins/`: VS Code, CLion, Neovim). This file
+C++23 modules) and the editor plugins that host it (`mide-plugins/`: VS Code, CLion, Neovim, Zed). This file
 gives the rules in their shortest form and links to the full statement, which holds where they differ.
 
 ## 1. Where a fact lives
@@ -55,11 +55,14 @@ gives the rules in their shortest form and links to the full statement, which ho
 - A version is `X.Y.Z`. The series `X.Y` is shared by the backend and every plugin; `Z` is one
   plugin's own patch. The backend is always `X.Y.0`: every package carries it, so a change to any
   backend path ([components.tsv](.github/components.tsv)) begins a new series.
-- Six statements: `mcpp.toml`, `src/server.cppm` (`kVersion`, `kSeries`), `vscode/package.json`,
-  `clion/gradle.properties` (`pluginVersion`), `nvim/lua/mcpp/session.lua` (`M.version`). A series
-  changes all of them in one commit, a patch only its plugin's; CI checks that they agree.
-- Tags: `vX.Y.0` releases every component. `vscode-vX.Y.Z`, `clion-vX.Y.Z` and `nvim-vX.Y.Z` release
-  one plugin's patch, and are refused if the backend changed after `vX.Y.0`.
+- Seven statements: `mcpp.toml`, `src/server.cppm` (`kVersion`, `kSeries`), `vscode/package.json`,
+  `clion/gradle.properties` (`pluginVersion`), `nvim/lua/mcpp/session.lua` (`M.version`),
+  `zed/extension.toml` (with its `Cargo.toml`). A series changes all of them in one commit, a patch
+  only its plugin's; CI checks that they agree.
+- Tags: `vX.Y.0` releases every component. `vscode-vX.Y.Z`, `clion-vX.Y.Z`, `nvim-vX.Y.Z` and
+  `zed-vX.Y.Z` release one plugin's patch, and are refused if the backend changed after `vX.Y.0`.
+  Zed's registry builds a tagged commit through a pull request a person opens there
+  (`mide-plugins/zed/README.md`).
 - Pins name only released versions: [versions.env](.github/versions.env) (CI), `.xlings.json`, `mcpp = ">=..."`.
 
 ## 5. Build and test
@@ -70,6 +73,7 @@ mcpp run mcpp-ide-dev -- check-sources && mcpp run mcpp-ide-dev -- check-i18n
 (cd mide-plugins/vscode && npm ci && npm test)               # extension, parity gates included
 (cd mide-plugins/clion && gradle buildPlugin verifyPlugin)   # CLion plugin
 nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua # Neovim plugin
+(cd mide-plugins/zed && cargo test)                          # Zed extension
 ```
 
 - Edit `spec/`, never what is generated from it. `mcpp-ide-dev gen vscode` rewrites the extension's
@@ -83,7 +87,9 @@ nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua # Neovim plugin
   reached only through `mcpplibs.os` (`os::host()`, never `os::is_<os>`, which an ok image answers
   false). `check-sources` enforces all of this.
 - CLion: public IntelliJ API only (the verifier reports internal use). VS Code: the oldest
-  `engines.vscode` (`VSCODE_VERSION`). Neovim: 0.10 and later, over `vim.lsp`.
+  `engines.vscode` (`VSCODE_VERSION`). Neovim: 0.10 and later, over `vim.lsp`. Zed:
+  `zed_extension_api` for `wasm32-wasip2` and the rules of Zed's registry; its few messages, shown
+  before a backend answers, are English, as the registry asks.
 - User-facing strings belong to the backend (`spec/i18n`), and English and Chinese change together.
 - Follow the neighbouring code and change only what the task needs. A comment says why, not what.
 

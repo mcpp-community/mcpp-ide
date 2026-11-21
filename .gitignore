@@ -9,6 +9,7 @@ mide-plugins/clion/build/
 mide-plugins/clion/.gradle/
 mide-plugins/clion/.intellijPlatform/
 mide-plugins/clion/.kotlin/
+mide-plugins/zed/extension.wasm
 webui/dist/
 *.log
 compile_commands.json

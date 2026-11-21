@@ -31,11 +31,12 @@ flowchart TB
     vscode("<b>VS Code</b><br/>mcpp-vscode"):::client
     clion("<b>CLion</b><br/>mcpp-clion"):::client
     nvim("<b>Neovim</b><br/>mcpp-nvim"):::client
+    zed("<b>Zed</b><br/>mcpp-zed"):::client
     agent("<b>Agents</b><br/>mcpp-ide skill"):::client
     serve("<b>mcpp-ide serve</b><br/>LSP · 所有决定"):::core
     mcppls("<b>mcppls</b><br/>C++ 语言服务器"):::ls
     mcpp("<b>mcpp</b><br/>构建 · 测试 · 打包"):::tool
-    vscode & clion & nvim & agent --> serve
+    vscode & clion & nvim & zed & agent --> serve
     serve -- 契约 --> mcpp
     serve -. 状态 .-> mcppls
     classDef client fill:#ffffff,stroke:#54aeff,color:#0550ae
@@ -55,16 +56,16 @@ flowchart TB
 
 ## 编辑器
 
-| | VS Code 1.91+ | CLion 2026.1+ | Neovim 0.10+ |
-|---|---|---|---|
-| **安装** | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) | [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35632-mcpp) | `xlings install mcpp-ide-nvim` |
-| **构建 · 运行 · 测试** | 任务、测试视图 | 运行配置、测试运行器 | `:Mcpp`、quickfix |
-| **调试** | CodeLLDB · C/C++ · lldb-dap | GDB · LLDB | nvim-dap |
-| **视图** | 库、依赖图、缓存、设置 | 原生树、表单、JCEF 图 | 浮动窗口 |
-| **C++（mcppls）** | [随扩展安装](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) | [mcppls 插件](https://plugins.jetbrains.com/plugin/35609) | `xlings install mcppls-nvim` |
-| **指南** | [mcpp-vscode](mide-plugins/vscode/README.zh-CN.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) |
+| | VS Code 1.91+ | CLion 2026.1+ | Neovim 0.10+ | Zed |
+|---|---|---|---|---|
+| **安装** | [Marketplace](https://marketplace.visualstudio.com/items?itemName=mcpp-community.mcpp-vscode) · [Open VSX](https://open-vsx.org/extension/mcpp-community/mcpp-vscode) | [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/35632-mcpp) | `xlings install mcpp-ide-nvim` | Zed 扩展页：**mcpp IDE** |
+| **构建 · 运行 · 测试** | 任务、测试视图 | 运行配置、测试运行器 | `:Mcpp`、quickfix | 暂无 |
+| **调试** | CodeLLDB · C/C++ · lldb-dap | GDB · LLDB | nvim-dap | 暂无 |
+| **视图** | 库、依赖图、缓存、设置 | 原生树、表单、JCEF 图 | 浮动窗口 | 暂无 |
+| **C++（mcppls）** | [随扩展安装](https://marketplace.visualstudio.com/items?itemName=sunrisepeak.mcpp-language-server) | [mcppls 插件](https://plugins.jetbrains.com/plugin/35609) | `xlings install mcppls-nvim` | Zed 扩展页：**C++ Modules Language Server** |
+| **指南** | [mcpp-vscode](mide-plugins/vscode/README.zh-CN.md) | [mcpp-clion](mide-plugins/clion/README.md) | [mcpp-nvim](mide-plugins/nvim/README.md) | [mcpp-zed](mide-plugins/zed/README.md) |
 
-mcpp.toml 与 build.mcpp 在所有编辑器中都有补全、悬停、跳转与诊断。VS Code 与 CLion 的包自带后端，覆盖
+mcpp.toml 与 build.mcpp 在所有编辑器中都有补全、悬停、跳转与诊断（Zed 只有 mcpp.toml）。VS Code 与 CLion 的包自带后端，覆盖
 Linux x64/arm64、macOS arm64 与 Windows x64；离线时从[发布页](https://github.com/mcpp-community/mcpp-ide/releases)安装 `.vsix` 或 `.zip`。Agent 与其他
 客户端使用 `xlings install mcpp-ide`，然后运行 `mcpp-ide serve`。安装后用 `mcpp-ide self-check` 验证；版本见
 [docs/versions.md](docs/versions.md)。
@@ -93,6 +94,7 @@ mcpp build && mcpp test                                      # 后端、mock 与
 (cd mide-plugins/vscode && npm ci && npm test)               # VS Code，含 parity 门禁
 (cd mide-plugins/clion && gradle buildPlugin verifyPlugin)   # CLion（xlings install gradle）
 nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua # Neovim
+(cd mide-plugins/zed && cargo test)                          # Zed
 ```
 
 环境、各组件的测试、常见改动与发布流程见[开发 skill](.agents/skills/mcpp-ide-development/SKILL.md)。

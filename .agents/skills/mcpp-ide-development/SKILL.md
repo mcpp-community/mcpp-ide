@@ -32,6 +32,7 @@ change reaches every plugin, because each plugin is tested over the backend.
 | vscode | `mide-plugins/vscode/` | `npm ci && npm test`; `npm run test:parity`, `npm run test:webui`, `npm run test:e2e`; `npm run package` |
 | clion | `mide-plugins/clion/` | `gradle test buildPlugin verifyPlugin` |
 | nvim | `mide-plugins/nvim/` | `nvim --headless --clean -l mide-plugins/nvim/tests/smoke.lua` |
+| zed | `mide-plugins/zed/` | `cargo test`, `cargo build --release --target wasm32-wasip2` (Rust `ZED_RUST_VERSION`), `bash .github/scripts/check-zed-extension.sh mide-plugins/zed` |
 | CI | `.github/` | `bash .github/scripts/test_changes.sh`, `bash .github/scripts/release-plan.sh` |
 
 ## 3. Common changes
@@ -64,8 +65,8 @@ change reaches every plugin, because each plugin is tested over the backend.
 The rules are in AGENTS.md §4 and [release-plan.sh](../../../.github/scripts/release-plan.sh).
 
 1. Decide the kind. Any backend path changed since `vX.Y.0` means a series release `vX.Y+1.0` (or
-   `vX+1.0.0`). Otherwise it is a plugin patch, `<vscode|clion|nvim>-vX.Y.Z+1`.
-2. On `release/<version>`, bump the version statements (all six for a series, only the plugin's
+   `vX+1.0.0`). Otherwise it is a plugin patch, `<vscode|clion|nvim|zed>-vX.Y.Z+1`.
+2. On `release/<version>`, bump the version statements (all seven for a series, only the plugin's
    own for a patch) and add the CHANGELOG.md section under its series, listing each component's
    version. Then run `bash .github/scripts/release-plan.sh <tag>`.
 3. Open a pull request titled `X.Y.Z: <sentence>` and merge it after `ci` passes.
@@ -75,3 +76,6 @@ The rules are in AGENTS.md §4 and [release-plan.sh](../../../.github/scripts/re
    `JETBRAINS_TOKEN`; Marketplace availability follows JetBrains review.
 5. Watch the run until every job passes, then check that the release assets install
    (`mcpp-ide self-check` on a project).
+6. A release that carries the Zed extension reaches Zed through a pull request to Zed's registry,
+   which a person opens and answers (its AI policy admits no agent): `mide-plugins/zed/README.md`,
+   "Zed's extension registry".

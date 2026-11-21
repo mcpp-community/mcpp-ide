@@ -24,7 +24,8 @@ check() {   # check <description> <event> <expected key=value...> -- <paths...>
 check "a plugin alone" pull_request backend=false clion=true vscode=false nvim=false full=false -- mide-plugins/clion/src/main/kotlin/X.kt
 check "its README is the plugin's" pull_request vscode=true docs=false backend=false -- mide-plugins/vscode/README.md
 check "documentation alone" pull_request docs=true backend=false vscode=false -- docs/x.md README.md
-check "the backend reaches every plugin" pull_request backend=true vscode=true clion=true nvim=true -- src/main.cpp
+check "the backend reaches every plugin" pull_request backend=true vscode=true clion=true nvim=true zed=true -- src/main.cpp
+check "the Zed extension alone" pull_request zed=true backend=false vscode=false clion=false nvim=false full=false -- mide-plugins/zed/src/lib.rs
 check "spec/ is the backend's" pull_request backend=true vscode=true -- spec/test-frameworks.json
 check "the issue and pull-request forms are documentation" pull_request docs=true backend=false full=false -- .github/ISSUE_TEMPLATE/bug_report.yml .github/pull_request_template.md
 check "a skill is documentation" pull_request docs=true backend=false full=false -- .agents/skills/mcpp-ide-development/SKILL.md AGENTS.md

@@ -6,7 +6,7 @@
 # of the backend changes every package, and it begins a series. Two kinds of tag:
 #
 #   vX.Y.0              a series release: every component, each at X.Y.0 (a change of the backend)
-#   <plugin>-vX.Y.Z     one editor plugin's patch: vscode, clion or nvim, at X.Y.Z
+#   <plugin>-vX.Y.Z     one editor plugin's patch: vscode, clion, nvim or zed, at X.Y.Z
 #
 # Prints `components=...`, `version=...` and `title=...` for $GITHUB_OUTPUT. Without a tag it only
 # checks that every component states one series, the backend's two statements agree and the backend
@@ -18,40 +18,43 @@ version[backend]="$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$root/mcpp.toml" | he
 version[vscode]="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$root/mide-plugins/vscode/package.json" | head -1)"
 version[clion]="$(sed -n 's/^pluginVersion *= *\(.*\)$/\1/p' "$root/mide-plugins/clion/gradle.properties" | head -1)"
 version[nvim]="$(sed -n "s/^M.version = '\(.*\)'$/\1/p" "$root/mide-plugins/nvim/lua/mcpp/session.lua" | head -1)"
+version[zed]="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/mide-plugins/zed/extension.toml" | head -1)"
+zed_crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/mide-plugins/zed/Cargo.toml" | head -1)"
 backend_source="$(sed -n 's/^inline constexpr std::string_view kVersion = "\(.*\)";$/\1/p' "$root/src/server.cppm" | head -1)"
 series_source="$(sed -n 's/^inline constexpr std::string_view kSeries = "\(.*\)";$/\1/p' "$root/src/server.cppm" | head -1)"
 fail() { echo "release-plan: $*" >&2; exit 1; }
 series() { [[ "$1" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]] && echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"; }
 
-for c in backend vscode clion nvim; do
+for c in backend vscode clion nvim zed; do
     [ -n "${version[$c]}" ] && [ -n "$(series "${version[$c]}")" ] || fail "$c states no X.Y.Z version (${version[$c]:-none})"
 done
+[ "$zed_crate" = "${version[zed]}" ] || fail "mide-plugins/zed/Cargo.toml says $zed_crate and its extension.toml ${version[zed]}"
 [ "$backend_source" = "${version[backend]}" ] || fail "src/server.cppm says $backend_source and mcpp.toml ${version[backend]}"
 the_series="$(series "${version[backend]}")"
 [ "${version[backend]}" = "$the_series.0" ] \
     || fail "the backend is ${version[backend]}; it is always its series' X.Y.0 (the editor packages carry it, so a change of it begins a series)"
 [ "$series_source" = "$the_series" ] || fail "src/server.cppm's kSeries is $series_source, the backend's series $the_series"
-for c in vscode clion nvim; do
+for c in vscode clion nvim zed; do
     [ "$(series "${version[$c]}")" = "$the_series" ] \
         || fail "$c is ${version[$c]}, of another series than the backend's ${version[backend]}"
 done
 
 tag="${1:-}"
 if [ -z "$tag" ]; then
-    echo "one series $the_series: backend ${version[backend]}, vscode ${version[vscode]}, clion ${version[clion]}, nvim ${version[nvim]}"
+    echo "one series $the_series: backend ${version[backend]}, vscode ${version[vscode]}, clion ${version[clion]}, nvim ${version[nvim]}, zed ${version[zed]}"
     exit 0
 fi
 if [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.0)$ ]]; then
     v="${BASH_REMATCH[1]}"
-    for c in backend vscode clion nvim; do
+    for c in backend vscode clion nvim zed; do
         [ "${version[$c]}" = "$v" ] || fail "the series release $tag needs every component at $v; $c is ${version[$c]}"
     done
-    echo "components=backend vscode clion nvim"
+    echo "components=backend vscode clion nvim zed"
     echo "version=$v"
     echo "title=mcpp-ide $v"
 elif [[ "$tag" =~ ^backend-v ]]; then
     fail "$tag: the backend has no patch of its own; a change of it is a series release vX.Y.0"
-elif [[ "$tag" =~ ^(vscode|clion|nvim)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+elif [[ "$tag" =~ ^(vscode|clion|nvim|zed)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
     c="${BASH_REMATCH[1]}"; v="${BASH_REMATCH[2]}"
     [ "${version[$c]}" = "$v" ] || fail "the tag $tag names $c $v, and $c is ${version[$c]}"
     # A plugin's patch carries its series' backend: no path of the backend (.github/components.tsv)
@@ -70,10 +73,10 @@ elif [[ "$tag" =~ ^(vscode|clion|nvim)-v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
             done
         done < <(git -C "$root" diff --name-only "v$the_series.0" HEAD)
     fi
-    declare -A names=([vscode]=mcpp-vscode [clion]=mcpp-clion [nvim]=mcpp-nvim)
+    declare -A names=([vscode]=mcpp-vscode [clion]=mcpp-clion [nvim]=mcpp-nvim [zed]=mcpp-zed)
     echo "components=$c"
     echo "version=$v"
     echo "title=${names[$c]} $v"
 else
-    fail "$tag is neither vX.Y.0 nor <vscode|clion|nvim>-vX.Y.Z"
+    fail "$tag is neither vX.Y.0 nor <vscode|clion|nvim|zed>-vX.Y.Z"
 fi

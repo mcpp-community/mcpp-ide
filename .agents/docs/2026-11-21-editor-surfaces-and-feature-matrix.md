@@ -1,8 +1,10 @@
 # Editor surfaces and the feature matrix: one rule for every plugin, with Zed and Helix
 
 Status, 2026-11-21: accepted. Stream F (the fixes) is implemented in series 1.6.0; the section
-"Stream F as implemented" records where the implementation differs from the plan. Streams S and E (the
-surfaces, Zed and Helix) are not implemented and follow in pull requests of their own. The facts about
+"Stream F as implemented" records where the implementation differs from the plan. Zed's extension,
+its language server part only, is implemented as mcpp-zed 1.6.0 (2026-11-22, #21; section "Zed, as
+implemented"). The rest of streams S and E (the surfaces, Zed's tasks and debug locator, Helix) is not
+implemented and follows in pull requests of their own. The facts about
 this repository were read from `main` (7c411fb) and from mcpp-ide 1.5.0 run over its protocol. The facts about Zed
 and Helix come from their documentation and issue trackers and were not run; the section
 "Unverified facts" lists them. The facts about mcppls were read from its repository at release
@@ -360,6 +362,24 @@ in a real Zed in that repository's CI.
 - The debug locator turns the run task into a scenario of Zed's own adapters from
   `mcpp-ide launch`.
 - A context server for Zed's agent is a later addition over the same backend as `agents/`.
+
+### Zed, as implemented (2026-11-22)
+
+mcpp-zed 1.6.0 is the language server part of the plan above, made to the rules of Zed's registry
+(zed-industries/extensions) and run in a real Zed 1.29.3 (Linux x86_64, under Xvfb with lavapipe).
+Where it differs from the plan, and the facts the run settled:
+
+| Point | As implemented | Why |
+|---|---|---|
+| Id | `mcpp-ide-language-server`, name `mcpp IDE` | the registry asks an extension that provides only a language server for a `-language-server` or `-lsp` suffix, and an id never changes; `mcpp` is free for an extension that provides more |
+| The backend | `lsp.mcpp-ide.binary`, else the bundle of `vX.Y.0` downloaded into the work directory (GitHub, else GitCode's `xlings-res/mcpp-ide`); not PATH | the extension cannot read the series a backend answers, so it could not refuse another series; the plan's PATH first is dropped |
+| Where it starts | with any TOML file of a worktree, not only where `mcpp.toml` is at its root | declining was shown in Zed's status bar of every TOML project ("Failed to run mcpp-ide"), and missed projects below the root; the backend reads `mcpp.toml` and `build.mcpp` only |
+| Trust | `trusted: true` | Zed starts no language server in a worktree it does not trust ("Waiting for worktree … to be trusted, before starting language server mcpp-ide", Zed.log) |
+| `lsp.<server>.binary` | Zed itself starts the named command with the `arguments` given and nothing else, and still asks the extension for the initialization options | measured: a wrapper named without `arguments` was started with none; the README says to include `serve` |
+| Tasks, the debug locator, a C++ server for `build.mcpp` | not yet | they follow; mcppls's extension serves C++ |
+
+mcppls's extension was made to the same rules in its repository (Sunrisepeak/mcpp-language-server
+#93, `mcppls-language-server`, zed 0.23.1): its payload is downloaded the same way.
 
 ### Versions and release
 

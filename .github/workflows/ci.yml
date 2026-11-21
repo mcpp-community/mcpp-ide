@@ -45,6 +45,7 @@ jobs:
       vscode: ${{ steps.classify.outputs.vscode }}
       clion: ${{ steps.classify.outputs.clion }}
       nvim: ${{ steps.classify.outputs.nvim }}
+      zed: ${{ steps.classify.outputs.zed }}
       digest: ${{ steps.classify.outputs.digest }}
       lend: ${{ steps.classify.outputs.lend }}
     steps:
@@ -659,6 +660,32 @@ jobs:
     with:
       plugin_artifact: mcpp-clion-zip
 
+  # The Zed extension (mide-plugins/zed): its tests on the host, the crate built for wasm32-wasip2 with
+  # the Rust Zed's registry builds extensions with (ZED_RUST_VERSION), and what the registry checks of
+  # the manifest and the license. It needs no backend: it downloads its series' release. Zed's registry
+  # builds the commit a pull request there names, so nothing is packaged here (its README).
+  zed:
+    name: Zed extension
+    needs: changes
+    if: needs.changes.outputs.zed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mide-plugins/zed
+    steps:
+      - uses: actions/checkout@v5
+      - name: The Rust of Zed's registry
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^ZED_RUST_VERSION=//p' ../../.github/versions.env)"
+          rustup toolchain install "$version" --profile minimal --target wasm32-wasip2
+          echo "RUSTUP_TOOLCHAIN=$version" >> "$GITHUB_ENV"
+      - run: cargo test --locked
+      - run: cargo build --locked --release --target wasm32-wasip2
+      - name: What the registry checks of the manifest and the license
+        run: bash ../../.github/scripts/check-zed-extension.sh .
+
   # The Neovim plugin (mide-plugins/nvim) in a headless Neovim, against the backend built here: over
   # the mock mcpp on the oldest and the newest Neovim it supports, then over the real mcpp, which
   # builds the test's project. Neovim comes from xlings (`nvim` in xim-pkgindex), each version
@@ -778,7 +805,7 @@ jobs:
     name: ci
     if: always()
     needs: [changes, checks, versions, matrix, backend, backend-openkal, vscode-gates, vscode-drift, vscode, vscode-e2e,
-            vscode-isolated-install, vscode-graph-browser, clion, clion-stable, nvim, packages]
+            vscode-isolated-install, vscode-graph-browser, clion, clion-stable, nvim, zed, packages]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

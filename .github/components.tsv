@@ -20,6 +20,7 @@ backend	build.mcpp
 vscode	mide-plugins/vscode/*
 clion	mide-plugins/clion/*
 nvim	mide-plugins/nvim/*
+zed	mide-plugins/zed/*
 # What only people read.
 docs	docs/*
 docs	agents/*
