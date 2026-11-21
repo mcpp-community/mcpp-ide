@@ -79,16 +79,24 @@ class GraphInteractionTest {
         }
     }
 
-    @Test
-    fun graphRendersNavigatesAndRecoversInJcef() = runGraphScenario(false)
+    /** JCEF as the IDE has it: on; switched off (`ide.browser.jcef.enabled=false`); or its plugin
+     *  disabled, so that its classes are absent (#13: `NoClassDefFoundError: JBCefApp`). */
+    enum class Jcef(val output: String) { ON("graphs"), SWITCHED_OFF("graphs-no-jcef"), PLUGIN_DISABLED("graphs-no-jcef-plugin") }
 
     @Test
-    fun graphExplainsUnavailableJcef() = runGraphScenario(true)
+    fun graphRendersNavigatesAndRecoversInJcef() = runGraphScenario(Jcef.ON)
 
-    private fun runGraphScenario(disableJcef: Boolean) {
+    @Test
+    fun graphExplainsUnavailableJcef() = runGraphScenario(Jcef.SWITCHED_OFF)
+
+    @Test
+    fun graphExplainsAbsentJcefPlugin() = runGraphScenario(Jcef.PLUGIN_DISABLED)
+
+    private fun runGraphScenario(jcef: Jcef) {
+        val disableJcef = jcef != Jcef.ON
         val version = System.getProperty("mcpp.clion.ideVersion") ?: error("ideVersion is required")
         val output = Path.of(System.getProperty("mcpp.clion.output") ?: "build/stable-smoke").toAbsolutePath()
-            .resolve(if (disableJcef) "graphs-no-jcef" else "graphs")
+            .resolve(jcef.output)
         Files.createDirectories(output)
         val observations = mutableListOf<String>()
         fun record(name: String) {
@@ -115,13 +123,15 @@ class GraphInteractionTest {
         val context = Starter.newContext("mcpp-graphs-$version-${System.currentTimeMillis()}", TestCase(ide, LocalProjectInfo(fixture)))
         PluginConfigurator(context).installPluginFromPath(Path.of(System.getProperty("mcpp.clion.mcpplsZip") ?: error("mcpplsZip is required")))
         PluginConfigurator(context).installPluginFromPath(Path.of(System.getProperty("mcpp.clion.pluginZip") ?: error("pluginZip is required")))
+        // The JCEF plugin is built for each system; an installation can lack it or disable it.
+        if (jcef == Jcef.PLUGIN_DISABLED) PluginConfigurator(context).disablePlugins("com.intellij.modules.jcef")
         context.applyVMOptionsPatch {
             withXmx(2048)
             addSystemProperty("idea.trust.all.projects", true)
             addSystemProperty("ide.show.tips.on.startup.default.value", false)
             // Keep the large generated VFS cache with this isolated test's output.
             addSystemProperty("idea.system.path", output.resolve("ide-system").toString())
-            if (disableJcef) addSystemProperty("ide.browser.jcef.enabled", false)
+            if (jcef == Jcef.SWITCHED_OFF) addSystemProperty("ide.browser.jcef.enabled", false)
         }
         context.runIdeWithDriver().useDriverAndCloseIde {
             waitForProjectOpen()
@@ -275,6 +285,6 @@ class GraphInteractionTest {
         val plugin = Path.of(System.getProperty("mcpp.clion.pluginZip"))
         val sha = java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(plugin)).joinToString("") { "%02x".format(it) }
         val backendControl = System.getProperty("mcpp.clion.backendPath") != null
-        Files.writeString(output.resolve("result.json"), "{\"ideVersion\":\"$version\",\"pluginSha256\":\"$sha\",\"jcefDisabled\":$disableJcef,\"backendControl\":$backendControl,\"passed\":true}\n")
+        Files.writeString(output.resolve("result.json"), "{\"ideVersion\":\"$version\",\"pluginSha256\":\"$sha\",\"jcef\":\"${jcef.name.lowercase()}\",\"jcefDisabled\":$disableJcef,\"backendControl\":$backendControl,\"passed\":true}\n")
     }
 }

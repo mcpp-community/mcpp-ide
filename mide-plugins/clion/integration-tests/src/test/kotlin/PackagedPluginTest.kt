@@ -75,9 +75,19 @@ private fun ideFailureFingerprint(message: String, details: String, classificati
 @Remote("io.github.mcppcommunity.mcppclion.McppSession", plugin = PLUGIN_ID)
 interface McppSessionRemote {
     fun start(): StartupFuture
+    fun restart()
     fun getCommands(): List<RemoteJson>
     fun getDegraded(): Boolean
 }
+
+@Remote("io.github.mcppcommunity.mcppclion.editor.McppDocuments", plugin = PLUGIN_ID)
+interface McppDocumentsRemote {
+    fun version(uri: String): Int
+    fun diagnostics(uri: String, version: Int, timeoutMs: Long): RemoteJsonValue?
+}
+
+@Remote("io.github.mcppcommunity.mcppclion.McppSessionKt", plugin = PLUGIN_ID)
+interface McppUriFactory { fun uriOf(path: String): String }
 
 
 @Remote("java.util.concurrent.CompletableFuture")
@@ -151,10 +161,17 @@ interface TreeModelRemote { fun getRoot(): TreeNodeRemote }
 @Remote("javax.swing.tree.DefaultMutableTreeNode")
 interface TreeNodeRemote {
     fun getChildAt(index: Int): TreeNodeRemote
+    fun getChildCount(): Int
     fun getUserObject(): ViewRowRemote
 }
 @Remote("io.github.mcppcommunity.mcppclion.ui.Row", plugin = PLUGIN_ID)
-interface ViewRowRemote { fun getError(): Boolean }
+interface ViewRowRemote {
+    fun getText(): String
+    fun getError(): Boolean
+    fun getActions(): List<RowActionRemote>
+}
+@Remote("io.github.mcppcommunity.mcppclion.ui.RowAction", plugin = PLUGIN_ID)
+interface RowActionRemote { fun getPlan(): String }
 @Remote("com.intellij.openapi.project.DumbService")
 interface DumbServiceFactory { fun getInstance(project: Project): DumbServiceRemote }
 @Remote("com.intellij.openapi.project.DumbService")
@@ -553,6 +570,20 @@ class PackagedPluginTest {
                 assertEquals(manifestBefore + "\n[dependencies]", editor.getDocument().getText(), "completion replaces exactly the requested range")
                 record("manifest-completion-and-insertion")
                 if (indexingAtCompletion) record("manifest-completion-during-indexing")
+                // A backend that starts again is given every open document again, read in a read action
+                // off the EDT (#13: "Read access is allowed from inside read-action only" on that path).
+                // An error the IDE logs on the way fails the run (reportTestFailure above).
+                val documents = service<McppDocumentsRemote>(singleProject())
+                val manifestUri = utility<McppUriFactory>().uriOf(fixture.resolve("mcpp.toml").toString())
+                val sentBefore = documents.version(manifestUri)
+                assertTrue(sentBefore > 0, "the open manifest was sent to the backend")
+                session.restart()
+                val restarted = session.start()
+                val restartDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60)
+                while (!restarted.isDone() && System.nanoTime() < restartDeadline) Thread.sleep(100)
+                assertTrue(restarted.isDone(), "the backend starts again")
+                assertNotNull(documents.diagnostics(manifestUri, sentBefore + 1, 20_000), "the restarted backend is given the open manifest again")
+                record("open-documents-sent-after-restart")
                 withContext(OnDispatcher.EDT) {
                 val pending = ArrayDeque<ContainerRemote>()
                 pending.add(window.getContentManager().getSelectedContent()!!.getComponent())
@@ -569,8 +600,18 @@ class PackagedPluginTest {
                 val cacheDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15)
                 while (cacheTree!!.getRowCount() == 0 && System.nanoTime() < cacheDeadline) Thread.sleep(100)
                 assertTrue(cacheTree!!.getRowCount() > 0, "opening the cache view loads its inventory without manual refresh")
-                assertFalse(cacheTree.getModel().getRoot().getChildAt(0).getUserObject().getError(), "the inventory query succeeds")
+                // The sections of VS Code's page, each cleanup on the one it acts on (#13).
+                val sections = cacheTree.getModel().getRoot()
+                assertEquals(2, sections.getChildCount())
+                val projectCache = sections.getChildAt(0).getUserObject()
+                val sharedCache = sections.getChildAt(1)
+                assertEquals(listOf("stale", "project"), projectCache.getActions().map { it.getPlan() }, "the project's cleanups sit on its section")
+                assertTrue(sharedCache.getUserObject().getActions().map { it.getPlan() }.containsAll(listOf("cacheGc", "cachePrune", "cacheVerify")),
+                    "the shared cache's cleanups sit on its section")
+                assertTrue(sharedCache.getChildCount() > 0)
+                assertFalse(sharedCache.getChildAt(0).getUserObject().getError(), "the inventory query succeeds")
                 record("cache-inventory-visible")
+                record("cache-sections-with-their-cleanups")
                 }
                 // Store only public versions and assertions. Raw IDE logs can
                 // contain usernames, private paths or workspace details.
