@@ -227,6 +227,8 @@ jobs:
             ${{ runner.temp }}/clion-stable-result/ide-errors*.ndjson
             mide-plugins/clion/integration-tests/build/test-results/test/*.xml
             out/ide-tests/tests/*/*/log/idea.log
+            out/ide-tests/tests/*/*/log/monitoring-thread-dumps-ide/*.txt
+            ${{ runner.temp }}/clion-stable-result/*/ide-start-retried
             ${{ runner.temp }}/clion-stable-result/graphs/result.json
             ${{ runner.temp }}/clion-stable-result/graphs/checks.json
             ${{ runner.temp }}/clion-stable-result/graphs-no-jcef/result.json

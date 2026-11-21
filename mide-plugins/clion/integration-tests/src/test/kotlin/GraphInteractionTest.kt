@@ -84,13 +84,32 @@ class GraphInteractionTest {
     enum class Jcef(val output: String) { ON("graphs"), SWITCHED_OFF("graphs-no-jcef"), PLUGIN_DISABLED("graphs-no-jcef-plugin") }
 
     @Test
-    fun graphRendersNavigatesAndRecoversInJcef() = runGraphScenario(Jcef.ON)
+    fun graphRendersNavigatesAndRecoversInJcef() = startingOnce(Jcef.ON)
 
     @Test
-    fun graphExplainsUnavailableJcef() = runGraphScenario(Jcef.SWITCHED_OFF)
+    fun graphExplainsUnavailableJcef() = startingOnce(Jcef.SWITCHED_OFF)
 
     @Test
-    fun graphExplainsAbsentJcefPlugin() = runGraphScenario(Jcef.PLUGIN_DISABLED)
+    fun graphExplainsAbsentJcefPlugin() = startingOnce(Jcef.PLUGIN_DISABLED)
+
+    /**
+     * On a macOS runner an IDE can stop at its start, before any plugin loads (its log ends at "CPU cores"),
+     * and its driver never connects; it met one run in three, whichever IDE it was. Such a run starts a new
+     * IDE once, and says so (`ide-start-retried`); a run whose IDE started is never repeated, so a defect of
+     * this plugin fails it.
+     */
+    private fun startingOnce(jcef: Jcef) {
+        try {
+            runGraphScenario(jcef)
+        } catch (e: Exception) {
+            val notConnected = generateSequence<Throwable>(e) { it.cause }.any { it.message?.contains("Couldn't wait for the driver to connect") == true }
+            if (!notConnected) throw e
+            val output = Path.of(System.getProperty("mcpp.clion.output") ?: "build/stable-smoke").toAbsolutePath().resolve(jcef.output)
+            Files.createDirectories(output)
+            Files.writeString(output.resolve("ide-start-retried"), "the first IDE's driver never connected\n")
+            runGraphScenario(jcef)
+        }
+    }
 
     private fun runGraphScenario(jcef: Jcef) {
         val disableJcef = jcef != Jcef.ON
