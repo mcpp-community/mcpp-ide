@@ -112,6 +112,10 @@ E2E probe{"probe", [] {
             explained = true;
         }
     check(explained);
+    // An index package's features wait for mcpp to state them, and the issue that asks is named.
+    check(std::ranges::any_of(why["features"], [](const Json& f) {
+        return f["id"] == "manifest.packageFeatures" && f["available"] == false && f["reason"]["need"] == "mcpp#992";
+    }));
 
     // No run carries another project's pin: every run of mcpp removes XLINGS_PROJECT_DIR, which an
     // editor started from another project's terminal inherits (mcpp docs/50). The removal is the

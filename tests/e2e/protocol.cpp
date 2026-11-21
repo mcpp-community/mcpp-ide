@@ -107,6 +107,59 @@ E2E protocol{"protocol", [] {
     check(hover["contents"]["value"].get<std::string>().find("bmi_schedule") != std::string::npos);
     auto outline = result_of("textDocument/documentSymbol", Json{{"textDocument", {{"uri", tomlUri}}}});
     check(outline.size() == 2 && outline[1]["name"] == "[build]" && outline[1]["children"].size() == 1);
+    // A dependency's features (1.6.0), read from its own manifest: a `path` one and a workspace one.
+    {
+        const auto ws = root / "features-ws";
+        std::filesystem::create_directories(ws / "libs" / "core");
+        std::filesystem::create_directories(ws / "libs" / "plain");
+        std::filesystem::create_directories(ws / "app");
+        std::ofstream(ws / "mcpp.toml", std::ios::binary) << "[workspace]\nmembers = [\"app\", \"libs/core\"]\n[workspace.dependencies]\ncore = { path = \"libs/core\" }\n";
+        std::ofstream(ws / "libs" / "core" / "mcpp.toml", std::ios::binary)
+            << "[package]\nname = \"core\"\n[features]\ndefault = [\"fast\"]\nfast = []\ngui = [\"fast\"]\n[features.net]\nimplies = [\"fast\"]\n";
+        std::ofstream(ws / "libs" / "plain" / "mcpp.toml", std::ios::binary) << "[package]\nname = \"plain\"\n";
+        const auto appUri = testsupport::file_uri(ws / "app" / "mcpp.toml");
+        const std::string app = "[package]\nname = \"app\"\n[dependencies]\ncore = { path = \"../libs/core\", features = [\"gui\", \"nope\"] }\n"
+                                "plain = { path = \"../libs/plain\", features = [\"any\"] }\nmember = { workspace = true, features = [] }\n";
+        wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didOpen"},
+                                  {"params", {{"textDocument", {{"uri", appUri}, {"languageId", "mcpp-toml"}, {"version", 1}, {"text", app}}}}}}.dump());
+        // `nope` is reported; a dependency that declares no [features] accepts any name.
+        const auto diagnostics = wire.notifications("textDocument/publishDiagnostics").back();
+        check(diagnostics["uri"] == appUri && diagnostics["diagnostics"].size() == 1);
+        check(diagnostics["diagnostics"][0]["code"] == "mcpp.manifest.unknownFeature");
+        check(diagnostics["diagnostics"][0]["range"]["start"] == Json({{"line", 3}, {"character", 51}}));
+        check(diagnostics["diagnostics"][0]["message"].get<std::string>().find("fast, gui, net") != std::string::npos);
+        auto atApp = [&](int line, int character) {
+            return Json{{"textDocument", {{"uri", appUri}}}, {"position", {{"line", line}, {"character", character}}}};
+        };
+        // Inside the array: the features the edge does not name yet, as quoted names.
+        std::map<std::string, Json> offered;
+        for (const auto& i : result_of("textDocument/completion", atApp(3, 44))["items"]) offered[i["label"].get<std::string>()] = i;
+        check(offered.size() == 2 && offered.contains("fast") && offered.contains("net") && !offered.contains("gui"));
+        check(offered["fast"]["textEdit"]["newText"] == "\"fast\"" && offered["fast"]["detail"].get<std::string>().find("default") != std::string::npos);
+        // Inside a string: its content is replaced by the bare name.
+        std::set<std::string> inString;
+        for (const auto& i : result_of("textDocument/completion", atApp(3, 46))["items"]) {
+            inString.insert(i["label"].get<std::string>());
+            check(i["textEdit"]["range"]["start"]["character"] == 45 && i["textEdit"]["newText"] == i["label"]);
+        }
+        // The name being edited is offered again; the others the edge names are not.
+        check(inString == std::set<std::string>{"fast", "gui", "net"});
+        // A workspace dependency: the workspace's entry names its path.
+        wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didChange"},
+                                  {"params", {{"textDocument", {{"uri", appUri}, {"version", 2}}},
+                                              {"contentChanges", Json::array({{{"text", "[dependencies]\ncore = { workspace = true, features = [] }\n"}}})}}}}.dump());
+        std::set<std::string> member;
+        for (const auto& i : result_of("textDocument/completion", atApp(1, 39))["items"]) member.insert(i["label"].get<std::string>());
+        check(member == std::set<std::string>{"fast", "gui", "net"});
+        // A hover names the dependency, the default and what a feature implies.
+        wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didChange"},
+                                  {"params", {{"textDocument", {{"uri", appUri}, {"version", 3}}},
+                                              {"contentChanges", Json::array({{{"text", "[dependencies]\ncore = { workspace = true, features = [\"gui\"] }\n"}}})}}}}.dump());
+        const auto featureHover = result_of("textDocument/hover", atApp(1, 41))["contents"]["value"].get<std::string>();
+        check(featureHover.find("`gui`") != std::string::npos && featureHover.find("`core`") != std::string::npos &&
+              featureHover.find("`fast`") != std::string::npos);
+        wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didClose"}, {"params", {{"textDocument", {{"uri", appUri}}}}}}.dump());
+    }
     // A change is the whole text; closing clears the document's diagnostics.
     wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didChange"},
                               {"params", {{"textDocument", {{"uri", tomlUri}, {"version", 2}}}, {"contentChanges", Json::array({{{"text", "[package]\n"}}})}}}}.dump());

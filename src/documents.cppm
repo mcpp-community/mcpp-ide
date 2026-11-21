@@ -191,6 +191,47 @@ Json markdown(std::string value) { return Json{{"kind", "markdown"}, {"value", s
 // LSP CompletionItemKind.
 constexpr int kFolder = 19, kSnippet = 15, kValue = 12, kModule = 9, kFunction = 3;
 
+std::optional<std::vector<std::string>> read_lines(const std::filesystem::path& file) {
+    std::ifstream in(file, std::ios::binary);
+    if (!in) return std::nullopt;
+    return text::lines_of(std::string(std::istreambuf_iterator<char>(in), {}));
+}
+
+bool declares_workspace(const std::vector<std::string>& lines) {
+    return std::ranges::any_of(lines, [](const std::string& l) {
+        const auto t = text::trim(l);
+        return t == "[workspace]" || t.starts_with("[workspace.");
+    });
+}
+
+// A dependency's features, from the manifest of the directory its `path` names, or for
+// `workspace = true` the one the nearest enclosing workspace's `[workspace.dependencies]` names.
+manifest::FeatureResolver feature_resolver(const Document& d) {
+    return [dir = d.path.parent_path()](const manifest::DependencyEdge& e) -> std::optional<std::vector<manifest::Feature>> {
+        std::filesystem::path target;
+        if (e.path) {
+            target = dir / std::filesystem::path(*e.path);
+        } else if (e.workspace) {
+            auto at = dir;
+            for (int depth = 0; !at.empty() && depth < 64; ++depth, at = at.parent_path()) {
+                if (const auto lines = read_lines(at / "mcpp.toml"); lines && declares_workspace(*lines)) {
+                    const auto relative = manifest::workspace_dependency_path(*lines, e.name);
+                    if (!relative) return std::nullopt;
+                    target = at / std::filesystem::path(*relative);
+                    break;
+                }
+                if (at == at.parent_path()) break;
+            }
+            if (target.empty()) return std::nullopt;
+        } else {
+            return std::nullopt;
+        }
+        const auto lines = read_lines((target / "mcpp.toml").lexically_normal());
+        if (!lines) return std::nullopt;
+        return manifest::declared_features(*lines);
+    };
+}
+
 }  // namespace
 
 Options options_of(const Json& s, bool trusted, bool mcpplsServes, std::string_view locale) {
@@ -239,6 +280,9 @@ Json diagnostics(const Document& d, const Options& o) {
             if (x.relatedKey) j["data"] = Json{{"relatedKey", *x.relatedKey}};
             out.push_back(std::move(j));
         }
+        for (const auto& x : manifest::feature_diagnostics(d.lines, feature_resolver(d), o.tomlSeverity.unknownKey, o.locale))
+            out.push_back(Json{{"range", range(x.line - 1, x.start - 1, x.end - 1)}, {"severity", severity_number(x.severity)},
+                               {"code", x.code}, {"source", "mcpp"}, {"message", x.message}});
     }
     if (d.kind == Kind::buildscript && o.bsDiagnostics && o.bsSeverity != "off") {
         for (const auto& x : buildscript::analyse(d.lines, o.bsSeverity, !o.mcpplsServes))
@@ -256,13 +300,15 @@ Json completion(const Document& d, int line, int character, const Options& o, co
         // The lines up to the cursor's, as the editor asks.
         const std::vector<std::string> upTo(d.lines.begin(), d.lines.begin() + line + 1);
         auto suggestions = manifest::completions(upTo, line, character, o.locale);
+        // A dependency's features, from its own manifest (the whole document names its `path`).
+        if (suggestions.empty()) suggestions = manifest::feature_completions(d.lines, line, character, feature_resolver(d), o.locale);
         if (suggestions.empty() && o.indexCompletion && o.trusted)
             if (const auto at = manifest::dependency_version_context(upTo, line, character)) {
                 if (catalogue) suggestions = manifest::version_suggestions(*at, manifest::catalogue_versions(*catalogue, at->name));
                 else needCatalogue = incomplete = true;
             }
         for (const auto& s : suggestions) {
-            Json item{{"label", s.label}, {"kind", s.kind == "section" ? kFolder : s.kind == "version" ? kValue : kSnippet},
+            Json item{{"label", s.label}, {"kind", s.kind == "section" ? kFolder : s.kind == "version" || s.kind == "value" ? kValue : kSnippet},
                       {"detail", s.detail}, {"insertTextFormat", 2},
                       {"textEdit", Json{{"range", range(line, s.start, s.end)}, {"newText", s.insertSnippet.value_or(s.label)}}}};
             if (s.documentation) item["documentation"] = markdown(*s.documentation);
@@ -291,7 +337,8 @@ Json completion(const Document& d, int line, int character, const Options& o, co
 
 Json hover(const Document& d, int line, int character, const Options& o) {
     if (d.kind == Kind::manifest && o.tomlHover) {
-        const auto info = manifest::hover_at(d.lines, line, character);
+        auto info = manifest::feature_hover(d.lines, line, character, feature_resolver(d), o.locale);
+        if (!info) info = manifest::hover_at(d.lines, line, character);
         if (!info) return nullptr;
         auto value = std::format("**{}**\n\n{}", info->title, info->body);
         if (info->documentation)

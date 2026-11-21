@@ -334,6 +334,39 @@ CTS rules{"rules", [] {
     check(at && at->name == "zlib" && at->insideString);
     const auto suggestions = manifest::version_suggestions(*at, versions);
     check(suggestions.size() == 3 && suggestions[0].insertSnippet == "1.3.1" && suggestions[0].kind == "version");
+    // An inline table is read as the table of its name (1.6.0): `app = { ... }` under [targets] has the
+    // keys of [targets.app], less those it has; its enum keys have their values; a dependency's inline
+    // table is its specification, which the schema does not list.
+    auto labels = [](std::string_view text, int line, int character) {
+        std::set<std::string> out;
+        for (const auto& s : manifest::completions(text::lines_of(text), line, character)) out.insert(s.label);
+        return out;
+    };
+    const auto targetKeys = labels("[targets]\napp = { kind = \"bin\", ", 1, 26);
+    check(targetKeys.contains("main") && targetKeys.contains("linkage") && !targetKeys.contains("kind"));
+    check(labels("[targets]\napp = { ", 1, 8).contains("kind"));
+    const auto kinds = labels("[targets]\napp = { kind = \"", 1, 15);
+    check(kinds.contains("bin") && kinds.contains("lib") && kinds.contains("entry"));
+    check(labels("[targets]\napp = { kind = ", 1, 14).contains("shared"));
+    check(labels("[features]\nsimd = { defines = [\"A\"], ", 1, 26).contains("sources"));
+    check(labels("[dependencies]\nfmt = { ", 1, 8).empty());
+    check(labels("[dependencies]\nfmt = { version = \"1\", ", 1, 22).empty());
+    check(labels("[targets]\napp = { kind = \"bin\" ", 1, 21).empty());
+    check(labels("[package]\nmetadata = { ", 1, 13).empty());
+    // A manifest's features in their three shapes; none when it declares no [features].
+    const auto declared = manifest::declared_features(text::lines_of(
+        "[features]\ndefault = [\"a\"]\na = []\nb = [\"a\"]\nc = { defines = [\"C\"], implies = [\"b\"] }\n[features.d]\nimplies = [\"c\"]\n"));
+    check(declared && declared->size() == 4);
+    check((*declared)[0].name == "a" && (*declared)[0].isDefault && !(*declared)[1].isDefault);
+    check((*declared)[1].implies == std::vector<std::string>{"a"} && (*declared)[2].implies == std::vector<std::string>{"b"});
+    check((*declared)[3].name == "d" && (*declared)[3].implies == std::vector<std::string>{"c"});
+    check(!manifest::declared_features(text::lines_of("[package]\nname = \"x\"\n")));
+    check(manifest::declared_features(text::lines_of("[features]\n"))->empty());
+    check(manifest::workspace_dependency_path(text::lines_of("[workspace.dependencies]\ncore = { path = \"libs/core\" }\n"), "core") == "libs/core");
+    // An index dependency has nothing to read: no resolver is asked.
+    bool asked = false;
+    const manifest::FeatureResolver none = [&](const manifest::DependencyEdge&) { asked = true; return std::nullopt; };
+    check(manifest::feature_completions(text::lines_of("[dependencies]\nfmt = { version = \"1\", features = [] }\n"), 1, 37, none).empty() && !asked);
     // A suggestion's detail in the user's language.
     const auto zh = manifest::completions(text::lines_of("[dependencies]\n"), 1, 0, "zh-cn");
     check(!zh.empty() && zh[0].detail != "SemVer version dependency");

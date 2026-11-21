@@ -1344,6 +1344,9 @@ std::expected<Json, rpc::Error> Session::capabilities_explain(const Json& p) {
         {"tests.parts", "test-parts", "", "mcpp#917"},
         {"tests.live", "test-case-stream", "", "mcpp#917"},
         {"tests.metrics", "test-metrics", "", "mcpp#917"},
+        // An index package's features in mcpp.toml; a `path` or workspace dependency's are read from
+        // its own manifest meanwhile (1.6.0).
+        {"manifest.packageFeatures", "package-features", "", "mcpp#992"},
     };
     Json features = Json::array();
     for (const auto& g : kGates) {

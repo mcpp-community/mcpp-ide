@@ -833,5 +833,13 @@
   "worker {0}": "工作线程 {0}",
   "Critical path": "关键路径",
   "Metrics appear when the project's mcpp states them (test-metrics, mcpp#917).": "项目的 mcpp 声明指标后才会显示（test-metrics，mcpp#917）。",
-  "This IDE runs without JCEF, which draws the test insights.": "此 IDE 未启用 JCEF，无法绘制测试洞察。"
+  "This IDE runs without JCEF, which draws the test insights.": "此 IDE 未启用 JCEF，无法绘制测试洞察。",
+  "default feature of {0}": "{0} 的默认 feature",
+  "feature of {0}": "{0} 的 feature",
+  "implies {0}": "隐含 {0}",
+  "A feature of {0}, as its mcpp.toml declares it.": "{0} 的 feature，按其 mcpp.toml 的声明。",
+  "On by default.": "默认开启。",
+  "Implies {0}.": "隐含 {0}。",
+  "{0} declares no feature {1}: it declares none": "{0} 未声明 feature {1}：它未声明任何 feature",
+  "{0} declares no feature {1}: it declares {2}": "{0} 未声明 feature {1}：它声明的是 {2}"
 }

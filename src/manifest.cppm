@@ -28,7 +28,7 @@ using Json = nlohmann::json;
 
 struct Suggestion {
     std::string label;
-    std::string kind;                         // section | template | version
+    std::string kind;                         // section | template | version | value (a feature)
     std::string detail;
     std::optional<std::string> documentation;
     std::optional<std::string> insertSnippet; // a snippet (`${1:name}`); the label when none
@@ -91,6 +91,41 @@ std::vector<Diagnostic> analyse(const std::vector<std::string>& lines, const Dia
 
 // The outline: each table, and the keys under it (LSP DocumentSymbol).
 Json document_symbols(const std::vector<std::string>& lines);
+
+// ── a dependency's features (1.6.0) ────────────────────────────────────────
+// Read from the text of the dependency's own manifest, which a `path` names or the workspace's
+// `[workspace.dependencies]` entry does: mcpp states no features of an index package (mcpp#992).
+
+struct Feature {
+    std::string name;
+    bool isDefault = false;
+    std::vector<std::string> implies;
+};
+// The features a manifest declares, by `[features]` and `[features.<name>]`; nullopt when it declares
+// no `[features]`, which mcpp reads as a package that accepts any name.
+std::optional<std::vector<Feature>> declared_features(const std::vector<std::string>& lines);
+
+// A dependency as its edge names it: the key, and its `path` or `workspace = true`.
+struct DependencyEdge {
+    std::string name;
+    std::optional<std::string> path;
+    bool workspace = false;
+};
+// The features of the manifest an edge leads to; nullopt when there is none to read or it declares
+// none. The file system is the caller's.
+using FeatureResolver = std::function<std::optional<std::vector<Feature>>(const DependencyEdge&)>;
+// The `path` a workspace's `[workspace.dependencies]` gives `name`.
+std::optional<std::string> workspace_dependency_path(const std::vector<std::string>& lines, std::string_view name);
+
+// Inside the `features = [...]` of a dependency edge: the features its manifest declares and the edge
+// does not name yet; a feature's hover; and a name the manifest does not declare (`unknownFeature`,
+// at the severity of `unknownKey`). `lines` are the whole document's.
+std::vector<Suggestion> feature_completions(const std::vector<std::string>& lines, int line, int character,
+                                            const FeatureResolver& resolve, std::string_view locale = "en");
+std::optional<HoverInfo> feature_hover(const std::vector<std::string>& lines, int line, int character,
+                                       const FeatureResolver& resolve, std::string_view locale = "en");
+std::vector<Diagnostic> feature_diagnostics(const std::vector<std::string>& lines, const FeatureResolver& resolve,
+                                            std::string_view severity, std::string_view locale = "en");
 
 // The snapshot's provenance.
 Json schema_source();
@@ -1230,6 +1265,224 @@ Json document_symbols(const std::vector<std::string>& lines) {
 
 Json schema_source() {
     return Json{{"version", str(schema(), "sourceVersion")}, {"commit", str(schema(), "sourceCommit")}};
+}
+
+// ── a dependency's features ──
+
+namespace {
+
+std::vector<std::string> string_elements(const toml::Value& v) {
+    std::vector<std::string> out;
+    if (v.kind != toml::ValueKind::array) return out;
+    for (const auto& e : v.elements)
+        if (e.kind == toml::ValueKind::string && e.text) out.push_back(*e.text);
+    return out;
+}
+
+const toml::KeyValue* entry_of(const toml::Value& table, std::string_view key) {
+    for (const auto& e : table.entries)
+        if (e.keyPath.size() == 1 && e.keyPath[0].name == key) return &e;
+    return nullptr;
+}
+
+// A dependency edge written as an inline table, with its `features` array when it has one.
+struct EdgeAt {
+    DependencyEdge edge;
+    const toml::Value* features = nullptr;
+};
+
+std::vector<EdgeAt> edges_of(const toml::Document& doc) {
+    std::vector<EdgeAt> out;
+    std::vector<std::string> sectionSegments;
+    for (const auto& node : doc.nodes) {
+        if (const auto* s = std::get_if<toml::Section>(&node)) {
+            sectionSegments = s->isArray ? std::vector<std::string>{} : segment_names(s->segments);
+            continue;
+        }
+        const auto& kv = std::get<toml::KeyValue>(node);
+        const auto group = group_of(sectionSegments);
+        if (!group || !kDependencyGroups.contains(*group) || *group == "workspace.dependencies") continue;
+        if (kv.keyPath.empty() || !kv.value || kv.value->kind != toml::ValueKind::inlineTable) continue;
+        EdgeAt at;
+        at.edge.name = join(segment_names(kv.keyPath));
+        if (const auto* path = entry_of(*kv.value, "path"); path && path->value && path->value->kind == toml::ValueKind::string)
+            at.edge.path = path->value->text.value_or("");
+        if (const auto* ws = entry_of(*kv.value, "workspace"); ws && ws->value && ws->value->kind == toml::ValueKind::boolean)
+            at.edge.workspace = ws->value->text == "true";
+        if (const auto* f = entry_of(*kv.value, "features"); f && f->value && f->value->kind == toml::ValueKind::array)
+            at.features = &*f->value;
+        if (at.edge.path || at.edge.workspace) out.push_back(std::move(at));
+    }
+    return out;
+}
+
+std::optional<std::vector<Feature>> features_of(const FeatureResolver& resolve, const DependencyEdge& edge) {
+    if (!resolve || (edge.path && !relative_path(*edge.path))) return std::nullopt;
+    try {
+        return resolve(edge);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+const Feature* find_feature(const std::vector<Feature>& features, std::string_view name) {
+    const auto it = std::ranges::find(features, name, &Feature::name);
+    return it == features.end() ? nullptr : &*it;
+}
+
+std::string quoted_list(const std::vector<std::string>& names) {
+    std::string out;
+    for (const auto& n : names) out += (out.empty() ? "`" : ", `") + n + "`";
+    return out;
+}
+
+}  // namespace
+
+std::optional<std::vector<Feature>> declared_features(const std::vector<std::string>& lines) {
+    std::vector<Feature> out;
+    bool declared = false;
+    std::vector<std::string> defaults;
+    auto feature = [&](const std::string& name) -> Feature& {
+        auto it = std::ranges::find(out, name, &Feature::name);
+        if (it != out.end()) return *it;
+        out.push_back({name, false, {}});
+        return out.back();
+    };
+    std::vector<std::string> sectionSegments;
+    for (const auto& node : toml::parse(lines).nodes) {
+        if (const auto* s = std::get_if<toml::Section>(&node)) {
+            sectionSegments = s->isArray ? std::vector<std::string>{} : segment_names(s->segments);
+            if (!sectionSegments.empty() && sectionSegments[0] == "features") declared = true;
+            if (sectionSegments.size() == 2 && sectionSegments[0] == "features") feature(sectionSegments[1]);
+            continue;
+        }
+        const auto& kv = std::get<toml::KeyValue>(node);
+        if (kv.keyPath.empty() || sectionSegments.empty() || sectionSegments[0] != "features") continue;
+        const auto key = kv.keyPath[0].name;
+        if (sectionSegments.size() == 2) {
+            if (key == "implies" && kv.keyPath.size() == 1 && kv.value) feature(sectionSegments[1]).implies = string_elements(*kv.value);
+            continue;
+        }
+        if (sectionSegments.size() != 1 || kv.keyPath.size() != 1) continue;
+        if (key == "default") {
+            if (kv.value) defaults = string_elements(*kv.value);
+            continue;
+        }
+        auto& f = feature(key);
+        if (!kv.value) continue;
+        if (kv.value->kind == toml::ValueKind::array) f.implies = string_elements(*kv.value);
+        else if (kv.value->kind == toml::ValueKind::inlineTable)
+            if (const auto* implies = entry_of(*kv.value, "implies"); implies && implies->value) f.implies = string_elements(*implies->value);
+    }
+    if (!declared) return std::nullopt;
+    for (auto& f : out) f.isDefault = std::ranges::find(defaults, f.name) != defaults.end();
+    return out;
+}
+
+std::optional<std::string> workspace_dependency_path(const std::vector<std::string>& lines, std::string_view name) {
+    std::vector<std::string> sectionSegments;
+    for (const auto& node : toml::parse(lines).nodes) {
+        if (const auto* s = std::get_if<toml::Section>(&node)) {
+            sectionSegments = s->isArray ? std::vector<std::string>{} : segment_names(s->segments);
+            continue;
+        }
+        const auto& kv = std::get<toml::KeyValue>(node);
+        if (group_of(sectionSegments) != std::optional<std::string>("workspace.dependencies") || sectionSegments.size() != 2) continue;
+        if (join(segment_names(kv.keyPath)) != name || !kv.value || kv.value->kind != toml::ValueKind::inlineTable) continue;
+        const auto* path = entry_of(*kv.value, "path");
+        if (path && path->value && path->value->kind == toml::ValueKind::string) return path->value->text.value_or("");
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+std::vector<Suggestion> feature_completions(const std::vector<std::string>& lines, int line, int character,
+                                            const FeatureResolver& resolve, std::string_view locale) {
+    auto t = [&](std::string_view key, const std::vector<std::string>& args) { return i18n::translate(key, locale, args); };
+    const int cursorLine = std::clamp(line, 0, std::max(0, static_cast<int>(lines.size()) - 1));
+    const int cursorCol = cursor_byte(lines, cursorLine, std::max(0, character));
+    const auto doc = toml::parse(lines);
+    for (const auto& at : edges_of(doc)) {
+        // Inside the array's brackets: after `[`, before `]` when it is closed.
+        if (!at.features || !contains(at.features->range, cursorLine, cursorCol)) continue;
+        const auto& r = at.features->range;
+        if (cursorLine == r.startLine && cursorCol <= r.startCol) continue;
+        if (!at.features->open && cursorLine == r.endLine && cursorCol >= r.endCol) continue;
+        const toml::Value* element = nullptr;
+        for (const auto& e : at.features->elements)
+            if (contains(e.range, cursorLine, cursorCol) && !(cursorLine == e.range.startLine && cursorCol == e.range.startCol)) element = &e;
+        if (element && element->kind != toml::ValueKind::string) return {};
+        const auto inside = element && element->contentRange && contains(*element->contentRange, cursorLine, cursorCol);
+        if (element && !inside) return {};
+        const auto features = features_of(resolve, at.edge);
+        if (!features) return {};
+        auto present = string_elements(*at.features);
+        int start = cursorCol, end = cursorCol;
+        if (inside) {
+            start = element->contentRange->startCol;
+            end = element->contentRange->endCol;
+            if (const auto it = std::ranges::find(present, element->text.value_or("")); it != present.end()) present.erase(it);
+        }
+        std::vector<Suggestion> v;
+        for (const auto& f : *features) {
+            if (std::ranges::find(present, f.name) != present.end()) continue;
+            auto detail = f.isDefault ? t("default feature of {0}", {at.edge.name}) : t("feature of {0}", {at.edge.name});
+            if (!f.implies.empty()) detail += " · " + t("implies {0}", {join(f.implies, ", ")});
+            v.push_back({f.name, "value", detail, std::nullopt, inside ? f.name : text::stringify(Json(f.name)),
+                         u16(lines, cursorLine, start), u16(lines, cursorLine, end)});
+        }
+        return v;
+    }
+    return {};
+}
+
+std::optional<HoverInfo> feature_hover(const std::vector<std::string>& lines, int line, int character,
+                                       const FeatureResolver& resolve, std::string_view locale) {
+    auto t = [&](std::string_view key, const std::vector<std::string>& args) { return i18n::translate(key, locale, args); };
+    if (line < 0 || line >= static_cast<int>(lines.size())) return std::nullopt;
+    const int cursorCol = cursor_byte(lines, line, std::max(0, character));
+    const auto doc = toml::parse(lines);
+    for (const auto& at : edges_of(doc)) {
+        if (!at.features) continue;
+        for (const auto& e : at.features->elements) {
+            if (e.kind != toml::ValueKind::string || !contains(e.range, line, cursorCol)) continue;
+            const auto features = features_of(resolve, at.edge);
+            if (!features) return std::nullopt;
+            const auto* f = find_feature(*features, e.text.value_or(""));
+            if (!f) return std::nullopt;
+            std::vector<std::string> body{t("A feature of {0}, as its mcpp.toml declares it.", {"`" + at.edge.name + "`"})};
+            if (f->isDefault) body.push_back(t("On by default.", {}));
+            if (!f->implies.empty()) body.push_back(t("Implies {0}.", {quoted_list(f->implies)}));
+            return HoverInfo{std::format("`{}`", f->name), paragraphs(body), std::nullopt};
+        }
+    }
+    return std::nullopt;
+}
+
+std::vector<Diagnostic> feature_diagnostics(const std::vector<std::string>& lines, const FeatureResolver& resolve,
+                                            std::string_view severity, std::string_view locale) {
+    std::vector<Diagnostic> out;
+    if (severity == "off") return out;
+    auto t = [&](std::string_view key, const std::vector<std::string>& args) { return i18n::translate(key, locale, args); };
+    const auto doc = toml::parse(lines);
+    for (const auto& at : edges_of(doc)) {
+        if (!at.features) continue;
+        std::optional<std::optional<std::vector<Feature>>> features;
+        for (const auto& e : at.features->elements) {
+            if (e.kind != toml::ValueKind::string || !e.text || e.text->empty() || e.open) continue;
+            if (!features) features = features_of(resolve, at.edge);
+            if (!*features) break;
+            if (find_feature(**features, *e.text)) continue;
+            std::vector<std::string> names;
+            for (const auto& f : **features) names.push_back(f.name);
+            const auto message = names.empty() ? t("{0} declares no feature {1}: it declares none", {at.edge.name, *e.text})
+                                               : t("{0} declares no feature {1}: it declares {2}", {at.edge.name, *e.text, join(names, ", ")});
+            out.push_back({"mcpp.manifest.unknownFeature", message, std::string(severity), e.range.startLine + 1,
+                           u16(lines, e.range.startLine, e.range.startCol) + 1, u16(lines, e.range.endLine, e.range.endCol) + 1,
+                           std::nullopt});
+        }
+    }
+    return out;
 }
 
 }  // namespace mcppide::manifest
