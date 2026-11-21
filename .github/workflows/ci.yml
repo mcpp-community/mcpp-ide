@@ -650,8 +650,11 @@ jobs:
 
   # Both stable families load the exact same packaged ZIP. These are actual
   # IDE startup/session checks, in addition to the static Plugin Verifier.
+  # Whenever the plugin was built here: a change of the plugin alone skips the backend's jobs, and a
+  # skipped job upstream would otherwise skip this one too.
   clion-stable:
     needs: clion
+    if: ${{ !cancelled() && needs.clion.result == 'success' }}
     uses: ./.github/workflows/clion-stable.yml
     with:
       plugin_artifact: mcpp-clion-zip
