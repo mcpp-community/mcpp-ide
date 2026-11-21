@@ -76,6 +76,7 @@ private fun ideFailureFingerprint(message: String, details: String, classificati
 interface McppSessionRemote {
     fun start(): StartupFuture
     fun restart()
+    fun getRoot(): String?
     fun getCommands(): List<RemoteJson>
     fun getDegraded(): Boolean
 }

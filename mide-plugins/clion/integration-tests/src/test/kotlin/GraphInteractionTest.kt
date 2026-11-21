@@ -212,7 +212,19 @@ class GraphInteractionTest {
                 } else {
                     val runs = utility<RunContentManagerFactory>().getInstance(singleProject())
                     val before = runs.getAllDescriptors().map { it.getExecutionId() }.toSet()
-                    invokeAction("mcpp.build")
+                    // The action is enabled once the session knows the project's root; it is invoked on the
+                    // project's frame, which on macOS CI need not hold the focus the driver would read.
+                    val session = service<McppSessionRemote>(singleProject())
+                    val rooted = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+                    while (session.getRoot() == null && System.nanoTime() < rooted) Thread.sleep(100)
+                    val frame = ui.x("//div[@class='IdeFrameImpl']")
+                    val diagnosis = { "root=${session.getRoot()} commands=${session.getCommands().size} frame=${frame.present()}" }
+                    assertNotNull(session.getRoot(), "the session knows the project's root: ${diagnosis()}")
+                    try {
+                        invokeAction("mcpp.build", component = if (frame.present()) frame.component else null)
+                    } catch (e: Exception) {
+                        throw AssertionError("mcpp.build was not run: ${diagnosis()}", e)
+                    }
                     val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(180)
                     var finished: RunDescriptorRemote? = null
                     while (System.nanoTime() < deadline) {
