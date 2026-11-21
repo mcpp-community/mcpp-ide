@@ -2,6 +2,44 @@
 
 The changelog is kept by series (`X.Y`); each section lists its components' releases.
 
+## 1.6
+
+### 1.6.0
+
+Every component is 1.6.0: the backend, mcpp-vscode, mcpp-clion and mcpp-nvim (from 1.5.0). These
+are the fixes of the issue review of 2026-11-21
+([design record](.agents/docs/2026-11-21-editor-surfaces-and-feature-matrix.md), stream F).
+
+- **CLion: no listener on the reading thread** (#13). "Read access is allowed from inside read-action
+  only" was logged at startup and each time a backend started. The thread that reads the backend's
+  output now only decodes frames; notifications reach their listeners in order on a pooled thread,
+  answers complete on the pool, and the open documents are read in a read action.
+- **CLion without JCEF** (#13). Opening a graph without the JCEF plugin failed with
+  `NoClassDefFoundError: JBCefApp`. The core of the plugin names no JCEF class; JCEF's page host is
+  registered only when the JCEF plugin is loaded, and without it the tab says why.
+- **CLion: the cache tab in the sections of VS Code's page** (#13). Project cache (`target/`) and
+  Global build cache, each with its cleanups as links on its row and in its context menu; an
+  ellipsis marks one that asks first. The toolbar keeps Refresh. Neovim's cache text has the same
+  two sections.
+- **CLion: texts read when shown** (#13). Toolbar texts and the Libraries button no longer stay in
+  English beside Chinese rows.
+- **CLion: the runs that would have caught these.** The real-IDE run restarts the backend with
+  `mcpp.toml` open and checks the cache tab's sections; the graphs run with the JCEF plugin
+  disabled; the startup chain and the graphs run on macOS aarch64; a weekly run checks the latest
+  published plugin. The pinned mcppls CLion plugin is 0.23.0.
+- **VS Code: pairs and comments in `mcpp.toml`** (#15, #18). Brackets and quotes close as they are
+  typed, and `#` comments a line. The parity gate keeps every field of each language 0.9.0
+  contributed and admits an added one.
+- **Inline tables** (#15). Inside `app = { ... }` under `[targets]` the keys of `[targets.app]` are
+  offered, less those written, and an enum key's values. A dependency's inline table gets nothing:
+  the snapshot does not list a dependency's keys.
+- **A dependency's features** (#16, #17). Inside `features = [...]` of a `path` or workspace
+  dependency: its features, read from its own `mcpp.toml`; their hover; and
+  `mcpp.manifest.unknownFeature` for a name it does not declare. An index package's features are not
+  answered: mcpp states none, and `capabilities/explain` names
+  [mcpp#992](https://github.com/mcpp-community/mcpp/issues/992) (`manifest.packageFeatures`).
+- **Protocol.** A cache command of `commands/list` states `scope` (`project`, `shared`) and `level`.
+
 ## 1.5
 
 ### 1.5.0
