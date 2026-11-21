@@ -1,2 +1,6 @@
-<!-- Nothing to register: the dependency only makes its classes visible to this plugin. -->
-<idea-plugin/>
+<!-- Read only when the JCEF plugin is loaded: the pages' JCEF host, the one place that names JCEF. -->
+<idea-plugin>
+    <extensions defaultExtensionNs="io.github.mcpp-community.mcpp-clion">
+        <pageHost implementation="io.github.mcppcommunity.mcppclion.ui.jcef.JcefPageHost$Factory"/>
+    </extensions>
+</idea-plugin>
