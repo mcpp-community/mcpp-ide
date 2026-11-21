@@ -27,18 +27,28 @@ apart. mcpp-ide makes them once. Its backend, `mcpp-ide serve`, reads only mcpp'
 and answers every editor as an LSP server. Each plugin then shows those answers in its editor's own UI.
 
 ```mermaid
-%%{init: {"theme": "base", "flowchart": {"curve": "linear", "rankSpacing": 70}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#818cf8", "edgeLabelBackground": "#ffffff"}}}%%
-flowchart LR
-    mcpp("<b>mcpp</b><br/>machine contract"):::ext
-    serve("<b>mcpp-ide serve</b><br/>every decision"):::core
-    clients("<b>VS Code · CLion<br/>Neovim · agents</b><br/>native UI, no decisions"):::ide
-    mcppls("<b>mcppls</b><br/>C++ language features"):::ls
-    mcpp -- contract --> serve <-- LSP --> clients <-. LSP .-> mcppls
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 22, "rankSpacing": 60, "padding": 10}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#6366f1", "edgeLabelBackground": "#ffffff"}}}%%
+flowchart TB
+    vscode("<b>VS Code</b><br/>mcpp-vscode"):::ide
+    clion("<b>CLion</b><br/>mcpp-clion"):::ide
+    nvim("<b>Neovim</b><br/>mcpp-nvim"):::ide
+    agent("<b>Agents</b><br/>mcpp-ide skill"):::ide
+    subgraph backend ["mcpp-ide serve · LSP server · every decision"]
+        direction LR
+        projects("projects"):::part ~~~ jobs("jobs"):::part ~~~ views("view models"):::part ~~~ rules("mcpp.toml rules"):::part
+    end
+    mcppls("<b>mcppls</b><br/>C++ language server"):::ls
+    mcpp("<b>mcpp</b><br/>build · test · pack"):::ext
+    vscode & clion & nvim & agent ==> backend
+    backend -. "status" .-> mcppls
+    backend == "runs · reads its contract" ==> mcpp
+    mcppls -. "result record" .-> mcpp
+    classDef ide fill:#ffffff,stroke:#818cf8,color:#3730a3
+    classDef part fill:#eef2ff,stroke:#c7d2fe,color:#312e81
     classDef ext fill:#f8fafc,stroke:#94a3b8,color:#334155
-    classDef core fill:#4f46e5,stroke:#4338ca,color:#ffffff
-    classDef ide fill:#eef2ff,stroke:#818cf8,color:#3730a3
     classDef ls fill:#fffbeb,stroke:#f59e0b,color:#92400e
-    linkStyle 2 stroke:#f59e0b
+    style backend fill:#4f46e5,stroke:#4338ca,color:#ffffff
+    linkStyle 7,9 stroke:#f59e0b
 ```
 
 ## Highlights

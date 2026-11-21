@@ -178,7 +178,7 @@ editor package carries that bundle and the runner that starts it on each system:
 | `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`--mode self-contained --systems all`: each okrun built over the platform's hosted arrangement); one command packs both, `mcpp pack mcpp-ide --target openkal --mode self-contained --systems all --pkg-format tar,okb`, and the package's `runs_on.self` names the systems it runs on | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
 
 ```mermaid
-%%{init: {"theme": "base", "flowchart": {"curve": "linear", "rankSpacing": 70}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#818cf8", "edgeLabelBackground": "#ffffff"}}}%%
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "rankSpacing": 70}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#818cf8", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart LR
     cfg("<b>1</b> · mcpp.ide.backendPath"):::ext
     pkg("<b>2</b> · the package's .okb<br/>run by okrun"):::core
