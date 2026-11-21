@@ -26,28 +26,23 @@ VS Code · CLion · Neovim 的构建、运行、测试、调试、打包行为�
 各插件再用编辑器自己的界面呈现这些回答。
 
 ```mermaid
-%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 22, "rankSpacing": 60, "padding": 10}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#6366f1", "edgeLabelBackground": "#ffffff"}}}%%
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 56, "padding": 14}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#54aeff", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TB
-    vscode("<b>VS Code</b><br/>mcpp-vscode"):::ide
-    clion("<b>CLion</b><br/>mcpp-clion"):::ide
-    nvim("<b>Neovim</b><br/>mcpp-nvim"):::ide
-    agent("<b>Agents</b><br/>mcpp-ide skill"):::ide
-    subgraph backend ["mcpp-ide serve · LSP 服务器 · 所有决定"]
-        direction LR
-        projects("工程"):::part ~~~ jobs("任务"):::part ~~~ views("视图模型"):::part ~~~ rules("mcpp.toml 规则"):::part
-    end
+    vscode("<b>VS Code</b><br/>mcpp-vscode"):::client
+    clion("<b>CLion</b><br/>mcpp-clion"):::client
+    nvim("<b>Neovim</b><br/>mcpp-nvim"):::client
+    agent("<b>Agents</b><br/>mcpp-ide skill"):::client
+    serve("<b>mcpp-ide serve</b><br/>LSP · 所有决定"):::core
     mcppls("<b>mcppls</b><br/>C++ 语言服务器"):::ls
-    mcpp("<b>mcpp</b><br/>构建 · 测试 · 打包"):::ext
-    vscode & clion & nvim & agent ==> backend
-    backend -. "状态" .-> mcppls
-    backend == "运行 · 读取契约" ==> mcpp
-    mcppls -. "结果记录" .-> mcpp
-    classDef ide fill:#ffffff,stroke:#818cf8,color:#3730a3
-    classDef part fill:#eef2ff,stroke:#c7d2fe,color:#312e81
-    classDef ext fill:#f8fafc,stroke:#94a3b8,color:#334155
-    classDef ls fill:#fffbeb,stroke:#f59e0b,color:#92400e
-    style backend fill:#4f46e5,stroke:#4338ca,color:#ffffff
-    linkStyle 7,9 stroke:#f59e0b
+    mcpp("<b>mcpp</b><br/>构建 · 测试 · 打包"):::tool
+    vscode & clion & nvim & agent --> serve
+    serve -- 契约 --> mcpp
+    serve -. 状态 .-> mcppls
+    classDef client fill:#ffffff,stroke:#54aeff,color:#0550ae
+    classDef core fill:#0969da,stroke:#0550ae,color:#ffffff
+    classDef ls fill:#fbefff,stroke:#c297ff,color:#6639ba
+    classDef tool fill:#f6f8fa,stroke:#8c959f,color:#24292f
+    linkStyle 5 stroke:#c297ff
 ```
 
 ## 特性

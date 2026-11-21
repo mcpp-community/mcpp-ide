@@ -63,7 +63,7 @@ mcppls what a compiler answers better.
 ## A build, end to end
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#eef2ff", "actorBorder": "#818cf8", "actorTextColor": "#3730a3", "actorLineColor": "#c7d2fe", "signalColor": "#818cf8", "signalTextColor": "#64748b", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fffbeb", "noteBorderColor": "#f59e0b", "noteTextColor": "#92400e", "labelBoxBkgColor": "#eef2ff", "labelBoxBorderColor": "#818cf8", "labelTextColor": "#3730a3", "loopTextColor": "#64748b"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#ddf4ff", "actorBorder": "#54aeff", "actorTextColor": "#0550ae", "actorLineColor": "#b6e3ff", "signalColor": "#54aeff", "signalTextColor": "#57606a", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fbefff", "noteBorderColor": "#c297ff", "noteTextColor": "#6639ba", "labelBoxBkgColor": "#ddf4ff", "labelBoxBorderColor": "#54aeff", "labelTextColor": "#0550ae", "loopTextColor": "#57606a"}}}%%
 sequenceDiagram
     autonumber
     participant E as Editor plugin
@@ -101,7 +101,7 @@ program is written with, and the backend knows none by name. What a framework of
 it states of itself (`mcpp test --guide`, B6).
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#eef2ff", "actorBorder": "#818cf8", "actorTextColor": "#3730a3", "actorLineColor": "#c7d2fe", "signalColor": "#818cf8", "signalTextColor": "#64748b", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fffbeb", "noteBorderColor": "#f59e0b", "noteTextColor": "#92400e", "labelBoxBkgColor": "#eef2ff", "labelBoxBorderColor": "#818cf8", "labelTextColor": "#3730a3", "loopTextColor": "#64748b"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#ddf4ff", "actorBorder": "#54aeff", "actorTextColor": "#0550ae", "actorLineColor": "#b6e3ff", "signalColor": "#54aeff", "signalTextColor": "#57606a", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fbefff", "noteBorderColor": "#c297ff", "noteTextColor": "#6639ba", "labelBoxBkgColor": "#ddf4ff", "labelBoxBorderColor": "#54aeff", "labelTextColor": "#0550ae", "loopTextColor": "#57606a"}}}%%
 sequenceDiagram
     autonumber
     participant E as Editor plugin
@@ -178,16 +178,16 @@ editor package carries that bundle and the runner that starts it on each system:
 | `backend/okrun/<os>-<arch>/okrun[.exe]` | okrun for `linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `windows-x86_64`, from the universal self-contained package (`--mode self-contained --systems all`: each okrun built over the platform's hosted arrangement); one command packs both, `mcpp pack mcpp-ide --target openkal --mode self-contained --systems all --pkg-format tar,okb`, and the package's `runs_on.self` names the systems it runs on | `okrun mcpp-ide.okb serve`: the okrun carried for this system, else okrun on PATH |
 
 ```mermaid
-%%{init: {"theme": "base", "flowchart": {"curve": "basis", "rankSpacing": 70}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#818cf8", "edgeLabelBackground": "#ffffff"}}}%%
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 56, "padding": 14}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#54aeff", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart LR
-    cfg("<b>1</b> · mcpp.ide.backendPath"):::ext
+    cfg("<b>1</b> · mcpp.ide.backendPath"):::tool
     pkg("<b>2</b> · the package's .okb<br/>run by okrun"):::core
-    inst("<b>3</b> · mcpp-ide<br/>from xlings or PATH"):::ide
+    inst("<b>3</b> · mcpp-ide<br/>from xlings or PATH"):::client
     cfg -- unset --> pkg -- not carried --> inst
-    classDef ext fill:#f8fafc,stroke:#94a3b8,color:#334155
-    classDef core fill:#4f46e5,stroke:#4338ca,color:#ffffff
-    classDef ide fill:#eef2ff,stroke:#818cf8,color:#3730a3
-    classDef ls fill:#fffbeb,stroke:#f59e0b,color:#92400e
+    classDef client fill:#ffffff,stroke:#54aeff,color:#0550ae
+    classDef core fill:#0969da,stroke:#0550ae,color:#ffffff
+    classDef ls fill:#fbefff,stroke:#c297ff,color:#6639ba
+    classDef tool fill:#f6f8fa,stroke:#8c959f,color:#24292f
 ```
 
 Before it, a configured `mcpp.ide.backendPath` (a program or an `.okb`) is used; after it, an

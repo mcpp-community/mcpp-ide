@@ -23,7 +23,7 @@ and its contract, mcppls, xlings, trust.
 ## A session
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#eef2ff", "actorBorder": "#818cf8", "actorTextColor": "#3730a3", "actorLineColor": "#c7d2fe", "signalColor": "#818cf8", "signalTextColor": "#64748b", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fffbeb", "noteBorderColor": "#f59e0b", "noteTextColor": "#92400e", "labelBoxBkgColor": "#eef2ff", "labelBoxBorderColor": "#818cf8", "labelTextColor": "#3730a3", "loopTextColor": "#64748b"}}}%%
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "actorBkg": "#ddf4ff", "actorBorder": "#54aeff", "actorTextColor": "#0550ae", "actorLineColor": "#b6e3ff", "signalColor": "#54aeff", "signalTextColor": "#57606a", "sequenceNumberColor": "#ffffff", "noteBkgColor": "#fbefff", "noteBorderColor": "#c297ff", "noteTextColor": "#6639ba", "labelBoxBkgColor": "#ddf4ff", "labelBoxBorderColor": "#54aeff", "labelTextColor": "#0550ae", "loopTextColor": "#57606a"}}}%%
 sequenceDiagram
     participant A as Agent
     participant B as mcpp-ide serve

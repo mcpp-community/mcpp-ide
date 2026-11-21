@@ -27,28 +27,23 @@ apart. mcpp-ide makes them once. Its backend, `mcpp-ide serve`, reads only mcpp'
 and answers every editor as an LSP server. Each plugin then shows those answers in its editor's own UI.
 
 ```mermaid
-%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 22, "rankSpacing": 60, "padding": 10}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#6366f1", "edgeLabelBackground": "#ffffff"}}}%%
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 26, "rankSpacing": 56, "padding": 14}, "themeVariables": {"fontFamily": "ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif", "fontSize": "14px", "lineColor": "#54aeff", "edgeLabelBackground": "#ffffff"}}}%%
 flowchart TB
-    vscode("<b>VS Code</b><br/>mcpp-vscode"):::ide
-    clion("<b>CLion</b><br/>mcpp-clion"):::ide
-    nvim("<b>Neovim</b><br/>mcpp-nvim"):::ide
-    agent("<b>Agents</b><br/>mcpp-ide skill"):::ide
-    subgraph backend ["mcpp-ide serve · LSP server · every decision"]
-        direction LR
-        projects("projects"):::part ~~~ jobs("jobs"):::part ~~~ views("view models"):::part ~~~ rules("mcpp.toml rules"):::part
-    end
+    vscode("<b>VS Code</b><br/>mcpp-vscode"):::client
+    clion("<b>CLion</b><br/>mcpp-clion"):::client
+    nvim("<b>Neovim</b><br/>mcpp-nvim"):::client
+    agent("<b>Agents</b><br/>mcpp-ide skill"):::client
+    serve("<b>mcpp-ide serve</b><br/>LSP · every decision"):::core
     mcppls("<b>mcppls</b><br/>C++ language server"):::ls
-    mcpp("<b>mcpp</b><br/>build · test · pack"):::ext
-    vscode & clion & nvim & agent ==> backend
-    backend -. "status" .-> mcppls
-    backend == "runs · reads its contract" ==> mcpp
-    mcppls -. "result record" .-> mcpp
-    classDef ide fill:#ffffff,stroke:#818cf8,color:#3730a3
-    classDef part fill:#eef2ff,stroke:#c7d2fe,color:#312e81
-    classDef ext fill:#f8fafc,stroke:#94a3b8,color:#334155
-    classDef ls fill:#fffbeb,stroke:#f59e0b,color:#92400e
-    style backend fill:#4f46e5,stroke:#4338ca,color:#ffffff
-    linkStyle 7,9 stroke:#f59e0b
+    mcpp("<b>mcpp</b><br/>build · test · pack"):::tool
+    vscode & clion & nvim & agent --> serve
+    serve -- contract --> mcpp
+    serve -. status .-> mcppls
+    classDef client fill:#ffffff,stroke:#54aeff,color:#0550ae
+    classDef core fill:#0969da,stroke:#0550ae,color:#ffffff
+    classDef ls fill:#fbefff,stroke:#c297ff,color:#6639ba
+    classDef tool fill:#f6f8fa,stroke:#8c959f,color:#24292f
+    linkStyle 5 stroke:#c297ff
 ```
 
 ## Highlights
