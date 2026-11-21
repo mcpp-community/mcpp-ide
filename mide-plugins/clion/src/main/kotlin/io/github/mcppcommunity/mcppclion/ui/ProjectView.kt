@@ -34,9 +34,17 @@ import javax.swing.JTree
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 
-/** A row of a tree: its text, a quieter detail, an icon, and a file it opens or a command it runs. */
+/** A row of a tree: its text, a quieter detail, an icon, a file it opens or a command it runs, and the
+ *  actions on what it shows, drawn as links after its detail and listed in its context menu. */
 data class Row(val text: String, val detail: String = "", val icon: Icon? = null, val file: String? = null,
-               val command: String? = null, val root: String? = null, val error: Boolean = false)
+               val command: String? = null, val root: String? = null, val error: Boolean = false,
+               val actions: List<RowAction> = emptyList())
+
+/** An action of a row: a cleanup of the command table, by its title; `asks` when it confirms first. */
+data class RowAction(val command: String, val plan: String, val title: String, val asks: Boolean) {
+    /** The link's text: an ellipsis marks an action that asks before it acts. */
+    val label: String get() = if (asks) "$title…" else title
+}
 
 /** A row with its children. */
 class RowNode(row: Row, children: List<RowNode> = emptyList()) : DefaultMutableTreeNode(row) {
@@ -137,9 +145,7 @@ class ProjectView(private val project: Project, parent: Disposable) : McppView, 
             .map { m -> session.on(m) { refresh() } }
     }
 
-    private fun action(text: String, icon: Icon, run: () -> Unit) = object : DumbAwareAction(session.t(text), null, icon) {
-        override fun actionPerformed(e: AnActionEvent) = run()
-    }
+    private fun action(text: String, icon: Icon, run: () -> Unit) = SessionAction({ session.t(text) }, icon, run)
 
     private fun open(row: Row) {
         row.file?.let { path ->
@@ -186,14 +192,73 @@ class ProjectView(private val project: Project, parent: Disposable) : McppView, 
     }
 }
 
-/** A row's text, then its detail in grey; an error in the error colour. */
+/**
+ * A toolbar action whose text is read each time the toolbar shows it: a view is built before the
+ * session's strings (`i18n/bundle`) arrive, so a text read once would stay in English (#13).
+ */
+class SessionAction(private val text: () -> String, icon: Icon, private val run: () -> Unit) :
+    DumbAwareAction(text(), null, icon) {
+    override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.BGT
+    override fun update(e: AnActionEvent) {
+        e.presentation.text = text()
+    }
+    override fun actionPerformed(e: AnActionEvent) = run()
+}
+
+/** A row's text, then its detail in grey, then its actions as links; an error in the error colour. */
 class RowRenderer : ColoredTreeCellRenderer() {
     override fun customizeCellRenderer(tree: JTree, value: Any?, selected: Boolean, expanded: Boolean, leaf: Boolean, row: Int, hasFocus: Boolean) {
         val r = (value as? RowNode)?.row ?: return
         icon = r.icon
         append(r.text, if (r.error) SimpleTextAttributes.ERROR_ATTRIBUTES else SimpleTextAttributes.REGULAR_ATTRIBUTES)
         if (r.detail.isNotEmpty()) append("  " + r.detail, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        for ((i, a) in r.actions.withIndex()) {
+            append(if (i == 0) "    " else "   ", SimpleTextAttributes.REGULAR_ATTRIBUTES)
+            append(a.label, SimpleTextAttributes.LINK_ATTRIBUTES, a)
+        }
     }
+}
+
+/**
+ * A row's actions in a tree: a click on a link runs it, the pointer shows a hand over one, and the
+ * row's context menu lists them (with the keyboard's context-menu key too).
+ */
+fun installRowActions(tree: JTree, run: (RowAction) -> Unit) {
+    fun actionAt(e: MouseEvent): RowAction? {
+        val path = tree.getPathForLocation(e.x, e.y) ?: return null
+        val bounds = tree.getPathBounds(path) ?: return null
+        val node = path.lastPathComponent as? RowNode ?: return null
+        if (node.row.actions.isEmpty()) return null
+        val row = tree.getRowForPath(path)
+        val renderer = tree.cellRenderer.getTreeCellRendererComponent(tree, node, false, tree.isExpanded(path), node.isLeaf, row, false)
+        val colored = renderer as? com.intellij.ui.SimpleColoredComponent ?: return null
+        colored.setBounds(0, 0, bounds.width, bounds.height)
+        val fragment = colored.findFragmentAt(e.x - bounds.x)
+        return if (fragment >= 0) colored.getFragmentTag(fragment) as? RowAction else null
+    }
+    val mouse = object : java.awt.event.MouseAdapter() {
+        override fun mouseClicked(e: MouseEvent) {
+            if (e.button != MouseEvent.BUTTON1 || e.clickCount != 1) return
+            actionAt(e)?.let { e.consume(); run(it) }
+        }
+        override fun mouseMoved(e: MouseEvent) {
+            tree.cursor = if (actionAt(e) != null) java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR) else null
+        }
+    }
+    tree.addMouseListener(mouse)
+    tree.addMouseMotionListener(mouse)
+    val menu = object : com.intellij.openapi.actionSystem.ActionGroup() {
+        override fun getActionUpdateThread() = com.intellij.openapi.actionSystem.ActionUpdateThread.EDT
+        override fun getChildren(e: AnActionEvent?): Array<com.intellij.openapi.actionSystem.AnAction> {
+            val node = tree.selectionPath?.lastPathComponent as? RowNode ?: return emptyArray()
+            return node.row.actions.map { a ->
+                object : DumbAwareAction(a.label) {
+                    override fun actionPerformed(e: AnActionEvent) = run(a)
+                }
+            }.toTypedArray()
+        }
+    }
+    com.intellij.ui.PopupHandler.installPopupMenu(tree, menu, "McppRowActions")
 }
 
 /** The values of a JSON array as objects. */
