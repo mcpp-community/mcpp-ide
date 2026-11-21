@@ -153,7 +153,7 @@ function panels.targets(row, _, root)
 end
 
 function panels.cache(row, _, root)
-  views.show(row.title, 'cache/inventory', { root = root }, views.cache_text)
+  views.show(row.title, 'cache/inventory', { root = root }, function(inv) return views.cache_text(inv, M.offered()) end)
 end
 
 function panels.graph(row, _, root)

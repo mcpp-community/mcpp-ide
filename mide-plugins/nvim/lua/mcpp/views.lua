@@ -189,31 +189,57 @@ function M.targets_text(r)
   return lines
 end
 
-local function rows(into, list, label)
+local function rows(into, list, label, indent)
+  indent = indent or '  '
   for _, r in ipairs(list or {}) do
-    into[#into + 1] = string.format('  %-32s %10s  %d', label(r), r.bytesText or '', r.entries or 0)
+    into[#into + 1] = string.format('%s%-30s %10s  %d', indent, label(r), r.bytesText or '', r.entries or 0)
   end
   if not list or #list == 0 then
-    into[#into + 1] = '  ' .. t('none')
+    into[#into + 1] = indent .. t('none')
   end
 end
 
--- cache/inventory: the total, by kind, the largest packages, by last use.
-function M.cache_text(inv)
+-- The cleanups of the command table for one scope (`project`, `shared`), as the subcommand that runs
+-- each; an ellipsis marks one that asks first. Two commands of one plan are one, the cache group's, in
+-- its place (as CLion's cache tab; design 2026-11-21).
+local function cleanups(into, commands, scope)
+  local chosen = {}
+  for _, row in ipairs(commands or {}) do
+    local a = row.action or {}
+    if a.kind == 'cache' and a.scope == scope then
+      local kept = chosen[a.plan]
+      if not kept or (kept.group ~= 'cache' and row.group == 'cache') then chosen[a.plan] = row end
+    end
+  end
+  for _, row in ipairs(commands or {}) do
+    local a = row.action or {}
+    if a.kind == 'cache' and chosen[a.plan] == row then
+      into[#into + 1] = string.format('  :Mcpp %-28s %s%s', row.subcommand, row.title, (a.level or 0) > 0 and '…' or '')
+    end
+  end
+end
+
+-- cache/inventory in the two sections of VS Code's page: the project's build with its cleanups, and
+-- the shared cache -- its total, by kind, the largest packages, by last use -- with its own.
+-- `commands` is the table Neovim offers (commands/list).
+function M.cache_text(inv, commands)
+  local lines = { t('Project cache') .. ' · target/' }
+  cleanups(lines, commands, 'project')
   local where = (inv.root or '') ~= '' and (' · ' .. inv.root) or ''
-  local lines = { inv.totalText .. ' ' .. t('in {0} entries', inv.totalEntries) .. where, '' }
-  lines[#lines + 1] = t('By kind')
-  rows(lines, inv.byKind, function(r) return r.kind end)
-  vim.list_extend(lines, { '', t('Largest packages') })
-  rows(lines, inv.topLabels, function(r) return r.label end)
-  vim.list_extend(lines, { '', t('By last use') })
+  vim.list_extend(lines, { '', t('Global build cache') .. ' · ' .. inv.totalText .. ' ' .. t('in {0} entries', inv.totalEntries) .. where })
+  cleanups(lines, commands, 'shared')
+  lines[#lines + 1] = '  ' .. t('By kind')
+  rows(lines, inv.byKind, function(r) return r.kind end, '    ')
+  lines[#lines + 1] = '  ' .. t('Largest packages')
+  rows(lines, inv.topLabels, function(r) return r.label end, '    ')
+  lines[#lines + 1] = '  ' .. t('By last use')
   rows(lines, inv.ageBuckets, function(b)
     return b.toDays == nil and t('older than {0} days', b.fromDays) or t('{0}–{1} days', b.fromDays, b.toDays)
-  end)
+  end, '    ')
   if inv.incomplete and #inv.incomplete > 0 then
-    vim.list_extend(lines, { '', t('Incomplete entries') })
+    lines[#lines + 1] = '  ' .. t('Incomplete entries')
     for _, e in ipairs(inv.incomplete) do
-      lines[#lines + 1] = '  ' .. (e.label or e.key or '')
+      lines[#lines + 1] = '    ' .. (e.label or e.key or '')
     end
   end
   return lines
