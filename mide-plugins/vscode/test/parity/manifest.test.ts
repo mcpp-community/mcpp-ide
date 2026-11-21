@@ -39,8 +39,18 @@ test("every setting 0.9.0 contributed keeps its type, default, scope, order and 
   assert.equal(now.contributes.configuration.title, old.contributes.configuration.title);
 });
 
-test("the views, languages, grammars, colours and the rest of the manifest are 0.9.0's", () => {
-  for (const key of ["viewsContainers", "views", "languages", "grammars", "colors", "problemMatchers", "viewsWelcome", "configurationDefaults"]) {
+test("every language 0.9.0 contributed keeps each of its fields; a field may be added", () => {
+  // 1.6.0 gives mcpp-toml its language configuration (pairs, comments); nothing of 0.9.0's changes.
+  const byId = new Map<string, Record<string, unknown>>(now.contributes.languages.map((l: { id: string }) => [l.id, l]));
+  for (const language of old.contributes.languages) {
+    const current = byId.get(language.id);
+    assert.ok(current, language.id);
+    for (const [field, value] of Object.entries(language)) assert.equal(canon(current[field]), canon(value), `${language.id}.${field}`);
+  }
+});
+
+test("the views, grammars, colours and the rest of the manifest are 0.9.0's", () => {
+  for (const key of ["viewsContainers", "views", "grammars", "colors", "problemMatchers", "viewsWelcome", "configurationDefaults"]) {
     assert.equal(canon(now.contributes[key]), canon(old.contributes[key]), key);
   }
   for (const key of ["name", "publisher", "displayName", "description", "icon", "engines", "extensionDependencies", "capabilities", "main"]) {

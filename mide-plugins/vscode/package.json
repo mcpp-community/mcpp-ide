@@ -1267,7 +1267,8 @@
         ],
         "filenames": [
           "mcpp.toml"
-        ]
+        ],
+        "configuration": "./syntaxes/mcpp-toml.language-configuration.json"
       }
     ],
     "configurationDefaults": {
