@@ -1344,9 +1344,6 @@ std::expected<Json, rpc::Error> Session::capabilities_explain(const Json& p) {
         {"tests.parts", "test-parts", "", "mcpp#917"},
         {"tests.live", "test-case-stream", "", "mcpp#917"},
         {"tests.metrics", "test-metrics", "", "mcpp#917"},
-        // An index package's features in mcpp.toml; a `path` or workspace dependency's are read from
-        // its own manifest meanwhile (1.6.0).
-        {"manifest.packageFeatures", "package-features", "", "mcpp#992"},
     };
     Json features = Json::array();
     for (const auto& g : kGates) {
@@ -1362,6 +1359,12 @@ std::expected<Json, rpc::Error> Session::capabilities_explain(const Json& p) {
         }
         features.push_back(std::move(f));
     }
+    // An index package's features in mcpp.toml: mcpp states none in any release, and no capability is
+    // named yet (mcpp#992 asks for them); a `path` or workspace dependency's are read from its own
+    // manifest meanwhile (1.6.0).
+    features.push_back(Json{{"id", "manifest.packageFeatures"}, {"available", false},
+                            {"reason", Json{{"source", "mcpp"}, {"capability", ""}, {"need", "mcpp#992"}, {"have", probe.version},
+                                            {"message", t("mcpp states no features of an index package, which {0} asks for", {"mcpp#992"})}}}});
     return Json{{"root", root.generic_string()}, {"mcpp", probe_json(root, probe)}, {"features", features}};
 }
 

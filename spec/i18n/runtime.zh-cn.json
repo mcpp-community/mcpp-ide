@@ -841,5 +841,6 @@
   "On by default.": "默认开启。",
   "Implies {0}.": "隐含 {0}。",
   "{0} declares no feature {1}: it declares none": "{0} 未声明 feature {1}：它未声明任何 feature",
-  "{0} declares no feature {1}: it declares {2}": "{0} 未声明 feature {1}：它声明的是 {2}"
+  "{0} declares no feature {1}: it declares {2}": "{0} 未声明 feature {1}：它声明的是 {2}",
+  "mcpp states no features of an index package, which {0} asks for": "mcpp 未声明索引包的 feature（{0} 提出了这一需求）"
 }

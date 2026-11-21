@@ -101,8 +101,10 @@ struct Feature {
     bool isDefault = false;
     std::vector<std::string> implies;
 };
-// The features a manifest declares, by `[features]` and `[features.<name>]`; nullopt when it declares
-// no `[features]`, which mcpp reads as a package that accepts any name.
+// The features a manifest declares, as mcpp registers them: the keys of `[features]` (`default`
+// among them) and `[features.<name>]`, and the names of `[feature-deps.<name>]` and, under a target
+// selector, of `feature-deps`, `feature-requires-abi` and `feature-xlings`; nullopt when it declares
+// none, which mcpp reads as a package that accepts any name.
 std::optional<std::vector<Feature>> declared_features(const std::vector<std::string>& lines);
 
 // A dependency as its edge names it: the key, and its `path` or `workspace = true`.
@@ -443,10 +445,44 @@ std::vector<Suggestion> inline_table_keys(const Context& context, std::string_vi
     if (before > 0 && lineText[before - 1] != '{' && lineText[before - 1] != ',') return {};
     const auto* schemaSection = section_by_name(context.table.group);
     if (!schemaSection || schemaSection->value("openKeys", false) || !keys_of(schemaSection)) return {};
+    // The keys the inline table has after the cursor too, on its line, up to its `}`.
+    auto siblings = context.siblings;
+    {
+        auto bare_key_char = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-'; };
+        auto i = std::min<std::size_t>(static_cast<std::size_t>(std::max(0, context.replace.end)), lineText.size());
+        int depth = 0;
+        bool expectKey = false;
+        char quote = 0;
+        for (; i < lineText.size(); ++i) {
+            const char c = lineText[i];
+            if (quote) {
+                if (c == '\\' && quote == '"') ++i;
+                else if (c == quote) quote = 0;
+                continue;
+            }
+            if (c == '"' || c == '\'') { quote = c; continue; }
+            if (c == '#') break;
+            if (c == '{' || c == '[') { ++depth; continue; }
+            if (c == '}' || c == ']') {
+                if (depth == 0) break;
+                --depth;
+                continue;
+            }
+            if (depth == 0 && c == ',') { expectKey = true; continue; }
+            if (depth == 0 && expectKey && bare_key_char(c)) {
+                auto j = i;
+                while (j < lineText.size() && bare_key_char(lineText[j])) ++j;
+                siblings.emplace_back(lineText.substr(i, j - i));
+                expectKey = false;
+                i = j - 1;
+            }
+        }
+    }
     std::vector<Suggestion> v;
     for (const auto& key : *keys_of(schemaSection)) {
         const auto name = str(key, "key");
-        if (std::ranges::find(context.siblings, name) != context.siblings.end()) continue;
+        if (std::ranges::find(siblings, name) != siblings.end()) continue;
+
         v.push_back({name, "template", key_detail(key), key_documentation(key), name + " = " + key_placeholder(key),
                      context.replace.start, context.replace.end});
     }
@@ -1201,7 +1237,9 @@ std::vector<Diagnostic> analyse(const std::vector<std::string>& lines, const Dia
             continue;
         }
         const auto* info = key_info_of(section, key);
-        if (keys_of(section) && !section->value("openKeys", false) && !info)
+        // `app = { ... }` under [targets] (or [profile]) is the table [targets.app], which mcpp reads.
+        const bool namesEntry = headerName && (*headerName == "targets" || *headerName == "profile") && value.starts_with('{');
+        if (keys_of(section) && !section->value("openKeys", false) && !info && !namesEntry)
             push("unknownKey", settings.unknownKey, std::format("unknown key {} in {}", key, str(*section, "header")), lineNumber,
                  keyStart, keyEnd, key);
         if (info && info->value("legacy", false) == true && !(section && has_string(*section, "deprecatedBy"))) {
@@ -1340,7 +1378,6 @@ std::string quoted_list(const std::vector<std::string>& names) {
 
 std::optional<std::vector<Feature>> declared_features(const std::vector<std::string>& lines) {
     std::vector<Feature> out;
-    bool declared = false;
     std::vector<std::string> defaults;
     auto feature = [&](const std::string& name) -> Feature& {
         auto it = std::ranges::find(out, name, &Feature::name);
@@ -1348,33 +1385,43 @@ std::optional<std::vector<Feature>> declared_features(const std::vector<std::str
         out.push_back({name, false, {}});
         return out.back();
     };
+    // Where the names of features begin in a table's segments: after `features` or `feature-deps`,
+    // or under a target selector after `feature-deps`, `feature-requires-abi` or `feature-xlings`;
+    // npos for another table.
+    auto names_at = [](const std::vector<std::string>& segments) -> std::size_t {
+        if (!segments.empty() && (segments[0] == "features" || segments[0] == "feature-deps")) return 1;
+        if (segments.size() >= 3 && segments[0] == "target" &&
+            (segments[2] == "feature-deps" || segments[2] == "feature-requires-abi" || segments[2] == "feature-xlings"))
+            return 3;
+        return std::string::npos;
+    };
     std::vector<std::string> sectionSegments;
     for (const auto& node : toml::parse(lines).nodes) {
         if (const auto* s = std::get_if<toml::Section>(&node)) {
             sectionSegments = s->isArray ? std::vector<std::string>{} : segment_names(s->segments);
-            if (!sectionSegments.empty() && sectionSegments[0] == "features") declared = true;
-            if (sectionSegments.size() == 2 && sectionSegments[0] == "features") feature(sectionSegments[1]);
+            const auto at = names_at(sectionSegments);
+            if (at != std::string::npos && sectionSegments.size() == at + 1) feature(sectionSegments[at]);
             continue;
         }
         const auto& kv = std::get<toml::KeyValue>(node);
-        if (kv.keyPath.empty() || sectionSegments.empty() || sectionSegments[0] != "features") continue;
+        const auto at = names_at(sectionSegments);
+        if (kv.keyPath.empty() || at == std::string::npos) continue;
         const auto key = kv.keyPath[0].name;
-        if (sectionSegments.size() == 2) {
-            if (key == "implies" && kv.keyPath.size() == 1 && kv.value) feature(sectionSegments[1]).implies = string_elements(*kv.value);
+        const bool features = sectionSegments[0] == "features";
+        if (sectionSegments.size() == at + 1) {
+            if (features && key == "implies" && kv.keyPath.size() == 1 && kv.value) feature(sectionSegments[at]).implies = string_elements(*kv.value);
             continue;
         }
-        if (sectionSegments.size() != 1 || kv.keyPath.size() != 1) continue;
-        if (key == "default") {
-            if (kv.value) defaults = string_elements(*kv.value);
-            continue;
-        }
+        if (sectionSegments.size() != at || kv.keyPath.size() != 1) continue;
+        // `[feature-deps]` with `ssl = { ... }` names the feature ssl too.
         auto& f = feature(key);
-        if (!kv.value) continue;
+        if (!features || !kv.value) continue;
+        if (key == "default") defaults = string_elements(*kv.value);
         if (kv.value->kind == toml::ValueKind::array) f.implies = string_elements(*kv.value);
         else if (kv.value->kind == toml::ValueKind::inlineTable)
             if (const auto* implies = entry_of(*kv.value, "implies"); implies && implies->value) f.implies = string_elements(*implies->value);
     }
-    if (!declared) return std::nullopt;
+    if (out.empty()) return std::nullopt;
     for (auto& f : out) f.isDefault = std::ranges::find(defaults, f.name) != defaults.end();
     return out;
 }
@@ -1408,9 +1455,13 @@ std::vector<Suggestion> feature_completions(const std::vector<std::string>& line
         const auto& r = at.features->range;
         if (cursorLine == r.startLine && cursorCol <= r.startCol) continue;
         if (!at.features->open && cursorLine == r.endLine && cursorCol >= r.endCol) continue;
+        // An array left open runs to the end of the document: only its own line is inside it.
+        if (at.features->open && cursorLine != r.startLine) continue;
         const toml::Value* element = nullptr;
         for (const auto& e : at.features->elements)
-            if (contains(e.range, cursorLine, cursorCol) && !(cursorLine == e.range.startLine && cursorCol == e.range.startCol)) element = &e;
+            if (contains(e.range, cursorLine, cursorCol) && !(cursorLine == e.range.startLine && cursorCol == e.range.startCol) &&
+                !(cursorLine == e.range.endLine && cursorCol == e.range.endCol && !e.open))
+                element = &e;
         if (element && element->kind != toml::ValueKind::string) return {};
         const auto inside = element && element->contentRange && contains(*element->contentRange, cursorLine, cursorCol);
         if (element && !inside) return {};
@@ -1423,12 +1474,23 @@ std::vector<Suggestion> feature_completions(const std::vector<std::string>& line
             end = element->contentRange->endCol;
             if (const auto it = std::ranges::find(present, element->text.value_or("")); it != present.end()) present.erase(it);
         }
+        // A quoted name between two elements is separated from them by commas.
+        std::string before, after;
+        if (!inside) {
+            const std::string_view l = lines[cursorLine];
+            auto b = std::min<std::size_t>(cursorCol, l.size());
+            while (b > 0 && (l[b - 1] == ' ' || l[b - 1] == '\t')) --b;
+            if (b > 0 && l[b - 1] != '[' && l[b - 1] != ',') before = ", ";
+            auto a = std::min<std::size_t>(cursorCol, l.size());
+            while (a < l.size() && (l[a] == ' ' || l[a] == '\t')) ++a;
+            if (a < l.size() && l[a] != ']' && l[a] != ',' && l[a] != '#') after = ", ";
+        }
         std::vector<Suggestion> v;
         for (const auto& f : *features) {
             if (std::ranges::find(present, f.name) != present.end()) continue;
             auto detail = f.isDefault ? t("default feature of {0}", {at.edge.name}) : t("feature of {0}", {at.edge.name});
             if (!f.implies.empty()) detail += " · " + t("implies {0}", {join(f.implies, ", ")});
-            v.push_back({f.name, "value", detail, std::nullopt, inside ? f.name : text::stringify(Json(f.name)),
+            v.push_back({f.name, "value", detail, std::nullopt, inside ? f.name : before + text::stringify(Json(f.name)) + after,
                          u16(lines, cursorLine, start), u16(lines, cursorLine, end)});
         }
         return v;
@@ -1469,7 +1531,7 @@ std::vector<Diagnostic> feature_diagnostics(const std::vector<std::string>& line
         if (!at.features) continue;
         std::optional<std::optional<std::vector<Feature>>> features;
         for (const auto& e : at.features->elements) {
-            if (e.kind != toml::ValueKind::string || !e.text || e.text->empty() || e.open) continue;
+            if (e.kind != toml::ValueKind::string || !e.text || e.text->empty() || e.open || e.range.startLine != e.range.endLine) continue;
             if (!features) features = features_of(resolve, at.edge);
             if (!*features) break;
             if (find_feature(**features, *e.text)) continue;

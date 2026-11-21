@@ -205,28 +205,45 @@ bool declares_workspace(const std::vector<std::string>& lines) {
 }
 
 // A dependency's features, from the manifest of the directory its `path` names, or for
-// `workspace = true` the one the nearest enclosing workspace's `[workspace.dependencies]` names.
+// `workspace = true` the one the nearest enclosing workspace's `[workspace.dependencies]` names. One
+// resolver serves one answer: each manifest, the workspace's included, is read once by it.
 manifest::FeatureResolver feature_resolver(const Document& d) {
-    return [dir = d.path.parent_path()](const manifest::DependencyEdge& e) -> std::optional<std::vector<manifest::Feature>> {
+    struct Memo {
+        std::map<std::filesystem::path, std::optional<std::vector<std::string>>> files;
+        const std::optional<std::vector<std::string>>& read(const std::filesystem::path& file) {
+            auto it = files.find(file);
+            if (it == files.end()) it = files.emplace(file, read_lines(file)).first;
+            return it->second;
+        }
+        std::optional<std::filesystem::path> workspace;
+        bool workspaceSought = false;
+    };
+    return [dir = d.path.parent_path(), memo = std::make_shared<Memo>()](const manifest::DependencyEdge& e)
+               -> std::optional<std::vector<manifest::Feature>> {
         std::filesystem::path target;
         if (e.path) {
             target = dir / std::filesystem::path(*e.path);
         } else if (e.workspace) {
-            auto at = dir;
-            for (int depth = 0; !at.empty() && depth < 64; ++depth, at = at.parent_path()) {
-                if (const auto lines = read_lines(at / "mcpp.toml"); lines && declares_workspace(*lines)) {
-                    const auto relative = manifest::workspace_dependency_path(*lines, e.name);
-                    if (!relative) return std::nullopt;
-                    target = at / std::filesystem::path(*relative);
-                    break;
+            if (!memo->workspaceSought) {
+                memo->workspaceSought = true;
+                auto at = dir;
+                for (int depth = 0; !at.empty() && depth < 64; ++depth, at = at.parent_path()) {
+                    if (const auto& lines = memo->read(at / "mcpp.toml"); lines && declares_workspace(*lines)) {
+                        memo->workspace = at;
+                        break;
+                    }
+                    if (at == at.parent_path()) break;
                 }
-                if (at == at.parent_path()) break;
             }
-            if (target.empty()) return std::nullopt;
+            if (!memo->workspace) return std::nullopt;
+            const auto& lines = memo->read(*memo->workspace / "mcpp.toml");
+            const auto relative = lines ? manifest::workspace_dependency_path(*lines, e.name) : std::nullopt;
+            if (!relative) return std::nullopt;
+            target = *memo->workspace / std::filesystem::path(*relative);
         } else {
             return std::nullopt;
         }
-        const auto lines = read_lines((target / "mcpp.toml").lexically_normal());
+        const auto& lines = memo->read((target / "mcpp.toml").lexically_normal());
         if (!lines) return std::nullopt;
         return manifest::declared_features(*lines);
     };

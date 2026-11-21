@@ -356,17 +356,39 @@ CTS rules{"rules", [] {
     // A manifest's features in their three shapes; none when it declares no [features].
     const auto declared = manifest::declared_features(text::lines_of(
         "[features]\ndefault = [\"a\"]\na = []\nb = [\"a\"]\nc = { defines = [\"C\"], implies = [\"b\"] }\n[features.d]\nimplies = [\"c\"]\n"));
-    check(declared && declared->size() == 4);
-    check((*declared)[0].name == "a" && (*declared)[0].isDefault && !(*declared)[1].isDefault);
-    check((*declared)[1].implies == std::vector<std::string>{"a"} && (*declared)[2].implies == std::vector<std::string>{"b"});
-    check((*declared)[3].name == "d" && (*declared)[3].implies == std::vector<std::string>{"c"});
+    // `default` is a key mcpp accepts as a name too.
+    check(declared && declared->size() == 5);
+    check((*declared)[0].name == "default" && (*declared)[0].implies == std::vector<std::string>{"a"});
+    check((*declared)[1].name == "a" && (*declared)[1].isDefault && !(*declared)[2].isDefault);
+    check((*declared)[2].implies == std::vector<std::string>{"a"} && (*declared)[3].implies == std::vector<std::string>{"b"});
+    check((*declared)[4].name == "d" && (*declared)[4].implies == std::vector<std::string>{"c"});
     check(!manifest::declared_features(text::lines_of("[package]\nname = \"x\"\n")));
-    check(manifest::declared_features(text::lines_of("[features]\n"))->empty());
+    // An empty [features] declares none, which mcpp reads as accepting any name.
+    check(!manifest::declared_features(text::lines_of("[features]\n")));
+    // The tables mcpp registers a feature by besides [features].
+    const auto others = manifest::declared_features(text::lines_of(
+        "[feature-deps.ssl]\nopenssl = \"3\"\n[target.'cfg(os = \"linux\")'.feature-xlings.gtk]\nx = \"1\"\n[feature-deps]\nzip = { zlib = \"1\" }\n"));
+    check(others && others->size() == 3 && (*others)[0].name == "ssl" && (*others)[1].name == "gtk" && (*others)[2].name == "zip");
     check(manifest::workspace_dependency_path(text::lines_of("[workspace.dependencies]\ncore = { path = \"libs/core\" }\n"), "core") == "libs/core");
     // An index dependency has nothing to read: no resolver is asked.
     bool asked = false;
     const manifest::FeatureResolver none = [&](const manifest::DependencyEdge&) { asked = true; return std::nullopt; };
     check(manifest::feature_completions(text::lines_of("[dependencies]\nfmt = { version = \"1\", features = [] }\n"), 1, 37, none).empty() && !asked);
+    // Between elements a quoted name is separated by commas; an array left open is its own line only.
+    const manifest::FeatureResolver ab = [](const manifest::DependencyEdge&) {
+        return std::optional(std::vector<manifest::Feature>{{"a", false, {}}, {"b", false, {}}});
+    };
+    const auto edge = text::lines_of("[dependencies]\nlib = { path = \"../lib\", features = [\"a\"] }\n");
+    const auto first = manifest::feature_completions(edge, 1, 37, ab);
+    check(first.size() == 1 && first[0].insertSnippet == "\"b\", ");
+    const auto last = manifest::feature_completions(edge, 1, 40, ab);
+    check(last.size() == 1 && last[0].insertSnippet == ", \"b\"");
+    check(manifest::feature_completions(text::lines_of("[dependencies]\nlib = { path = \"../lib\", features = [\n[package]\nname = \"x\"\n"), 2, 0, ab).empty());
+    // A key the inline table has after the cursor is not offered again; nor is an inline entry of
+    // [targets] an unknown key, since mcpp reads it as [targets.app].
+    check(!labels("[targets]\napp = { kind = \"lib\", , main = \"x\" }", 1, 22).contains("main"));
+    check(labels("[targets]\napp = { kind = \"lib\", , main = \"x\" }", 1, 22).contains("linkage"));
+    for (const auto& d : manifest::analyse(text::lines_of("[targets]\napp = { kind = \"bin\" }\n"), {})) check(d.code != "mcpp.manifest.unknownKey");
     // A suggestion's detail in the user's language.
     const auto zh = manifest::completions(text::lines_of("[dependencies]\n"), 1, 0, "zh-cn");
     check(!zh.empty() && zh[0].detail != "SemVer version dependency");

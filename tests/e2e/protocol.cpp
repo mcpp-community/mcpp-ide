@@ -127,15 +127,15 @@ E2E protocol{"protocol", [] {
         check(diagnostics["uri"] == appUri && diagnostics["diagnostics"].size() == 1);
         check(diagnostics["diagnostics"][0]["code"] == "mcpp.manifest.unknownFeature");
         check(diagnostics["diagnostics"][0]["range"]["start"] == Json({{"line", 3}, {"character", 51}}));
-        check(diagnostics["diagnostics"][0]["message"].get<std::string>().find("fast, gui, net") != std::string::npos);
+        check(diagnostics["diagnostics"][0]["message"].get<std::string>().find("default, fast, gui, net") != std::string::npos);
         auto atApp = [&](int line, int character) {
             return Json{{"textDocument", {{"uri", appUri}}}, {"position", {{"line", line}, {"character", character}}}};
         };
         // Inside the array: the features the edge does not name yet, as quoted names.
         std::map<std::string, Json> offered;
         for (const auto& i : result_of("textDocument/completion", atApp(3, 44))["items"]) offered[i["label"].get<std::string>()] = i;
-        check(offered.size() == 2 && offered.contains("fast") && offered.contains("net") && !offered.contains("gui"));
-        check(offered["fast"]["textEdit"]["newText"] == "\"fast\"" && offered["fast"]["detail"].get<std::string>().find("default") != std::string::npos);
+        check(offered.size() == 3 && offered.contains("default") && offered.contains("fast") && offered.contains("net") && !offered.contains("gui"));
+        check(offered["fast"]["textEdit"]["newText"] == "\"fast\", " && offered["fast"]["detail"].get<std::string>().find("default") != std::string::npos);
         // Inside a string: its content is replaced by the bare name.
         std::set<std::string> inString;
         for (const auto& i : result_of("textDocument/completion", atApp(3, 46))["items"]) {
@@ -143,14 +143,14 @@ E2E protocol{"protocol", [] {
             check(i["textEdit"]["range"]["start"]["character"] == 45 && i["textEdit"]["newText"] == i["label"]);
         }
         // The name being edited is offered again; the others the edge names are not.
-        check(inString == std::set<std::string>{"fast", "gui", "net"});
+        check(inString == std::set<std::string>{"default", "fast", "gui", "net"});
         // A workspace dependency: the workspace's entry names its path.
         wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didChange"},
                                   {"params", {{"textDocument", {{"uri", appUri}, {"version", 2}}},
                                               {"contentChanges", Json::array({{{"text", "[dependencies]\ncore = { workspace = true, features = [] }\n"}}})}}}}.dump());
         std::set<std::string> member;
         for (const auto& i : result_of("textDocument/completion", atApp(1, 39))["items"]) member.insert(i["label"].get<std::string>());
-        check(member == std::set<std::string>{"fast", "gui", "net"});
+        check(member == std::set<std::string>{"default", "fast", "gui", "net"});
         // A hover names the dependency, the default and what a feature implies.
         wire.server.dispatch(Json{{"jsonrpc", "2.0"}, {"method", "textDocument/didChange"},
                                   {"params", {{"textDocument", {{"uri", appUri}, {"version", 3}}},

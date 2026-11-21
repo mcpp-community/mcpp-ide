@@ -32,7 +32,7 @@ the order the messages arrive, so an answer sees the document the notifications 
 | On a key of a table with a closed vocabulary | its keys, less those already written in the table's group; a key's detail names its type, values and default |
 | On a key of a dependency table | the five dependency forms |
 | On a key of `[features]`, `[generated_files]`, `[capabilities]`, `[xlings.workspace]`, `[tools.overrides]` | that table's forms |
-| Inside an inline table, after `{` or `,` (1.6.0) | the keys of the table of its name, less those the inline table has: `app = { ... }` under `[targets]` lists what `[targets.app]` does. A dependency's inline table is its specification, whose keys the snapshot does not list, and gets nothing |
+| Inside an inline table, after `{` or `,` (1.6.0) | the keys of the table of its name, less those the inline table has on either side of the cursor: `app = { ... }` under `[targets]` lists what `[targets.app]` does, and is not an unknown key of `[targets]`. A dependency's inline table is its specification, whose keys the snapshot does not list, and gets nothing |
 | On an enum key's value | its values (inside a string only the content is replaced); a key of an inline table or a dotted key has its own table's |
 | Inside `features = [...]` of a dependency given by `path` or `workspace = true` (1.6.0) | the features its own manifest declares and the edge does not name yet, each with whether it is a default and what it implies |
 | On a dependency's version, with `mcpp.toml.indexCompletion` on and the workspace trusted | the versions mcpp's catalogue (`mcpp search --format json`) lists for that package, newest first; the catalogue is read once in the background (the answer is incomplete until then) and kept for ten minutes |
@@ -52,9 +52,12 @@ it, its note) and an enum value. Definition jumps from `workspace = true` to the
 
 A dependency's features are read from the text of its own manifest, the rules layer's ground: the
 directory its `path` names, or for `workspace = true` the one the nearest enclosing workspace's
-`[workspace.dependencies]` entry names. The manifest's `[features]` and `[features.<name>]` declare
-them, its `default` the ones on without being named, an array or `implies` what each turns on. A
-dependency whose manifest declares no `[features]` accepts any name, as mcpp does.
+`[workspace.dependencies]` entry names. Its features are the names mcpp registers: the keys of
+`[features]` (`default` among them) and `[features.<name>]`, and the names of `[feature-deps.<name>]`
+and, under a target selector, of `feature-deps`, `feature-requires-abi` and `feature-xlings`. Its
+`default` names the ones on without being named, an array or `implies` what each turns on. A
+dependency whose manifest declares none accepts any name, as mcpp does. Between two elements a
+suggestion brings its commas; an array left open is read on its own line only.
 
 An index package's features are not answered: mcpp states none
 ([mcpp#992](https://github.com/mcpp-community/mcpp/issues/992) asks for them), and an index's
