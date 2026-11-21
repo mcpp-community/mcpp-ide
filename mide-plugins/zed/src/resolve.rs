@@ -35,8 +35,9 @@ pub const REPOSITORY: &str = "mcpp-community/mcpp-ide";
 /// The GitCode mirror of the release's files, tried when GitHub cannot be reached.
 pub const MIRROR: &str = "https://gitcode.com/xlings-res/mcpp-ide/releases/download";
 
-/// Where the backend comes from: the command `lsp.mcpp-ide.binary.path` names in Zed's settings,
-/// with its `arguments` (`serve` when none are given), else the backend of this extension's series,
+/// Where the backend comes from: the command `lsp.mcpp-ide.binary.path` names in Zed's settings (Zed
+/// itself starts that one with its `arguments` alone, and `serve` is the default only where the
+/// extension is asked), else the backend of this extension's series,
 /// which `lib.rs` downloads into the extension's work directory. A `mcpp-ide` on PATH is not
 /// started: the extension cannot read the series a backend answers, so it could not refuse one of
 /// another series as the other plugins do.
