@@ -33,6 +33,35 @@ class BackendTest {
     }
 
     @Test
+    fun theReadingThreadRunsNoListener() {
+        // A listener reads the IDE's model; on the thread that reads the backend's output it ran outside
+        // any read action (#13). Notifications reach their listeners on `events`, in order; answers
+        // complete on `answers`.
+        assumeTrue(!System.getProperty("os.name").startsWith("Windows"))
+        val frames = (1..3).joinToString("") { n ->
+            val body = """{"jsonrpc":"2.0","method":"mcpp-ide/job/progress","params":{"n":$n}}"""
+            "Content-Length: ${body.toByteArray().size}\r\n\r\n$body"
+        }
+        val script = Files.createTempFile("mcppclion-frames-", ".sh").toFile()
+        // The frames are written once the listener is in place.
+        script.writeText("sleep 1\nprintf '%s' '$frames'\nsleep 2\n")
+        val threads = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val order = java.util.Collections.synchronizedList(mutableListOf<Int>())
+        val done = CompletableFuture<Unit>()
+        Backend(listOf("sh", script.path), {}, io.github.mcppcommunity.mcppclion.backend.sequentialExecutor("test events"),
+            java.util.concurrent.Executors.newCachedThreadPool()).use { backend ->
+            backend.on("job/progress") { _, p ->
+                threads += Thread.currentThread().name
+                order += p.asJsonObject["n"].asInt
+                if (order.size == 3) done.complete(Unit)
+            }
+            done.get(10, TimeUnit.SECONDS)
+        }
+        assertEquals(listOf(1, 2, 3), order.toList())
+        assertTrue(threads.toString(), threads.all { it == "test events" })
+    }
+
+    @Test
     fun theBundleRunsUnderTheOkrunCarriedForThisSystem() {
         assertEquals("windows-x86_64", Locate.okrunDir("Windows 11", "amd64"))
         assertEquals("macos-aarch64", Locate.okrunDir("Mac OS X", "aarch64"))

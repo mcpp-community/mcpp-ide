@@ -107,10 +107,16 @@ class McppDocuments(private val project: Project) : Disposable {
         reopen()
     }
 
+    /** Sends every open document again. It is called from the startup activity and when a backend
+     *  has started, off the EDT: the documents are read in a read action (#13). */
     private fun reopen() {
         sent.clear()
-        for (file in FileEditorManager.getInstance(project).openFiles)
-            if (served(file)) FileDocumentManager.getInstance().getDocument(file)?.let { sync(file, it) }
+        val open = com.intellij.openapi.application.ApplicationManager.getApplication().runReadAction(com.intellij.openapi.util.Computable {
+            if (project.isDisposed) emptyList<Pair<VirtualFile, Document>>()
+            else FileEditorManager.getInstance(project).openFiles.filter { served(it) }
+                .mapNotNull { file -> FileDocumentManager.getInstance().getDocument(file)?.let { file to it } }
+        })
+        for ((file, document) in open) sync(file, document)
     }
 
     /** Sends the document's text when it differs from what the backend holds: its uri and version. */
@@ -163,6 +169,9 @@ class McppDocuments(private val project: Project) : Disposable {
             }
         }
     }
+
+    /** The version of a document last sent to the backend; 0 when it was never sent (the IDE runs read it). */
+    fun version(uri: String): Int = versions[uri] ?: 0
 
     /** The diagnostics the backend published for `version` of the document or a later one. */
     fun diagnostics(uri: String, version: Int, timeoutMs: Long): JsonArray? {

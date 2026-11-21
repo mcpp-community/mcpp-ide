@@ -1,7 +1,8 @@
-// A page of webui/ in JCEF (mcpp design 2026-10-30 part 2 §9): the plugin's copy of the page's files,
-// a browser that loads one of them, `mcppRender` to hand the page the backend's answer and its strings,
-// and `mcppHostSend` for what the page asks of the IDE. A page reaches nothing else. Without JCEF the
-// tab says why.
+// A page of webui/ (mcpp design 2026-10-30 part 2 §9): the plugin's copy of the page's files, a page
+// host that loads one of them, `mcppRender` to hand the page the backend's answer and its strings, and
+// `mcppHostSend` for what the page asks of the IDE. A page reaches nothing else. The host is the
+// browser the IDE gives (PageHost.kt); without one the tab says why, in the session's language when
+// it is shown.
 package io.github.mcppcommunity.mcppclion.ui
 
 import com.google.gson.JsonObject
@@ -13,54 +14,49 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.components.JBTextArea
-import com.intellij.ui.jcef.JBCefApp
-import com.intellij.ui.jcef.JBCefBrowser
-import com.intellij.ui.jcef.JBCefBrowserBase
-import com.intellij.ui.jcef.JBCefJSQuery
 import com.intellij.util.ui.JBUI
 import io.github.mcppcommunity.mcppclion.McppSession
-import org.cef.browser.CefBrowser
-import org.cef.browser.CefFrame
-import org.cef.handler.CefLoadHandlerAdapter
 import java.io.File
 import javax.swing.JComponent
 
-abstract class JcefPage(protected val project: Project, private val file: String, withoutJcef: String) : McppView, Disposable {
+abstract class WebPage(protected val project: Project, private val file: String, private val withoutBrowser: String) : McppView, Disposable {
     protected val session = McppSession.get(project)
-    private val browser: JBCefBrowser? = if (JBCefApp.isSupported()) JBCefBrowser() else null
-    private val query: JBCefJSQuery? = browser?.let { JBCefJSQuery.create(it as JBCefBrowserBase) }
     @Volatile private var loaded = false
     private var pending: String? = null
-    // Without JCEF the page says why. The tool window sits on the left beside Project, narrower than
+    private val host: PageHost? = PageHostFactory.create({ text -> received(text) }) {
+        loaded = true
+        pending?.let { render(it) }
+        pending = null
+    }
+    // Without a host the page says why. The tool window sits on the left beside Project, narrower than
     // the sentence, so the text wraps; its accessible name is the whole sentence.
-    val component: JComponent = browser?.component ?: unavailable(withoutJcef)
+    private val explanation: JBTextArea? = if (host == null) unavailable(session.t(withoutBrowser)) else null
+    val component: JComponent = host?.component ?: explanation!!
 
     init {
-        if (browser != null && query != null) {
-            Disposer.register(this, browser)
-            Disposer.register(this, query)
-            query.addHandler { text -> received(text); null }
-            browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
-                override fun onLoadEnd(b: CefBrowser, frame: CefFrame, status: Int) {
-                    if (!frame.isMain) return
-                    b.executeJavaScript("window.mcppHostSend = function (text) { ${query.inject("text")} };", b.url, 0)
-                    ApplicationManager.getApplication().invokeLater {
-                        loaded = true
-                        pending?.let { render(it) }
-                        pending = null
-                    }
-                }
-            }, browser.cefBrowser)
-            browser.loadURL(page().toURI().toString())
+        host?.let {
+            Disposer.register(this, it)
+            it.load(page().toURI().toString())
         }
     }
 
     /** What the page sent (`mcppHostSend`). */
     protected abstract fun received(text: String)
 
+    /** Asks the backend for what the page draws and hands it to [show]. */
+    protected abstract fun draw()
+
+    final override fun refresh() {
+        explanation?.let {
+            it.text = session.t(withoutBrowser)
+            it.accessibleContext.accessibleName = it.text
+        }
+        if (host != null) draw()
+    }
+
     /** The page's files, written once per build of the plugin where the browser can load them. */
     private fun page(): File {
-        val jar = runCatching { File(JcefPage::class.java.protectionDomain.codeSource.location.toURI()) }.getOrNull()
+        val jar = runCatching { File(WebPage::class.java.protectionDomain.codeSource.location.toURI()) }.getOrNull()
         val version = jar?.takeIf { it.isFile }?.let { "${it.nameWithoutExtension}-${it.lastModified()}" } ?: "dev"
         val dir = File(PathManager.getSystemPath(), "mcpp-clion/webui-$version")
         val index = javaClass.getResource("/webui/files.txt")?.readText() ?: error("the pages are not in the plugin (webui/files.txt)")
@@ -82,8 +78,7 @@ abstract class JcefPage(protected val project: Project, private val file: String
     }
 
     private fun render(page: String) {
-        val b = browser ?: return
-        b.cefBrowser.executeJavaScript("window.mcppRender && window.mcppRender($page);", b.cefBrowser.url, 0)
+        host?.execute("window.mcppRender && window.mcppRender($page);")
     }
 
     /** A file of the project in an editor, at a 0-based line. */
@@ -98,7 +93,7 @@ abstract class JcefPage(protected val project: Project, private val file: String
     override fun dispose() {}
 }
 
-private fun unavailable(text: String): JComponent = JBTextArea(text).apply {
+private fun unavailable(text: String): JBTextArea = JBTextArea(text).apply {
     isEditable = false
     lineWrap = true
     wrapStyleWord = true
