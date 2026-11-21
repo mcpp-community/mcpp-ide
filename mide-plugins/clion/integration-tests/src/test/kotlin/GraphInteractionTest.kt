@@ -72,7 +72,7 @@ class GraphInteractionTest {
             bindSingleton<CIServer>(overrides = true) {
                 object : CIServer by NoCIServer {
                     override fun reportTestFailure(testName: String, message: String, details: String, linkToLogs: String?, kind: SyntheticTestKind, generifyTestName: Boolean) {
-                        throw AssertionError("IDE failure: $testName: $message")
+                        recordIdeFailure("ide-errors-graphs.ndjson", testName, message, details)
                     }
                 }
             }

@@ -57,7 +57,16 @@ private fun stockClion262DebuggerStop(
         "io.github.mcppcommunity." !in reported
 }
 
-private fun ideFailureFingerprint(message: String, details: String, classification: String): String {
+/** An error the IDE logged during a run, kept for the report as its fingerprint, then the run fails. */
+internal fun recordIdeFailure(file: String, testName: String, message: String, details: String): Nothing {
+    val output = Path.of(System.getProperty("mcpp.clion.output") ?: "build/stable-smoke").toAbsolutePath()
+    Files.createDirectories(output)
+    Files.writeString(output.resolve(file), ideFailureFingerprint(message, details, "unclassified") + "\n",
+        StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+    throw AssertionError("IDE failure: $testName: $message")
+}
+
+internal fun ideFailureFingerprint(message: String, details: String, classification: String): String {
     // IDE reports can contain machine paths. Retain only Java/Kotlin type and
     // method symbols; this is enough to distinguish an SDK error from ours.
     val text = "$message\n$details"

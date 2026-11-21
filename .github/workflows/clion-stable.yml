@@ -133,7 +133,7 @@ jobs:
           path: |
             ${{ runner.temp }}/clion-stable-result/result.json
             ${{ runner.temp }}/clion-stable-result/checks.json
-            ${{ runner.temp }}/clion-stable-result/ide-errors.ndjson
+            ${{ runner.temp }}/clion-stable-result/ide-errors*.ndjson
             ${{ runner.temp }}/clion-stable-result/settings/result.json
             ${{ runner.temp }}/clion-stable-result/settings/observations.json
             ${{ runner.temp }}/clion-stable-result/graphs/result.json
@@ -224,6 +224,7 @@ jobs:
           # The JUnit results name an assertion's message; the IDE's own log, of a runner's IDE on a
           # generated project, names why an IDE did not start.
           path: |
+            ${{ runner.temp }}/clion-stable-result/ide-errors*.ndjson
             mide-plugins/clion/integration-tests/build/test-results/test/*.xml
             out/ide-tests/tests/*/*/log/idea.log
             ${{ runner.temp }}/clion-stable-result/graphs/result.json
